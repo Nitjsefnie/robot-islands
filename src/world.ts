@@ -129,13 +129,6 @@ export function islandRenderState(
   return 'discovered';
 }
 
-/** "Discovered, no current info" tint — cool desaturated blue-grey. Combined
- *  with reduced alpha this reads as a ghost of the island against the dark
- *  page background. */
-export const DISCOVERED_TINT = 0xa0b0c0;
-/** Alpha for the 'discovered' state. */
-export const DISCOVERED_ALPHA = 0.5;
-
 /**
  * Render a single island's terrain + buildings into a fresh container, with
  * the container positioned at the island's world-pixel centre. The contents
@@ -143,16 +136,17 @@ export const DISCOVERED_ALPHA = 0.5;
  * `renderBuildings` from step 1), and the container translation handles the
  * world placement.
  *
- * The render state controls visual modulation:
- *   - 'visible'    → full color / alpha 1
- *   - 'discovered' → dimmed + cool tint (read as "ghost")
- *   - 'unknown'    → null (caller skips it)
+ * The render state only controls *whether* the island is drawn:
+ *   - 'visible'    → full colour land
+ *   - 'discovered' → full colour land (the surrounding mid-blue ocean tier
+ *                    is the sole indicator of "known but no current info")
+ *   - 'unknown'    → null (caller skips it; ocean tier C shows through)
  *
- * Note: Container.tint in Pixi v8 multiplies through to child Graphics fills,
- * so we apply both tint and alpha to the wrapper container and the tile +
- * building children inherit. If a future Pixi upgrade breaks the propagation
- * we'd need to switch to applying tint on the inner Graphics directly or
- * use a ColorMatrixFilter.
+ * Earlier versions dimmed discovered islands via alpha + tint, which made
+ * the steel-blue ocean tier bleed through the half-transparent land and
+ * read as "ocean overlays the island". The ocean colour itself now carries
+ * the world's vision-state info; the island stays opaque so it always
+ * reads as land.
  */
 export function renderIsland(spec: IslandSpec, state: IslandRenderState = 'visible'): Container | null {
   if (state === 'unknown') return null;
@@ -167,10 +161,6 @@ export function renderIsland(spec: IslandSpec, state: IslandRenderState = 'visib
   if (spec.buildings.length > 0) c.addChild(renderBuildings(spec.buildings));
   const px = tileToWorldPx(spec.cx, spec.cy);
   c.position.set(px.x, px.y);
-  if (state === 'discovered') {
-    c.alpha = DISCOVERED_ALPHA;
-    c.tint = DISCOVERED_TINT;
-  }
   return c;
 }
 
