@@ -74,9 +74,14 @@ export function cap(state: IslandState, r: ResourceId): number {
  * make per second); `consumption` is gross inputs. `production` is the
  * value that feeds the XP formula per §9.1.
  *
- * For step 3, `effectiveRate = (1 / cycleSec) × inputAvail × outputAvail`.
- * `powerFactor` (§5.1) and `buffStack` (§15.3) are 1 and folded into the
- * formula explicitly so future steps can extend without restructuring.
+ * Per §15.3 with §5.1 power: `effectiveRate = baseRate × inputAvail ×
+ * (consumesPower ? powerFactor : 1)`, where `baseRate = (1/cycleSec) ×
+ * outputAvail × buffStack`. `buffStack` (§15.3 — adjacency, specialization,
+ * Network Consciousness) is still 1 in step 4; `powerFactor` lives on the
+ * `PowerBalance` returned by `computeRates` and is recomputed each call.
+ * The four-pass implementation in `computeRates` documents how the
+ * inputAvail/powerFactor circular dependency is broken (nominal-rate
+ * inputAvail, post-applied powerFactor).
  */
 interface BuildingRate {
   readonly building: Building;
