@@ -24,6 +24,7 @@ import { Container } from 'pixi.js';
 
 import type { Building } from './buildings.js';
 import { HOME_ISLAND_BUILDINGS, renderBuildings } from './buildings.js';
+import type { IslandState } from './economy.js';
 import type { Tile, TerrainKind } from './island.js';
 import {
   computeIslandTiles,
@@ -31,6 +32,7 @@ import {
   renderIslandTiles,
   TILE_PX,
 } from './island.js';
+import { ALL_RESOURCES, type ResourceId } from './recipes.js';
 
 /** Stratification cell side length, in tiles. SPEC §2.1 calls this R. */
 export const CELL_SIZE_TILES = 16;
@@ -223,3 +225,56 @@ export const DEMO_ISLANDS: ReadonlyArray<IslandSpec> = [
     terrainAt: () => 'water',
   },
 ];
+
+// ---------------------------------------------------------------------------
+// Initial economy state
+// ---------------------------------------------------------------------------
+//
+// `IslandSpec` describes the static layout (terrain, ellipse, building
+// placements); `IslandState` carries the mutable per-island runtime
+// (inventory, level, XP, lastTick). We keep them separated so the spec
+// can remain `readonly` and `DEMO_ISLANDS` can stay a frozen literal.
+//
+// For step 3 we only build state for the home island — the other demo
+// islands are unpopulated and have no buildings, so their economies are
+// trivially "nothing happens". When colonization lands in a later step,
+// `makeInitialIslandState` will be applied to each newly-populated spec.
+
+/**
+ * Step-3 starting inventory. Coal is seeded at 50 so the Workshop chain
+ * runs immediately at startup; once coal hits zero (~500s in) the Workshop
+ * stalls and the player visibly sees the `inputAvail = 0` back-propagation.
+ * That stall is intentional — step 3 has no coal producer, so demonstrating
+ * the stall is part of the demo.
+ */
+function startingInventory(): Record<ResourceId, number> {
+  const inv = {} as Record<ResourceId, number>;
+  for (const r of ALL_RESOURCES) inv[r] = 0;
+  inv.coal = 50;
+  return inv;
+}
+
+/** Step-3 storage caps. Hardcoded to 100 across the board until storage
+ *  buildings exist (deferred to a later step). */
+function startingCaps(value = 100): Record<ResourceId, number> {
+  const caps = {} as Record<ResourceId, number>;
+  for (const r of ALL_RESOURCES) caps[r] = value;
+  return caps;
+}
+
+/**
+ * Build a fresh `IslandState` for a spec. `nowMs` seeds `lastTick` so the
+ * first `advanceIsland` call doesn't replay history from epoch zero.
+ */
+export function makeInitialIslandState(spec: IslandSpec, nowMs: number): IslandState {
+  return {
+    id: spec.id,
+    buildings: spec.buildings,
+    inventory: startingInventory(),
+    storageCaps: startingCaps(),
+    xp: 0,
+    level: 1,
+    unspentSkillPoints: 0,
+    lastTick: nowMs,
+  };
+}

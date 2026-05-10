@@ -28,7 +28,9 @@ import {
   zoomAt,
   type Camera,
 } from './camera.js';
+import { advanceIsland, computeRates } from './economy.js';
 import { renderCellGrid } from './grid.js';
+import { mountHud } from './hud.js';
 import {
   bind,
   defineAction,
@@ -42,6 +44,7 @@ import { mountUi } from './ui.js';
 import {
   DEMO_ISLANDS,
   islandRenderState,
+  makeInitialIslandState,
   renderIsland,
   VISION_RADIUS_TILES,
 } from './world.js';
@@ -231,9 +234,27 @@ async function main(): Promise<void> {
     { label: 'Center on Home (H)', action: 'center-home' },
   ]);
 
+  // -----------------------------------------------------------------------
+  // Economy state — step 3
+  // -----------------------------------------------------------------------
+  //
+  // Only the home island carries a tick-loop state for now. Multi-island
+  // economies land when other islands become populated (deferred to a
+  // later step). `lastTick` is seeded with the current performance.now()
+  // so the first frame's `advanceIsland` call sees a zero-length interval.
+  const homeSpec = DEMO_ISLANDS.find((s) => s.id === 'home');
+  if (!homeSpec) throw new Error('main: home island missing from DEMO_ISLANDS');
+  const homeState = makeInitialIslandState(homeSpec, performance.now());
+
+  // HUD: bottom-right panel showing inventory, rates, and level. Updated
+  // once per frame inside the ticker after the economy advance.
+  const hud = mountHud(document.body);
+
   // Update tick: apply held pan flags + sync camera state to the world
-  // container. One pass per frame keeps the camera->container assignment
-  // cheap and predictable.
+  // container, advance the home island's economy, and update the HUD.
+  // One pass per frame keeps the camera->container assignment cheap and
+  // predictable; `advanceIsland`'s piecewise integration handles whatever
+  // elapsed interval the frame brings (matters on tab-blur catch-up).
   app.ticker.add(() => {
     let dx = 0;
     let dy = 0;
@@ -244,6 +265,13 @@ async function main(): Promise<void> {
     if (dx !== 0 || dy !== 0) panCam(cam, dx, dy);
     world.position.set(cam.tx, cam.ty);
     world.scale.set(cam.zoom);
+
+    advanceIsland(homeState, performance.now());
+    // Recompute rates AFTER the tick so the HUD shows the current
+    // post-advance state (e.g., a freshly-stalled building reads as
+    // 0 rate, not the rate it was running at one event ago).
+    const { net } = computeRates(homeState);
+    hud.update(homeState, net);
   });
 
   // Recenter the camera's reference point on resize so the world doesn't
@@ -265,6 +293,7 @@ async function main(): Promise<void> {
   if (import.meta.env.DEV) {
     (window as unknown as { __cam: Camera }).__cam = cam;
     (window as unknown as { __reg: typeof reg }).__reg = reg;
+    (window as unknown as { __home: typeof homeState }).__home = homeState;
     void bind; // referenced for rebind-from-console workflows
     void TILE_PX;
   }
