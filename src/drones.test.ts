@@ -60,6 +60,7 @@ function makeIslandSpec(over: Partial<IslandSpec>): IslandSpec {
     populated: false,
     discovered: false,
     buildings: [],
+    modifiers: [],
     ...over,
   };
 }

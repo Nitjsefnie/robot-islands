@@ -14,6 +14,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { Building } from './buildings.js';
+import { effectiveModifierMultipliers } from './biomes.js';
 import {
   advanceIsland,
   computeRates,
@@ -517,5 +518,97 @@ describe('funneling — consumption drains pending bonus XP credit (§10)', () =
     state.funnelPending.iron_ore = 5;
     advanceIsland(state, 10_000);
     expect(state.funnelPending.iron_ore).toBeCloseTo(5, 6);
+  });
+});
+
+describe('modifier integration in computeRates / advanceIsland (§3.5)', () => {
+  it('mineral_rich: extraction-tagged Mine runs at 1.25× base rate', () => {
+    // Mine alone, no input dependencies. Base 0.2 iron_ore/s; with
+    // mineral_rich (+25% extraction) the rate is 0.25/s. Over 10s with
+    // headroom, that's 2.5 units (no cap interference at 100 cap).
+    const state = makeState({
+      buildings: [MINE],
+      inventory: blankInventory(),
+    });
+    const mul = effectiveModifierMultipliers(['mineral_rich']);
+    advanceIsland(state, 10_000, mul);
+    expect(state.inventory.iron_ore).toBeCloseTo(2.5, 9);
+  });
+
+  it('cursed_storms: all recipes run at 0.90× base rate (global)', () => {
+    // Mine alone. Base 0.2/s × 0.90 = 0.18/s. Over 10s = 1.8 units.
+    const state = makeState({
+      buildings: [MINE],
+      inventory: blankInventory(),
+    });
+    const mul = effectiveModifierMultipliers(['cursed_storms']);
+    advanceIsland(state, 10_000, mul);
+    expect(state.inventory.iron_ore).toBeCloseTo(1.8, 9);
+  });
+
+  it('fertile: extraction +50% — Mine runs at 1.5× base', () => {
+    const state = makeState({
+      buildings: [MINE],
+      inventory: blankInventory(),
+    });
+    const mul = effectiveModifierMultipliers(['fertile']);
+    advanceIsland(state, 10_000, mul);
+    expect(state.inventory.iron_ore).toBeCloseTo(3, 9);
+  });
+
+  it('stable: no-op multiplier — Mine runs at base 0.2/s', () => {
+    const state = makeState({
+      buildings: [MINE],
+      inventory: blankInventory(),
+    });
+    const mul = effectiveModifierMultipliers(['stable']);
+    advanceIsland(state, 10_000, mul);
+    expect(state.inventory.iron_ore).toBeCloseTo(2, 9);
+  });
+
+  it('mineral_rich + cursed_storms compose: Mine at 0.2 × 1.25 × 0.9 = 0.225/s', () => {
+    const state = makeState({
+      buildings: [MINE],
+      inventory: blankInventory(),
+    });
+    const mul = effectiveModifierMultipliers(['mineral_rich', 'cursed_storms']);
+    advanceIsland(state, 10_000, mul);
+    expect(state.inventory.iron_ore).toBeCloseTo(0.2 * 1.25 * 0.9 * 10, 9);
+  });
+
+  it('cursed_storms applies to non-extraction recipes too (Workshop manufacturing)', () => {
+    // Workshop is `manufacturing` category — the global cursed_storms multiplier
+    // should reach it even though `mineral_rich` (extraction-only) would not.
+    // Workshop: 1 bolt / 10s with iron_ore + coal stocked. Base rate 0.1 bolt/s.
+    // With cursed_storms: 0.09 bolt/s. Over 10s = 0.9 bolt produced.
+    const state = makeState({
+      buildings: [WORKSHOP],
+      inventory: { ...blankInventory(), iron_ore: 10, coal: 10 },
+    });
+    const mul = effectiveModifierMultipliers(['cursed_storms']);
+    advanceIsland(state, 10_000, mul);
+    expect(state.inventory.bolt).toBeCloseTo(0.9, 9);
+  });
+
+  it('placeholder modifier (high_wind) does not change rates', () => {
+    // Sanity check: placeholders contribute 1× and the result is identical
+    // to the no-modifier path.
+    const stateA = makeState({ buildings: [MINE], inventory: blankInventory() });
+    const stateB = makeState({ buildings: [MINE], inventory: blankInventory() });
+    advanceIsland(stateA, 10_000);
+    advanceIsland(stateB, 10_000, effectiveModifierMultipliers(['high_wind']));
+    expect(stateA.inventory.iron_ore).toBeCloseTo(stateB.inventory.iron_ore, 12);
+  });
+
+  it('computeRates with modifierMul matches advanceIsland integration', () => {
+    // Direct computeRates with mineral_rich → byBuilding effectiveRate = 0.25.
+    const state = makeState({
+      buildings: [MINE],
+      inventory: blankInventory(),
+    });
+    const mul = effectiveModifierMultipliers(['mineral_rich']);
+    const { byBuilding, production } = computeRates(state, mul);
+    expect(byBuilding[0]!.effectiveRate).toBeCloseTo(0.25, 9);
+    expect(production.iron_ore).toBeCloseTo(0.25, 9);
   });
 });

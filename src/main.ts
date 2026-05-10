@@ -28,6 +28,7 @@ import {
   zoomAt,
   type Camera,
 } from './camera.js';
+import { effectiveModifierMultipliers, type ModifierMultipliers } from './biomes.js';
 import { advanceIsland, computeRates, type IslandState } from './economy.js';
 import { renderCellGrid } from './grid.js';
 import { mountHud } from './hud.js';
@@ -338,6 +339,23 @@ async function main(): Promise<void> {
     if (!spec.populated) continue;
     islandStates.set(spec.id, makeInitialIslandState(spec, performance.now()));
   }
+  // Spec lookup by id — also needed by routes UI later. Built once; spec
+  // identity is stable across the session (drones flip discovered, but
+  // spec objects themselves aren't replaced).
+  const islandSpecsById = new Map<string, IslandSpec>();
+  for (const s of worldState.islands) islandSpecsById.set(s.id, s);
+  // Precomputed modifier multipliers keyed by island id. Modifier sets are
+  // immutable in step 8 (no rerolls, no random events firing yet), so we
+  // bake them once and reuse every frame instead of re-folding every tick.
+  const modifierMulsById = new Map<string, ModifierMultipliers>();
+  for (const spec of worldState.islands) {
+    modifierMulsById.set(spec.id, effectiveModifierMultipliers(spec.modifiers));
+  }
+  /** Helper: look up modifier multipliers for an island state, falling back
+   *  to identity if the spec is missing (shouldn't happen — every state has
+   *  a corresponding spec — but keeps the type safe). */
+  const modifierMulFor = (id: string): ModifierMultipliers =>
+    modifierMulsById.get(id) ?? effectiveModifierMultipliers([]);
 
   // HUD: bottom-right panel showing inventory, rates, and level. Updated
   // once per frame inside the ticker after the economy advance.
@@ -377,8 +395,8 @@ async function main(): Promise<void> {
   // Lives in screen space (same discipline as the drone reticle): stroke
   // widths stay 1.5px / chevrons stay ~10px regardless of zoom. Endpoint
   // screen positions are computed each frame via the camera transform.
-  const islandSpecsById = new Map<string, IslandSpec>();
-  for (const s of worldState.islands) islandSpecsById.set(s.id, s);
+  // (`islandSpecsById` is built earlier — same Map shared with the modifier-
+  // multiplier cache.)
   const routesUi = mountRoutesUi(document.body, {
     world: worldState,
     islandStates,
@@ -417,7 +435,9 @@ async function main(): Promise<void> {
     // advance so the per-island production from this frame is visible to
     // route dispatch; deliveries handed back to the next frame's advance
     // get consumed (and the funnel-pending credit drained) on that frame.
-    for (const s of islandStates.values()) advanceIsland(s, now);
+    // Each island's modifier set composes its own recipe-rate multipliers,
+    // so we look up the precomputed bundle by id and pass it through.
+    for (const s of islandStates.values()) advanceIsland(s, now, modifierMulFor(s.id));
     // Drones tick AFTER economy so any biofuel changes from this frame
     // are visible to the dispatch UI on the same frame; drone returns
     // are processed independent of economy state.
@@ -430,8 +450,8 @@ async function main(): Promise<void> {
     // Recompute rates AFTER the tick so the HUD shows the current
     // post-advance state (e.g., a freshly-stalled building reads as
     // 0 rate, not the rate it was running at one event ago).
-    const { net, power } = computeRates(homeState);
-    hud.update(homeState, net, power);
+    const { net, power } = computeRates(homeState, modifierMulFor(homeState.id));
+    hud.update(homeState, net, power, homeSpec);
     // Skill tree only repaints while visible — DOM writes are wasted
     // otherwise. show() also forces a paint on transition so we don't
     // strictly need a per-frame call, but level-up while the panel is open

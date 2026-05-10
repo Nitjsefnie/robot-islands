@@ -11,7 +11,19 @@
 
 import { Container, Graphics } from 'pixi.js';
 
-export type TerrainKind = 'grass' | 'stone' | 'ore' | 'coal' | 'water';
+export type TerrainKind =
+  | 'grass'
+  | 'stone'
+  | 'ore'
+  | 'coal'
+  | 'water'
+  // Step 8 biome palette additions. None of these tiles drive recipes yet
+  // (Logger / Wind Turbine / Cryo Generator / Geothermal Vent are deferred);
+  // they exist purely so non-Plains biomes look biome-distinct.
+  | 'tree'
+  | 'sand'
+  | 'ice'
+  | 'magma_vent';
 
 export interface Tile {
   /** Tile grid x. The tile occupies the unit square [x, x+1) × [y, y+1). */
@@ -29,6 +41,11 @@ const TERRAIN_COLOR: Readonly<Record<TerrainKind, number>> = {
   ore: 0x5a4a3a,
   coal: 0x1a1a1a,
   water: 0x3b6fa3,
+  // Step 8 biome palette colors.
+  tree: 0x2d5a2d,        // dark green — distinguishable from grass
+  sand: 0xc4a062,        // tan
+  ice: 0xc8e6f0,         // pale blue
+  magma_vent: 0xd04020,  // orange-red
 };
 
 /**

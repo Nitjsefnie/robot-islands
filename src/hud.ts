@@ -19,8 +19,10 @@
 // payoff. DOM text rendering is also crisper at any zoom level than PixiJS
 // Text (which would need to be drawn at a fixed device pixel ratio).
 
+import { BIOME_DEFS, MODIFIER_DEFS, type ModifierId } from './biomes.js';
 import { cap, type IslandState, type PowerBalance, xpForLevel } from './economy.js';
 import { ALL_RESOURCES, type ResourceId } from './recipes.js';
+import type { IslandSpec } from './world.js';
 
 /**
  * Mounts a fixed-position panel and returns an `update` function. Calling
@@ -36,6 +38,7 @@ export interface HudHandle {
     state: IslandState,
     net: Record<ResourceId, number>,
     power: PowerBalance,
+    spec: IslandSpec,
   ): void;
 }
 
@@ -51,6 +54,37 @@ function powerColor(factor: number): string {
   if (factor >= 0.5) return POWER_COLOR_MARGINAL;
   return POWER_COLOR_CRITICAL;
 }
+
+// Modifier chip palette. Tied to ModifierDef.category in `biomes.ts`. Each
+// category gets a (text, background-wash, border) triple — the wash is a
+// 10%-alpha tint over the panel background, the border a 40%-alpha pick of
+// the same hue. Stable lands in the muted-neutral bucket because every
+// fresh game starts with it; loud styling there would create constant noise.
+const CHIP_PALETTE: Readonly<Record<
+  'positive' | 'warning' | 'exotic' | 'neutral',
+  { readonly fg: string; readonly bg: string; readonly border: string }
+>> = {
+  positive: {
+    fg: '#7dd3a0',
+    bg: 'rgba(125, 211, 160, 0.10)',
+    border: 'rgba(125, 211, 160, 0.40)',
+  },
+  warning: {
+    fg: '#f5a742',
+    bg: 'rgba(245, 167, 66, 0.10)',
+    border: 'rgba(245, 167, 66, 0.40)',
+  },
+  exotic: {
+    fg: '#b48cd8',
+    bg: 'rgba(180, 140, 216, 0.10)',
+    border: 'rgba(180, 140, 216, 0.40)',
+  },
+  neutral: {
+    fg: '#7a8294',
+    bg: 'transparent',
+    border: 'rgba(122, 130, 148, 0.30)',
+  },
+};
 
 export function mountHud(parentEl: HTMLElement): HudHandle {
   const panel = document.createElement('div');
@@ -76,19 +110,128 @@ export function mountHud(parentEl: HTMLElement): HudHandle {
   ].join(';');
   parentEl.appendChild(panel);
 
-  // Pre-build a stable two-node layout: one text node carries the
-  // monospace block up to (and including) the literal "factor " marker;
-  // a span carries just the numeric factor (so we can recolour it on
-  // brownout); a trailing text node carries the rest. This keeps the
-  // per-frame update O(small fixed) — three textContent assigns total —
-  // and avoids re-parsing innerHTML each tick.
-  const preNode = document.createTextNode('');
+  // Stable DOM layout — three logical sections, each kept rebuild-free at
+  // tick time:
+  //   1. headerNode: text with "Home Island / Level / Skill points".
+  //   2. siteProfile: a mini-section with the biome line and a flex chip
+  //      row. The chips themselves are recreated only when the modifier
+  //      list signature changes (cached via a join-key on the prior set).
+  //   3. powerNode + factorSpan + tailNode: existing power + inventory block.
+  const headerNode = document.createTextNode('');
+  panel.appendChild(headerNode);
+
+  // Site profile — biome line + modifier chip row. Sits as its own block so
+  // the chip flex-row doesn't break the monospace alignment of the inventory
+  // block below. A thin top/bottom border separates it visually from the
+  // header above and the power+inventory block below — matches the panel's
+  // existing engineering-readout vibe (cf. the brownout factor colour-band).
+  const siteProfile = document.createElement('div');
+  siteProfile.style.cssText = [
+    'margin: 4px 0',
+    'padding: 4px 0',
+    'border-top: 1px solid rgba(58, 68, 82, 0.6)',
+    'border-bottom: 1px solid rgba(58, 68, 82, 0.6)',
+    'display: flex',
+    'flex-direction: column',
+    'gap: 3px',
+  ].join(';');
+
+  // Biome line: label "Site" left, biome display name right, mimicking
+  // the column layout the rest of the panel uses ("Power", "Inventory").
+  const biomeLine = document.createElement('div');
+  biomeLine.style.cssText = [
+    'display: flex',
+    'justify-content: space-between',
+    'align-items: baseline',
+    'gap: 8px',
+  ].join(';');
+  const biomeLabel = document.createElement('span');
+  biomeLabel.textContent = 'Site';
+  biomeLabel.style.cssText = [
+    'color: #7a8294',
+    'letter-spacing: 0.06em',
+    'text-transform: uppercase',
+    'font-size: 10px',
+  ].join(';');
+  const biomeValue = document.createElement('span');
+  biomeValue.style.cssText = ['color: #cdd6f4', 'font-weight: 600'].join(';');
+  biomeLine.appendChild(biomeLabel);
+  biomeLine.appendChild(biomeValue);
+  siteProfile.appendChild(biomeLine);
+
+  // Chip row container.
+  const chipRow = document.createElement('div');
+  chipRow.style.cssText = [
+    'display: flex',
+    'flex-wrap: wrap',
+    'gap: 4px',
+    'align-items: center',
+    'min-height: 16px', // keeps the row from collapsing when empty
+  ].join(';');
+  siteProfile.appendChild(chipRow);
+  panel.appendChild(siteProfile);
+
+  // Power + inventory block — preNode/factorSpan/postNode mirrors the
+  // pre-step-8 layout so the per-frame update remains a small fixed number
+  // of textContent writes.
+  const powerNode = document.createTextNode('');
   const factorSpan = document.createElement('span');
   factorSpan.style.fontWeight = '600';
   const postNode = document.createTextNode('');
-  panel.appendChild(preNode);
+  panel.appendChild(powerNode);
   panel.appendChild(factorSpan);
   panel.appendChild(postNode);
+
+  /** Last-rendered modifier signature — used to skip chip rebuild when the
+   *  set is unchanged. The signature is just the comma-joined ids; cheap
+   *  to compute and zero false-positives. */
+  let lastModifiersKey = '';
+  /** Last-rendered biome id — same skip logic. */
+  let lastBiome = '';
+
+  function buildChip(id: ModifierId): HTMLSpanElement {
+    const def = MODIFIER_DEFS[id];
+    const palette = CHIP_PALETTE[def.category];
+    const chip = document.createElement('span');
+    chip.textContent = def.displayName;
+    chip.title = def.description + (def.placeholder ? ' (placeholder — system pending)' : '');
+    chip.style.cssText = [
+      'display: inline-block',
+      'padding: 1px 6px',
+      `color: ${palette.fg}`,
+      `background: ${palette.bg}`,
+      `border: 1px solid ${palette.border}`,
+      'border-radius: 3px',
+      'font-size: 10px',
+      'letter-spacing: 0.05em',
+      'text-transform: uppercase',
+      'line-height: 1.4',
+      // Placeholder modifiers get a dashed border to flag "this exists in
+      // the catalog but doesn't affect the economy yet". Subtle enough not
+      // to overwhelm the active-modifier signal but visible on close read.
+      def.placeholder ? 'border-style: dashed' : '',
+    ].filter(Boolean).join(';');
+    return chip;
+  }
+
+  /** Rebuild the chip row. Called when `lastModifiersKey` changes. Empty
+   *  modifier list shows an em-dash placeholder so the layout stays stable
+   *  between "no modifiers" and "1+ modifiers" states. */
+  function renderChipRow(modifiers: ReadonlyArray<ModifierId>): void {
+    while (chipRow.firstChild) chipRow.removeChild(chipRow.firstChild);
+    if (modifiers.length === 0) {
+      const empty = document.createElement('span');
+      empty.textContent = '—';
+      empty.style.cssText = [
+        'color: #4d5566',
+        'font-size: 11px',
+        'letter-spacing: 0.1em',
+      ].join(';');
+      chipRow.appendChild(empty);
+      return;
+    }
+    for (const id of modifiers) chipRow.appendChild(buildChip(id));
+  }
 
   /** Format a number for the HUD. Integers shown without decimal; otherwise
    *  one decimal place. The economy uses fractional inventories internally
@@ -110,21 +253,34 @@ export function mountHud(parentEl: HTMLElement): HudHandle {
     state: IslandState,
     net: Record<ResourceId, number>,
     power: PowerBalance,
+    spec: IslandSpec,
   ): void {
     const need = xpForLevel(state.level + 1);
     const headerLines: string[] = [];
     headerLines.push(`Home Island`);
     headerLines.push(`Level ${state.level}   XP ${fmt(state.xp)} / ${fmt(need)}`);
     headerLines.push(`Skill points: ${state.unspentSkillPoints}`);
-    headerLines.push(``);
+    headerNode.textContent = headerLines.join('\n');
+
+    // Site profile — biome name + chip row. Skip DOM writes when the
+    // payload is identical, since the chip row's DOM construction is the
+    // most expensive piece of HUD per-frame work.
+    if (spec.biome !== lastBiome) {
+      biomeValue.textContent = BIOME_DEFS[spec.biome].displayName;
+      lastBiome = spec.biome;
+    }
+    const modifiersKey = spec.modifiers.join(',');
+    if (modifiersKey !== lastModifiersKey) {
+      renderChipRow(spec.modifiers);
+      lastModifiersKey = modifiersKey;
+    }
+
     // Power line group. Format: `Power      <prod> / <con>  factor X.XX`.
     // Numbers right-padded so the columns don't jitter as production swings.
     const prodStr = fmt(power.produced).padStart(4, ' ');
     const conStr = fmt(power.consumed).padStart(4, ' ');
     const factorStr = power.factor.toFixed(2);
-    headerLines.push(`Power      ${prodStr}W / ${conStr}W  factor `);
-    // Render header → factor span → trailing inventory block.
-    preNode.textContent = headerLines.join('\n');
+    powerNode.textContent = `Power      ${prodStr}W / ${conStr}W  factor `;
 
     factorSpan.textContent = factorStr;
     factorSpan.style.color = powerColor(power.factor);

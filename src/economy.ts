@@ -24,6 +24,7 @@
 // linear and exact. The integration converges in O(events × resources)
 // regardless of `now - lastTick`, so multi-day offline catchup is cheap.
 
+import { IDENTITY_MODIFIER_MULTIPLIERS, type ModifierMultipliers } from './biomes.js';
 import type { Building } from './buildings.js';
 import { RECIPES, XP_WEIGHT, type Recipe, type ResourceId } from './recipes.js';
 import { effectiveSkillMultipliers, type NodeId, type SubPathId } from './skilltree.js';
@@ -199,7 +200,10 @@ export interface PowerBalance {
  *          Drives inventory updates and the event finder.
  *   `power`: aggregated W produced/consumed and the resulting power_factor.
  */
-export function computeRates(state: IslandState): {
+export function computeRates(
+  state: IslandState,
+  modifierMul: ModifierMultipliers = IDENTITY_MODIFIER_MULTIPLIERS,
+): {
   byBuilding: ReadonlyArray<BuildingRate>;
   production: Record<ResourceId, number>;
   /** Gross consumption rates per resource (always positive). Mirrors
@@ -244,7 +248,14 @@ export function computeRates(state: IslandState): {
       tentative.push({ building: b, recipe, baseRate: 0 });
       continue;
     }
-    const rateMul = skillMul.recipeRate[recipe.category] ?? 1;
+    // Recipe-rate multipliers compose: skill-tree (per-category) × modifier
+    // (per-category) × modifier (global). Stable / placeholder modifiers
+    // contribute 1×, so the identity-modifier path matches the pre-step-8
+    // behaviour exactly.
+    const rateMul =
+      (skillMul.recipeRate[recipe.category] ?? 1) *
+      (modifierMul.recipeRateByCategory[recipe.category] ?? 1) *
+      modifierMul.globalRecipeRate;
     const baseRate = (1 / recipe.cycleSec) * buffStack * rateMul;
     tentative.push({ building: b, recipe, baseRate });
     for (const [r, yld] of Object.entries(recipe.outputs)) {
@@ -261,7 +272,12 @@ export function computeRates(state: IslandState): {
   const inputAvailByIdx = new Array<number>(tentative.length);
   for (let i = 0; i < tentative.length; i++) {
     const t = tentative[i]!;
-    const rateMul = skillMul.recipeRate[t.recipe.category] ?? 1;
+    // Same compound multiplier as Pass 1 — keeps producer/consumer supply
+    // ratios consistent when only one side is buffed.
+    const rateMul =
+      (skillMul.recipeRate[t.recipe.category] ?? 1) *
+      (modifierMul.recipeRateByCategory[t.recipe.category] ?? 1) *
+      modifierMul.globalRecipeRate;
     const nominalRate = (1 / t.recipe.cycleSec) * buffStack * rateMul;
     const externalSupply: Record<ResourceId, number> = {} as Record<ResourceId, number>;
     for (const r of Object.keys(tentSupply) as ResourceId[]) {
@@ -522,7 +538,11 @@ function levelUpIfReady(state: IslandState): void {
  * so the loop is O(resources²) in the worst case. The safety counter is
  * paranoia for floating-point edge cases.
  */
-export function advanceIsland(state: IslandState, nowMs: number): void {
+export function advanceIsland(
+  state: IslandState,
+  nowMs: number,
+  modifierMul: ModifierMultipliers = IDENTITY_MODIFIER_MULTIPLIERS,
+): void {
   if (nowMs <= state.lastTick) {
     state.lastTick = nowMs;
     return;
@@ -530,7 +550,7 @@ export function advanceIsland(state: IslandState, nowMs: number): void {
   let t = state.lastTick;
   for (let safety = 0; safety < 10000; safety++) {
     if (t >= nowMs) break;
-    const { production, consumption, net } = computeRates(state);
+    const { production, consumption, net } = computeRates(state, modifierMul);
     const nextEventMs = findNextCapEvent(state, net, t, nowMs);
     // Clamp to nowMs; findNextCapEvent already returns nowMs when nothing
     // changes, but if all rates are zero we still need to exit the loop.

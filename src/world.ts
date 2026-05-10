@@ -22,13 +22,14 @@
 
 import { Container } from 'pixi.js';
 
+import type { ModifierId } from './biomes.js';
+import { terrainAtForBiome } from './biomes.js';
 import type { Building } from './buildings.js';
 import { HOME_ISLAND_BUILDINGS, renderBuildings } from './buildings.js';
 import type { IslandState } from './economy.js';
 import type { Tile, TerrainKind } from './island.js';
 import {
   computeIslandTiles,
-  defaultTerrainAt,
   renderIslandTiles,
   TILE_PX,
 } from './island.js';
@@ -91,6 +92,10 @@ export interface IslandSpec {
   readonly buildings: ReadonlyArray<Building>;
   /** Terrain function in island-local coords. Defaults to grass everywhere. */
   readonly terrainAt?: (x: number, y: number) => TerrainKind;
+  /** Active modifiers on this island per §3.5. Step 8 hard-codes the demo
+   *  set on `DEMO_ISLANDS`; future steps roll from `rollModifiers` at
+   *  generation. Empty array means no modifiers active. */
+  readonly modifiers: ReadonlyArray<ModifierId>;
 }
 
 /** Convenience: world-tile coords → world-pixel coords. */
@@ -186,6 +191,13 @@ export function renderIsland(spec: IslandSpec, state: IslandRenderState = 'visib
  * efficiency 4 — see `drones.ts`). They give the player something concrete
  * to discover.
  */
+// Step-8 modifier assignments are hardcoded on each demo island. The
+// random `rollModifiers` generator is exported from `biomes.ts` for future-
+// step use (artificial islands, persisted seed worlds) but not invoked here.
+//
+// Per §3.7: home Plains starts with `Stable` and no other modifiers.
+// Other demo islands carry one wired modifier each so the visual + UI
+// integration is exercisable from step 8 onward.
 export const DEMO_ISLANDS: ReadonlyArray<IslandSpec> = [
   {
     id: 'home',
@@ -197,7 +209,11 @@ export const DEMO_ISLANDS: ReadonlyArray<IslandSpec> = [
     populated: true,
     discovered: true,
     buildings: HOME_ISLAND_BUILDINGS,
-    terrainAt: defaultTerrainAt,
+    // Home preserves its hand-placed terrain map exactly — terrainAtForBiome
+    // delegates to defaultTerrainAtHome for islandId === 'home'.
+    terrainAt: (x, y) => terrainAtForBiome('plains', 'home', x, y),
+    // §3.7: Stable trait by default, no other modifiers.
+    modifiers: ['stable'],
   },
   // forest-ne is hardcoded as populated for step 7 — it acts as the
   // demo destination for inter-island routes. Settlement vehicles (§12)
@@ -220,7 +236,8 @@ export const DEMO_ISLANDS: ReadonlyArray<IslandSpec> = [
       { kind: 'dock', x: 0, y: 0, width: 2, height: 2, fill: 0x3a7bd5, stroke: 0x0a2a55, label: 'Dock' },
       { kind: 'workshop', x: -3, y: 0, width: 2, height: 2, fill: 0xe07b3a, stroke: 0x6b2f00, label: 'Workshop', power: { consumes: 60 } },
     ],
-    terrainAt: () => 'grass',
+    terrainAt: (x, y) => terrainAtForBiome('forest', 'forest-ne', x, y),
+    modifiers: ['fertile'],
   },
   {
     id: 'desert-far',
@@ -232,7 +249,8 @@ export const DEMO_ISLANDS: ReadonlyArray<IslandSpec> = [
     populated: false,
     discovered: true,
     buildings: [],
-    terrainAt: () => 'stone',
+    terrainAt: (x, y) => terrainAtForBiome('desert', 'desert-far', x, y),
+    modifiers: ['mineral_rich'],
   },
   {
     id: 'coast-unknown',
@@ -244,7 +262,8 @@ export const DEMO_ISLANDS: ReadonlyArray<IslandSpec> = [
     populated: false,
     discovered: false,
     buildings: [],
-    terrainAt: () => 'water',
+    terrainAt: (x, y) => terrainAtForBiome('coast', 'coast-unknown', x, y),
+    modifiers: [],
   },
   {
     id: 'hidden-w',
@@ -256,7 +275,8 @@ export const DEMO_ISLANDS: ReadonlyArray<IslandSpec> = [
     populated: false,
     discovered: false,
     buildings: [],
-    terrainAt: () => 'grass',
+    terrainAt: (x, y) => terrainAtForBiome('plains', 'hidden-w', x, y),
+    modifiers: [],
   },
   {
     id: 'hidden-s',
@@ -268,7 +288,8 @@ export const DEMO_ISLANDS: ReadonlyArray<IslandSpec> = [
     populated: false,
     discovered: false,
     buildings: [],
-    terrainAt: () => 'grass',
+    terrainAt: (x, y) => terrainAtForBiome('forest', 'hidden-s', x, y),
+    modifiers: ['cursed_storms'],
   },
 ];
 
