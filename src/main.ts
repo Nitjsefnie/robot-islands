@@ -253,6 +253,9 @@ async function main(): Promise<void> {
       const rect = app.canvas.getBoundingClientRect();
       const sx = e.clientX - rect.left;
       const sy = e.clientY - rect.top;
+      // Reject mouseups outside the canvas — releasing on a side dock or off
+      // the window shouldn't commit a launch even if the drag was tiny.
+      if (sx < 0 || sx > rect.width || sy < 0 || sy > rect.height) return;
       const wp = screenToWorldTile(sx, sy);
       dronesUi.attemptLaunch(wp.x, wp.y, performance.now());
     }
