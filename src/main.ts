@@ -39,8 +39,9 @@ async function main(): Promise<void> {
   app.stage.addChild(world);
 
   const tiles = computeIslandTiles(HOME_RADIUS, HOME_RADIUS, defaultTerrainAt);
-  // eslint-disable-next-line no-console
-  console.log(`[robot-islands] tile count: ${tiles.length}`);
+  if (import.meta.env.DEV) {
+    console.log(`[robot-islands] tile count: ${tiles.length}`);
+  }
 
   world.addChild(renderIslandTiles(tiles));
   world.addChild(renderBuildings(HOME_ISLAND_BUILDINGS));
@@ -49,11 +50,14 @@ async function main(): Promise<void> {
     world.position.set(app.renderer.width / 2, app.renderer.height / 2);
   };
   recenter();
-  // Pixi v8: Application.resize is fired via the renderer when resizeTo is set.
-  window.addEventListener('resize', recenter);
+  // Pixi v8: the renderer fires its own 'resize' event AFTER it has updated
+  // app.renderer.width/height, so listening here (rather than on window)
+  // guarantees fresh dimensions when recenter runs.
+  // step-1 assumption: app lifetime = page lifetime; replace with
+  // app.renderer.off('resize', recenter) on teardown if step-N introduces remount.
+  app.renderer.on('resize', recenter);
 }
 
 main().catch((err: unknown) => {
-  // eslint-disable-next-line no-console
   console.error('[robot-islands] fatal:', err);
 });

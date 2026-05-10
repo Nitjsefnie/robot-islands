@@ -73,9 +73,9 @@ export function computeIslandTiles(
   // Bounding box: a tile fully inside the ellipse must satisfy |x|, |x+1| < major
   // and |y|, |y+1| < minor. So x ∈ [-major, major-1] is a safe over-approximation.
   const xMin = -Math.ceil(majorRadius);
-  const xMax = Math.ceil(majorRadius);
+  const xMax = Math.ceil(majorRadius) - 1;
   const yMin = -Math.ceil(minorRadius);
-  const yMax = Math.ceil(minorRadius);
+  const yMax = Math.ceil(minorRadius) - 1;
   for (let y = yMin; y <= yMax; y++) {
     for (let x = xMin; x <= xMax; x++) {
       if (tileInscribedInEllipse(x, y, majorRadius, minorRadius)) {
@@ -120,28 +120,32 @@ export function defaultTerrainAt(x: number, y: number): TerrainKind {
 
 /**
  * Render the tile grid into a fresh container. The container is positioned so
- * that the world-origin (tile-grid (0, 0) corner) sits at its local (0, 0); the
- * caller is responsible for centering the container in the viewport.
+ * that world (0, 0) is the *center* of the centre tile (tile (0, 0)); the caller
+ * is responsible for centering the container in the viewport.
  *
- * Each tile is drawn at local pixel coordinates (x * TILE_PX, y * TILE_PX). Tiles
- * with negative x or y therefore end up to the upper-left of the container origin.
+ * Each tile (x, y) is drawn at local pixel coordinates
+ *   (x * TILE_PX - TILE_PX/2, y * TILE_PX - TILE_PX/2)
+ * so that tile (0, 0) sits in the square [-TILE_PX/2, TILE_PX/2)² around the
+ * origin. With this convention, placing the container at the canvas centre
+ * visually centres a symmetric island regardless of viewport size.
  */
 export function renderIslandTiles(tiles: ReadonlyArray<Tile>): Container {
   const layer = new Container();
   layer.label = 'island-tiles';
 
+  const half = TILE_PX / 2;
   const g = new Graphics();
   for (const t of tiles) {
-    const px = t.x * TILE_PX;
-    const py = t.y * TILE_PX;
+    const px = t.x * TILE_PX - half;
+    const py = t.y * TILE_PX - half;
     g.rect(px, py, TILE_PX, TILE_PX).fill(TERRAIN_COLOR[t.terrain]);
   }
 
   // Subtle tile grid lines on top of fills, drawn per-tile so only in-island
   // tiles get a border (the boundary outline emerges naturally from this).
   for (const t of tiles) {
-    const px = t.x * TILE_PX;
-    const py = t.y * TILE_PX;
+    const px = t.x * TILE_PX - half;
+    const py = t.y * TILE_PX - half;
     g.rect(px, py, TILE_PX, TILE_PX).stroke({ width: 1, color: 0x000000, alpha: 0.18 });
   }
 

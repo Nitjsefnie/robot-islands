@@ -40,19 +40,24 @@ export const HOME_ISLAND_BUILDINGS: ReadonlyArray<Building> = [
 
 /**
  * Render buildings into a container. Coordinates align with island.ts: a
- * building's screen position is (x * TILE_PX, y * TILE_PX). A small inset
- * leaves a thin gap so the underlying terrain tile colour is still visible
- * around the building, and the stroke makes the building distinct.
+ * building's footprint origin is shifted by -TILE_PX/2 in both axes so that
+ * world (0, 0) is the centre of tile (0, 0) — matching renderIslandTiles. A
+ * building's screen position is therefore
+ *   (x * TILE_PX - TILE_PX/2, y * TILE_PX - TILE_PX/2)
+ * (plus the inset). The inset leaves a thin gap so the underlying terrain tile
+ * colour is still visible around the building, and the stroke makes the
+ * building distinct.
  */
 export function renderBuildings(buildings: ReadonlyArray<Building>): Container {
   const layer = new Container();
   layer.label = 'buildings';
 
+  const half = TILE_PX / 2;
   const inset = 2;
   const g = new Graphics();
   for (const b of buildings) {
-    const px = b.x * TILE_PX + inset;
-    const py = b.y * TILE_PX + inset;
+    const px = b.x * TILE_PX - half + inset;
+    const py = b.y * TILE_PX - half + inset;
     const w = b.width * TILE_PX - inset * 2;
     const h = b.height * TILE_PX - inset * 2;
     g.rect(px, py, w, h)
