@@ -24,6 +24,7 @@ import {
   type IslandState,
 } from './economy.js';
 import { ALL_RESOURCES, type ResourceId } from './recipes.js';
+import { effectiveSpecializationMultipliers } from './specialization.js';
 import { aggregateStorageCaps } from './world.js';
 
 const MINE: PlacedBuilding = { id: 'b-mine', defId: 'mine', x: 0, y: 0 };
@@ -77,6 +78,8 @@ function makeState(over: Partial<IslandState> = {}): IslandState {
     unlockedNodes: new Set(),
     subPathProgress: new Map(),
     funnelPending: blankFunnel(),
+    specializationRole: null,
+    declaredAt: null,
     lastTick: 0,
     ...over,
   };
@@ -666,5 +669,89 @@ describe('step-9 chain — Smelter T1 + storage aggregation', () => {
       { id: 't-tank', defId: 'tank', x: 4, y: 0 },
     ]);
     for (const r of ALL_RESOURCES) expect(caps[r]).toBe(4200);
+  });
+});
+
+// -----------------------------------------------------------------------
+// Step 10 — specialization roles + Network Consciousness
+// -----------------------------------------------------------------------
+
+describe('step-10 — specialization role integration (§9.4)', () => {
+  it('foundry role: smelting × 1.5, manufacturing × 0.75', () => {
+    // Smelter + Workshop on the same island. Foundry buffs smelting and
+    // penalises manufacturing; the two effects are observable through
+    // production rates after a 1s sample.
+    const SMELTER: PlacedBuilding = { id: 'b-smelter', defId: 'smelter', x: 0, y: 0 };
+    const WORK: PlacedBuilding = { id: 'b-work', defId: 'workshop', x: 0, y: 0 };
+    // Power-free catalog for both — POWER_FREE strips mine/workshop only,
+    // and the smelter ships with power.consumes. Strip both here for the test.
+    const noPower = ((): DefCatalog => {
+      const base = { ...BUILDING_DEFS } as Record<BuildingDefId, BuildingDef>;
+      for (const id of ['smelter', 'workshop'] as const) {
+        const def = base[id];
+        const { power: _power, ...rest } = def;
+        base[id] = rest as BuildingDef;
+      }
+      return base;
+    })();
+    const foundryMul = effectiveSpecializationMultipliers('foundry');
+    const state = makeState({
+      buildings: [SMELTER, WORK],
+      // Plenty of inputs so neither stalls (Smelter wants iron_ore+coal,
+      // Workshop wants iron_ore+coal). Use a big pool so 1s consumption
+      // doesn't dent it.
+      inventory: { ...blankInventory(), iron_ore: 1000, coal: 1000 },
+      storageCaps: blankCaps(10000),
+    });
+    const { byBuilding } = computeRates(state, undefined, noPower, foundryMul, 1);
+    // Smelter base rate = 1/8 = 0.125/s. With foundry buff (×1.5) → 0.1875.
+    // Workshop base rate = 1/10 = 0.1/s. With foundry penalty (×0.75) → 0.075.
+    const smelterRate = byBuilding.find((b) => b.building.defId === 'smelter')!.effectiveRate;
+    const workRate = byBuilding.find((b) => b.building.defId === 'workshop')!.effectiveRate;
+    expect(smelterRate).toBeCloseTo(0.125 * 1.5, 9);
+    expect(workRate).toBeCloseTo(0.1 * 0.75, 9);
+  });
+
+  it('research_beacon role: XP gain × 1.5, recipe rates × 0.75', () => {
+    // Bare Mine. Base 0.2 iron_ore/s, weight 1 → 0.2 XP/s identity.
+    // research_beacon: rate × 0.75 → 0.15 iron_ore/s; XP × 1.5 layered on
+    // top of (production × weight). Expected XP over 10s = 0.15 × 1 × 10 × 1.5 = 2.25.
+    const beaconMul = effectiveSpecializationMultipliers('research_beacon');
+    const state = makeState({
+      buildings: [MINE],
+      inventory: blankInventory(),
+      specializationRole: 'research_beacon',
+    });
+    advanceIsland(state, 10_000, undefined, POWER_FREE, beaconMul, 1);
+    // Production: 0.15/s × 10s = 1.5 iron_ore.
+    expect(state.inventory.iron_ore).toBeCloseTo(1.5, 9);
+    // XP: 1.5 (units) × 1 (weight) × 1.5 (xpMul) = 2.25.
+    expect(state.xp).toBeCloseTo(2.25, 9);
+  });
+
+  it('NC buff +5% applies to T3+ island production but NOT to T1 island', () => {
+    // Two identical bare Mines, one at level 1 (T1, no NC buff) and one at
+    // level 15 (T3, the buff applies). Caller is responsible for gating —
+    // we simulate the same gating advanceIsland would see by passing
+    // ncBuff=1.05 to the T3 state and ncBuff=1.0 to the T1 state.
+    const NC_BUFF = 1.05;
+    const t1 = makeState({
+      buildings: [MINE],
+      inventory: blankInventory(),
+      level: 1, // T1
+    });
+    const t3 = makeState({
+      buildings: [MINE],
+      inventory: blankInventory(),
+      level: 15, // T3
+    });
+    // T1: caller passes ncBuff = 1 (gate closed).
+    advanceIsland(t1, 10_000, undefined, POWER_FREE, undefined, 1);
+    // T3: caller passes ncBuff = 1.05 (gate open).
+    advanceIsland(t3, 10_000, undefined, POWER_FREE, undefined, NC_BUFF);
+    // Mine produces 1 iron_ore / 5s = 0.2/s. T1 over 10s = 2.0 units; T3
+    // over 10s = 2.0 × 1.05 = 2.1 units.
+    expect(t1.inventory.iron_ore).toBeCloseTo(2.0, 9);
+    expect(t3.inventory.iron_ore).toBeCloseTo(2.1, 9);
   });
 });

@@ -21,6 +21,7 @@
 
 import { BIOME_DEFS, MODIFIER_DEFS, type ModifierId } from './biomes.js';
 import { cap, type IslandState, type PowerBalance, xpForLevel } from './economy.js';
+import type { NetworkConsciousnessState } from './network-consciousness.js';
 import { ALL_RESOURCES, type ResourceId } from './recipes.js';
 import { tierForLevel, type Tier } from './skilltree.js';
 import type { IslandSpec } from './world.js';
@@ -40,6 +41,7 @@ export interface HudHandle {
     net: Record<ResourceId, number>,
     power: PowerBalance,
     spec: IslandSpec,
+    ncState: NetworkConsciousnessState,
   ): void;
 }
 
@@ -260,9 +262,43 @@ export function mountHud(parentEl: HTMLElement): HudHandle {
   const powerNode = document.createTextNode('');
   const factorSpan = document.createElement('span');
   factorSpan.style.fontWeight = '600';
-  const postNode = document.createTextNode('');
+  const powerTailNode = document.createTextNode('\n');
   panel.appendChild(powerNode);
   panel.appendChild(factorSpan);
+  panel.appendChild(powerTailNode);
+
+  // Network Consciousness line (§9.6). Sits between the Power line and the
+  // Inventory block. Label uses the same FG_DIM/uppercase letter-spaced
+  // typography as the Site row; value carries the active milestone summary
+  // or an em-dash when no T3+ islands exist yet. The line lives in a flex
+  // row so the value can right-align cleanly without monospace padding.
+  const networkLine = document.createElement('div');
+  networkLine.style.cssText = [
+    'display: flex',
+    'justify-content: space-between',
+    'align-items: baseline',
+    'gap: 8px',
+    'padding-top: 1px',
+  ].join(';');
+  const networkLabel = document.createElement('span');
+  networkLabel.textContent = 'Network';
+  networkLabel.style.cssText = [
+    'color: #7a8294',
+    'letter-spacing: 0.06em',
+    'text-transform: uppercase',
+    'font-size: 10px',
+  ].join(';');
+  const networkValue = document.createElement('span');
+  networkValue.style.cssText = [
+    'font-size: 11px',
+    'font-weight: 600',
+    'font-variant-numeric: tabular-nums',
+  ].join(';');
+  networkLine.appendChild(networkLabel);
+  networkLine.appendChild(networkValue);
+  panel.appendChild(networkLine);
+
+  const postNode = document.createTextNode('');
   panel.appendChild(postNode);
 
   /** Last-rendered modifier signature — used to skip chip rebuild when the
@@ -337,6 +373,7 @@ export function mountHud(parentEl: HTMLElement): HudHandle {
     net: Record<ResourceId, number>,
     power: PowerBalance,
     spec: IslandSpec,
+    ncState: NetworkConsciousnessState,
   ): void {
     const need = xpForLevel(state.level + 1);
     titleNode.textContent = 'Home Island';
@@ -381,6 +418,20 @@ export function mountHud(parentEl: HTMLElement): HudHandle {
 
     factorSpan.textContent = factorStr;
     factorSpan.style.color = powerColor(power.factor);
+
+    // Network Consciousness line. No T3+ islands → muted em-dash. Active
+    // milestone → "{N} at T3+ · NC tier {milestone} · +X%" in ACCENT.
+    // The buff percentage rounds to 0 places (1.05 → "+5%") — matches the
+    // §9.6 placeholders exactly.
+    if (ncState.tier3PlusCount === 0) {
+      networkValue.textContent = '—';
+      networkValue.style.color = '#4d5566';
+    } else {
+      const buffPct = Math.round((ncState.globalProductionBuff - 1) * 100);
+      networkValue.textContent =
+        `${ncState.tier3PlusCount} at T3+ · NC tier ${ncState.milestone} · +${buffPct}%`;
+      networkValue.style.color = '#7dd3e8';
+    }
 
     const tailLines: string[] = [];
     tailLines.push(``);

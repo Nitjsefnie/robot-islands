@@ -421,6 +421,11 @@ export function makeInitialIslandState(spec: IslandSpec, nowMs: number): IslandS
     unlockedNodes: new Set(),
     subPathProgress: new Map(),
     funnelPending: startingFunnelPending(),
+    // §9.4 specialization is undeclared at birth — every island starts as
+    // a Generalist (no buff, no penalty). Declaration is gated by T3
+    // (level ≥ 15) and one-way until §9.7 Tier Reset lands.
+    specializationRole: null,
+    declaredAt: null,
     lastTick: nowMs,
   };
 }

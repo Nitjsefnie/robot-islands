@@ -35,6 +35,7 @@ import {
   type SubPathId,
 } from './skilltree.js';
 import { type IslandState, xpForLevel } from './economy.js';
+import { ALL_ROLES, ROLE_DEFS, type RoleId } from './specialization.js';
 
 export interface SkillTreeUi {
   readonly el: HTMLDivElement;
@@ -49,6 +50,14 @@ export interface SkillTreeUi {
   toggle(): boolean;
   /** Whether the panel is currently visible. */
   isVisible(): boolean;
+}
+
+/** Optional hooks for the skill-tree panel. Step 10 adds `onDeclareRole`,
+ *  invoked after the panel mutates `state.specializationRole` so callers
+ *  can run additional bookkeeping (e.g., bumping a "declared role X"
+ *  notification). The mutation happens inside the panel regardless. */
+export interface SkillTreeUiOptions {
+  readonly onDeclareRole?: (role: RoleId) => void;
 }
 
 // Palette — derived from the world ocean palette + HUD foreground.
@@ -109,7 +118,11 @@ interface NodeRowRef {
   readonly titleEl: HTMLDivElement;
 }
 
-export function mountSkillTreeUi(parentEl: HTMLElement, state: IslandState): SkillTreeUi {
+export function mountSkillTreeUi(
+  parentEl: HTMLElement,
+  state: IslandState,
+  options: SkillTreeUiOptions = {},
+): SkillTreeUi {
   // Forward-declared so the closures inside `nodeRow` can capture them. They
   // are populated before any `refresh()` call (which is itself bound at the
   // end of this function via the returned object).
@@ -519,7 +532,424 @@ export function mountSkillTreeUi(parentEl: HTMLElement, state: IslandState): Ski
   footer.appendChild(footerL);
   footer.appendChild(footerR);
 
+  // -------------------------------------------------------------------------
+  // Specialization section — §9.4 role declaration (above the branch columns)
+  // -------------------------------------------------------------------------
+  //
+  // Layout: section container with a caption row (left "SPECIALIZATION",
+  // center subtitle, right status indicator), then a 5-column card grid
+  // (one per RoleId). Each card has a top-band glyph + T3 chip, name,
+  // datasheet rows, and a footer button (Locked / Declare / Active /
+  // LockedRoleSet depending on state).
+  const specSection = document.createElement('div');
+  styled(
+    specSection,
+    [
+      'padding: 12px 16px 14px',
+      'background: rgba(20, 24, 32, 0.6)',
+      `border-top: 1px solid ${PANEL_HEADER_BORDER}`,
+      `border-bottom: 1px solid ${PANEL_BORDER}`,
+      'display: flex',
+      'flex-direction: column',
+      'gap: 10px',
+    ].join(';'),
+  );
+
+  // Caption row.
+  const captionRow = document.createElement('div');
+  styled(
+    captionRow,
+    [
+      'display: flex',
+      'align-items: baseline',
+      'justify-content: space-between',
+      'gap: 12px',
+    ].join(';'),
+  );
+  const captionLeft = document.createElement('span');
+  captionLeft.textContent = 'SPECIALIZATION';
+  styled(
+    captionLeft,
+    [
+      `color: ${ACCENT}`,
+      'font-size: 11px',
+      'font-weight: 600',
+      'letter-spacing: 0.22em',
+    ].join(';'),
+  );
+  const captionSubtitle = document.createElement('span');
+  captionSubtitle.textContent = '§9.4 / role declaration';
+  styled(
+    captionSubtitle,
+    [
+      `color: ${FG_DIM}`,
+      'font-size: 10px',
+      'letter-spacing: 0.12em',
+      'text-transform: uppercase',
+      'flex: 1 1 auto',
+      'padding-left: 14px',
+    ].join(';'),
+  );
+  const captionStatus = document.createElement('span');
+  styled(
+    captionStatus,
+    [
+      'font-size: 11px',
+      'font-weight: 600',
+      'letter-spacing: 0.10em',
+      'text-transform: uppercase',
+      'flex: 0 0 auto',
+    ].join(';'),
+  );
+  captionRow.appendChild(captionLeft);
+  captionRow.appendChild(captionSubtitle);
+  captionRow.appendChild(captionStatus);
+  specSection.appendChild(captionRow);
+
+  // 5-column card grid.
+  const cardGrid = document.createElement('div');
+  styled(
+    cardGrid,
+    [
+      'display: grid',
+      'grid-template-columns: repeat(5, 1fr)',
+      'gap: 1px',
+      'background: #2a3140',
+    ].join(';'),
+  );
+  specSection.appendChild(cardGrid);
+
+  // Per-role glyphs (verbatim from the visual spec).
+  const ROLE_GLYPHS: Readonly<Record<RoleId, string>> = {
+    foundry: '▣',           // ▣
+    refinery: '◇',          // ◇
+    mining: '▽',            // ▽
+    logistics_hub: '⇄',     // ⇄
+    research_beacon: '⊙',   // ⊙
+  };
+  // Display names for each card's title row — uppercased displayName, with
+  // "LOGISTICS HUB" / "RESEARCH BEACON" reading more compact than the §9.4
+  // catalog string ("Logistics Hub", "Research Beacon").
+  const ROLE_CARD_NAMES: Readonly<Record<RoleId, string>> = {
+    foundry: 'FOUNDRY',
+    refinery: 'REFINERY',
+    mining: 'MINING',
+    logistics_hub: 'LOGISTICS HUB',
+    research_beacon: 'RESEARCH BEACON',
+  };
+
+  interface CardRef {
+    readonly card: HTMLDivElement;
+    readonly topBorder: HTMLDivElement;
+    readonly glyph: HTMLSpanElement;
+    readonly tierChip: HTMLSpanElement;
+    readonly nameEl: HTMLSpanElement;
+    readonly datasheetEl: HTMLDivElement;
+    readonly footerBtn: HTMLButtonElement;
+    readonly activeStamp: HTMLSpanElement;
+  }
+  const cardRefs = new Map<RoleId, CardRef>();
+
+  // Build datasheet rows for a role. Returns the rendered container so the
+  // card builder can attach it; the datasheet contents do not need to be
+  // re-rendered per refresh (the role's effect doesn't change).
+  function buildDatasheetRows(id: RoleId): HTMLDivElement {
+    const wrap = document.createElement('div');
+    styled(wrap, 'display: flex; flex-direction: column; gap: 3px');
+
+    function row(label: string, valueSpan: HTMLElement): HTMLDivElement {
+      const r = document.createElement('div');
+      styled(
+        r,
+        [
+          'display: flex',
+          'justify-content: space-between',
+          'align-items: baseline',
+          'gap: 6px',
+        ].join(';'),
+      );
+      const l = document.createElement('span');
+      l.textContent = label;
+      styled(
+        l,
+        [
+          `color: ${FG_DIM}`,
+          'font-size: 10px',
+          'letter-spacing: 0.06em',
+          'text-transform: uppercase',
+        ].join(';'),
+      );
+      r.appendChild(l);
+      r.appendChild(valueSpan);
+      return r;
+    }
+
+    function valueSpan(text: string, color: string): HTMLSpanElement {
+      const s = document.createElement('span');
+      s.textContent = text;
+      styled(
+        s,
+        [
+          `color: ${color}`,
+          'font-size: 11px',
+          'font-weight: 600',
+          'font-variant-numeric: tabular-nums',
+        ].join(';'),
+      );
+      return s;
+    }
+
+    // U+2212 minus throughout (per spec) for clean typography vs ASCII '-'.
+    const MIN = '−';
+
+    switch (id) {
+      case 'foundry':
+        wrap.appendChild(row('SMELTING', valueSpan('+50%', ACCENT)));
+        wrap.appendChild(row('OTHERS', valueSpan(`${MIN}25%`, WARN)));
+        break;
+      case 'refinery':
+        wrap.appendChild(row('CHEMISTRY', valueSpan('+50%', ACCENT)));
+        wrap.appendChild(row('OTHERS', valueSpan(`${MIN}25%`, WARN)));
+        break;
+      case 'mining':
+        wrap.appendChild(row('EXTRACTION', valueSpan('+75%', ACCENT)));
+        wrap.appendChild(row('OTHERS', valueSpan(`${MIN}50%`, WARN)));
+        break;
+      case 'logistics_hub':
+        wrap.appendChild(row('LOGISTICS', valueSpan('+100% · STG +50%', ACCENT)));
+        wrap.appendChild(row('OTHERS', valueSpan(`${MIN}25%`, WARN)));
+        break;
+      case 'research_beacon': {
+        // Mixed span: +50% in ACCENT, −25% in WARN, joined by " · ".
+        const mixed = document.createElement('span');
+        styled(
+          mixed,
+          [
+            'font-size: 11px',
+            'font-weight: 600',
+            'font-variant-numeric: tabular-nums',
+          ].join(';'),
+        );
+        const xpPart = document.createElement('span');
+        xpPart.textContent = '+50%';
+        styled(xpPart, `color: ${ACCENT}`);
+        const sep = document.createElement('span');
+        sep.textContent = ' · RECIPES ';
+        styled(sep, `color: ${FG_DIM}`);
+        const recipePart = document.createElement('span');
+        recipePart.textContent = `${MIN}25%`;
+        styled(recipePart, `color: ${WARN}`);
+        mixed.appendChild(xpPart);
+        mixed.appendChild(sep);
+        mixed.appendChild(recipePart);
+        wrap.appendChild(row('XP', mixed));
+        break;
+      }
+      default: {
+        const _exhaustive: never = id;
+        void _exhaustive;
+        break;
+      }
+    }
+    return wrap;
+  }
+
+  // Short summary string used inside the confirm() prompt body. Matches the
+  // datasheet contents at a sentence level so the confirmation reads like
+  // a digest of the card. Plain ASCII — confirm() text renders consistently
+  // across browsers without special glyph handling.
+  const ROLE_CONFIRM_SUMMARY: Readonly<Record<RoleId, string>> = {
+    foundry: '+50% smelting recipe rate, ×0.75 on all other production.',
+    refinery: '+50% chemistry recipe rate, ×0.75 on all other production.',
+    mining: '+75% extraction recipe rate, ×0.50 on all other production.',
+    logistics_hub:
+      '+100% logistics recipe rate, +50% storage caps, ×0.75 on all other production.',
+    research_beacon: '+50% skill XP on this island, ×0.75 on all recipe rates.',
+  };
+
+  function buildCard(id: RoleId): void {
+    const def = ROLE_DEFS[id];
+    const card = document.createElement('div');
+    styled(
+      card,
+      [
+        'background: rgba(14, 18, 26, 0.92)',
+        'padding: 10px 9px 9px',
+        'display: flex',
+        'flex-direction: column',
+        'gap: 8px',
+        'position: relative',
+        'transition: opacity 100ms ease, background 100ms ease',
+      ].join(';'),
+    );
+
+    // Top-border 2px (or 1px in the "others-after-declaration" state) drawn
+    // as an absolute-positioned bar so we can swap its colour cleanly per
+    // state without invalidating the card's padding box.
+    const topBorder = document.createElement('div');
+    styled(
+      topBorder,
+      [
+        'position: absolute',
+        'top: 0',
+        'left: 0',
+        'right: 0',
+        'height: 2px',
+        `background: ${FG_MUTED}`,
+      ].join(';'),
+    );
+    card.appendChild(topBorder);
+
+    // Glyph + T3 chip row.
+    const glyphRow = document.createElement('div');
+    styled(
+      glyphRow,
+      [
+        'display: flex',
+        'align-items: center',
+        'justify-content: space-between',
+        'gap: 6px',
+      ].join(';'),
+    );
+    const glyph = document.createElement('span');
+    glyph.textContent = ROLE_GLYPHS[id];
+    styled(
+      glyph,
+      [
+        `color: ${FG}`,
+        'font-size: 16px',
+        'font-family: ui-monospace, monospace',
+        'font-variant-numeric: tabular-nums',
+        'line-height: 1',
+      ].join(';'),
+    );
+    const tierChip = document.createElement('span');
+    tierChip.textContent = `T${def.tierRequirement}`;
+    styled(
+      tierChip,
+      [
+        `color: ${FG_DIM}`,
+        'font-size: 9.5px',
+        'letter-spacing: 0.08em',
+        `border: 1px solid ${FG_MUTED}`,
+        'padding: 0 4px',
+        'border-radius: 2px',
+        'line-height: 1.3',
+      ].join(';'),
+    );
+    glyphRow.appendChild(glyph);
+    glyphRow.appendChild(tierChip);
+    card.appendChild(glyphRow);
+
+    // Name (uppercase displayName).
+    const nameEl = document.createElement('span');
+    nameEl.textContent = ROLE_CARD_NAMES[id];
+    styled(
+      nameEl,
+      [
+        `color: ${FG}`,
+        'font-size: 12px',
+        'font-weight: 600',
+        'letter-spacing: 0.03em',
+        'text-transform: uppercase',
+      ].join(';'),
+    );
+    card.appendChild(nameEl);
+
+    // Datasheet rows.
+    const datasheetEl = buildDatasheetRows(id);
+    card.appendChild(datasheetEl);
+
+    // Footer button. The default visual is "Declarable / WARN"; refresh()
+    // recolours it per current state. Clicks are gated by current state at
+    // dispatch time — the per-frame visual is independent of the listener.
+    const footerBtn = document.createElement('button');
+    styled(
+      footerBtn,
+      [
+        'background: transparent',
+        `color: ${FG_MUTED}`,
+        `border: 1px solid ${FG_MUTED}`,
+        'padding: 3px 9px',
+        'font-family: ui-monospace, monospace',
+        'font-size: 11px',
+        'letter-spacing: 0.04em',
+        'text-transform: uppercase',
+        'cursor: not-allowed',
+        'width: 100%',
+        'margin-top: auto',
+        'transition: background 80ms ease, color 80ms ease, border-color 80ms ease',
+      ].join(';'),
+    );
+    footerBtn.addEventListener('click', () => {
+      // Re-check state at click time — the button can be enabled by a level
+      // up between paints.
+      const role = state.specializationRole;
+      if (role !== null) return; // already declared
+      if (tierForLevel(state.level) < def.tierRequirement) return; // tier-locked
+      const proceed = window.confirm(
+        `DECLARE ${ROLE_DEFS[id].displayName.toUpperCase()} ROLE\n\n` +
+          `${ROLE_CONFIRM_SUMMARY[id]}\n\n` +
+          'This commitment can only be reversed via Tier Reset (§9.7).\nProceed?',
+      );
+      if (!proceed) return;
+      state.specializationRole = id;
+      state.declaredAt = performance.now();
+      options.onDeclareRole?.(id);
+      refresh();
+      footerBtn.blur();
+    });
+    // Hover wash for declarable cards. Refresh() repaints the base state on
+    // mouseleave so a level-up mid-hover still settles correctly.
+    card.addEventListener('mouseenter', () => {
+      if (state.specializationRole !== null) return;
+      if (tierForLevel(state.level) < def.tierRequirement) return;
+      card.style.background = 'rgba(245, 167, 66, 0.06)';
+    });
+    card.addEventListener('mouseleave', () => {
+      refreshSpecialization();
+    });
+    card.appendChild(footerBtn);
+
+    // Absolute-positioned "● ACTIVE" stamp in top-right corner, shown only
+    // when this card is the declared role. Hidden by default; refresh()
+    // toggles its display.
+    const activeStamp = document.createElement('span');
+    activeStamp.textContent = '● ACTIVE';
+    styled(
+      activeStamp,
+      [
+        'position: absolute',
+        'top: 6px',
+        'right: 8px',
+        `color: ${ACCENT}`,
+        'font-size: 9px',
+        'letter-spacing: 0.10em',
+        `border: 1px solid rgba(125, 211, 232, 0.40)`,
+        'padding: 1px 4px',
+        'border-radius: 2px',
+        'display: none',
+      ].join(';'),
+    );
+    card.appendChild(activeStamp);
+
+    cardGrid.appendChild(card);
+    cardRefs.set(id, {
+      card,
+      topBorder,
+      glyph,
+      tierChip,
+      nameEl,
+      datasheetEl,
+      footerBtn,
+      activeStamp,
+    });
+  }
+
+  for (const id of ALL_ROLES) buildCard(id);
+
   panel.appendChild(header);
+  panel.appendChild(specSection);
   panel.appendChild(body);
   panel.appendChild(footer);
 
@@ -569,6 +999,105 @@ export function mountSkillTreeUi(parentEl: HTMLElement, state: IslandState): Ski
     }
   }
 
+  function refreshSpecialization(): void {
+    const declared: RoleId | null = state.specializationRole;
+    const tier = tierForLevel(state.level);
+    const unlocked = tier >= 3;
+
+    // Caption status — three branches: Locked / Awaiting / Active.
+    if (!unlocked && declared === null) {
+      captionStatus.textContent = '◯ REQUIRES TIER 3';
+      captionStatus.style.color = FG_MUTED;
+    } else if (declared !== null) {
+      const name = ROLE_DEFS[declared].displayName.toUpperCase();
+      captionStatus.textContent = `● ROLE ACTIVE: ${name}`;
+      captionStatus.style.color = ACCENT;
+    } else {
+      captionStatus.textContent = '◇ AWAITING DECLARATION';
+      captionStatus.style.color = WARN;
+    }
+
+    for (const id of ALL_ROLES) {
+      const ref = cardRefs.get(id);
+      if (!ref) continue;
+      const isActive = declared === id;
+      const isOtherDeclared = declared !== null && declared !== id;
+      // Card-level state classification: Locked < tier 3, Declarable
+      // (tier ≥ 3, no role), Active (this card), OtherDeclared.
+      if (isActive) {
+        ref.card.style.background = 'rgba(125, 211, 232, 0.05)';
+        ref.card.style.opacity = '1';
+        ref.topBorder.style.background = ACCENT;
+        ref.topBorder.style.height = '2px';
+        ref.glyph.style.color = ACCENT;
+        ref.glyph.style.textShadow = '0 0 6px rgba(125, 211, 232, 0.4)';
+        ref.tierChip.style.color = ACCENT;
+        ref.tierChip.style.borderColor = ACCENT;
+        ref.nameEl.style.color = FG;
+        ref.datasheetEl.style.opacity = '1';
+        ref.footerBtn.textContent = '● ACTIVE';
+        ref.footerBtn.style.color = ACCENT;
+        ref.footerBtn.style.borderColor = ACCENT;
+        ref.footerBtn.style.cursor = 'default';
+        ref.footerBtn.style.opacity = '1';
+        ref.activeStamp.style.display = 'inline-block';
+      } else if (isOtherDeclared) {
+        ref.card.style.background = 'rgba(14, 18, 26, 0.92)';
+        ref.card.style.opacity = '0.4';
+        ref.topBorder.style.background = FG_MUTED;
+        ref.topBorder.style.height = '1px';
+        ref.glyph.style.color = FG_MUTED;
+        ref.glyph.style.textShadow = 'none';
+        ref.tierChip.style.color = FG_MUTED;
+        ref.tierChip.style.borderColor = FG_MUTED;
+        ref.nameEl.style.color = FG_MUTED;
+        ref.datasheetEl.style.opacity = '1';
+        ref.footerBtn.textContent = 'LOCKED · ROLE SET';
+        ref.footerBtn.style.color = FG_MUTED;
+        ref.footerBtn.style.borderColor = FG_MUTED;
+        ref.footerBtn.style.cursor = 'not-allowed';
+        ref.footerBtn.style.opacity = '0.6';
+        ref.activeStamp.style.display = 'none';
+      } else if (unlocked) {
+        // Declarable.
+        ref.card.style.background = 'rgba(14, 18, 26, 0.92)';
+        ref.card.style.opacity = '1';
+        ref.topBorder.style.background = WARN;
+        ref.topBorder.style.height = '2px';
+        ref.glyph.style.color = FG;
+        ref.glyph.style.textShadow = 'none';
+        ref.tierChip.style.color = FG_DIM;
+        ref.tierChip.style.borderColor = FG_MUTED;
+        ref.nameEl.style.color = FG;
+        ref.datasheetEl.style.opacity = '1';
+        ref.footerBtn.textContent = '▶ DECLARE';
+        ref.footerBtn.style.color = WARN;
+        ref.footerBtn.style.borderColor = WARN;
+        ref.footerBtn.style.cursor = 'pointer';
+        ref.footerBtn.style.opacity = '1';
+        ref.activeStamp.style.display = 'none';
+      } else {
+        // Locked (tier < 3).
+        ref.card.style.background = 'rgba(14, 18, 26, 0.92)';
+        ref.card.style.opacity = '0.55';
+        ref.topBorder.style.background = FG_MUTED;
+        ref.topBorder.style.height = '2px';
+        ref.glyph.style.color = FG_MUTED;
+        ref.glyph.style.textShadow = 'none';
+        ref.tierChip.style.color = FG_MUTED;
+        ref.tierChip.style.borderColor = FG_MUTED;
+        ref.nameEl.style.color = FG_DIM;
+        ref.datasheetEl.style.opacity = '0.8';
+        ref.footerBtn.textContent = 'LOCKED · T3';
+        ref.footerBtn.style.color = FG_MUTED;
+        ref.footerBtn.style.borderColor = FG_MUTED;
+        ref.footerBtn.style.cursor = 'not-allowed';
+        ref.footerBtn.style.opacity = '0.5';
+        ref.activeStamp.style.display = 'none';
+      }
+    }
+  }
+
   refresh = (): void => {
     // Skip work while hidden — the ticker calls this every frame.
     if (!visible) return;
@@ -577,6 +1106,9 @@ export function mountSkillTreeUi(parentEl: HTMLElement, state: IslandState): Ski
     xpVal.textContent = `${state.xp.toFixed(0)} / ${need.toFixed(0)}`;
     tierVal.textContent = `T${tierForLevel(state.level)}`;
     pointsVal.textContent = String(state.unspentSkillPoints);
+
+    // Specialization section refresh — caption status + per-card state.
+    refreshSpecialization();
 
     for (const node of NODE_CATALOG) {
       const ref = nodeRefs.get(node.id);

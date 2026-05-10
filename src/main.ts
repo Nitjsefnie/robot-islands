@@ -30,6 +30,13 @@ import {
 } from './camera.js';
 import { effectiveModifierMultipliers, type ModifierMultipliers } from './biomes.js';
 import { advanceIsland, computeRates, type IslandState } from './economy.js';
+import { computeNcState } from './network-consciousness.js';
+import {
+  effectiveSpecializationMultipliers,
+  IDENTITY_SPECIALIZATION,
+  type SpecializationMultipliers,
+} from './specialization.js';
+import { tierForLevel } from './skilltree.js';
 import { renderCellGrid } from './grid.js';
 import { mountHud } from './hud.js';
 import {
@@ -447,13 +454,30 @@ async function main(): Promise<void> {
     const now = performance.now();
     const elapsedSec = Math.max(0, (now - lastFrameMs) / 1000);
     lastFrameMs = now;
+    // Compute Network Consciousness state once per frame from the current
+    // island set. §9.6 buff applies only to T3+ islands; per-island gating
+    // happens at the call site below (not inside advanceIsland) so the
+    // pure economy doesn't take a dependency on `tierForLevel`.
+    const ncState = computeNcState(islandStates);
+    // Specialization multipliers depend only on `state.specializationRole`,
+    // which is mutable from the UI. Recompute per-island per-frame; the
+    // fold is constant-cost and pre-baking it would require invalidation
+    // plumbing on the declare-role callback.
+    const specMulFor = (s: IslandState): SpecializationMultipliers =>
+      s.specializationRole === null
+        ? IDENTITY_SPECIALIZATION
+        : effectiveSpecializationMultipliers(s.specializationRole);
+    const ncBuffFor = (s: IslandState): number =>
+      tierForLevel(s.level) >= 3 ? ncState.globalProductionBuff : 1;
     // Advance every populated island in turn. Routes are dispatched AFTER
     // advance so the per-island production from this frame is visible to
     // route dispatch; deliveries handed back to the next frame's advance
     // get consumed (and the funnel-pending credit drained) on that frame.
     // Each island's modifier set composes its own recipe-rate multipliers,
     // so we look up the precomputed bundle by id and pass it through.
-    for (const s of islandStates.values()) advanceIsland(s, now, modifierMulFor(s.id));
+    for (const s of islandStates.values()) {
+      advanceIsland(s, now, modifierMulFor(s.id), undefined, specMulFor(s), ncBuffFor(s));
+    }
     // Drones tick AFTER economy so any biofuel changes from this frame
     // are visible to the dispatch UI on the same frame; drone returns
     // are processed independent of economy state.
@@ -466,8 +490,14 @@ async function main(): Promise<void> {
     // Recompute rates AFTER the tick so the HUD shows the current
     // post-advance state (e.g., a freshly-stalled building reads as
     // 0 rate, not the rate it was running at one event ago).
-    const { net, power } = computeRates(homeState, modifierMulFor(homeState.id));
-    hud.update(homeState, net, power, homeSpec);
+    const { net, power } = computeRates(
+      homeState,
+      modifierMulFor(homeState.id),
+      undefined,
+      specMulFor(homeState),
+      ncBuffFor(homeState),
+    );
+    hud.update(homeState, net, power, homeSpec, ncState);
     // Skill tree only repaints while visible — DOM writes are wasted
     // otherwise. show() also forces a paint on transition so we don't
     // strictly need a per-frame call, but level-up while the panel is open

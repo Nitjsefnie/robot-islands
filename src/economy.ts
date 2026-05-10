@@ -29,6 +29,12 @@ import { BUILDING_DEFS, type BuildingDef, type BuildingDefId } from './building-
 import type { PlacedBuilding } from './buildings.js';
 import { RECIPES, XP_WEIGHT, type Recipe, type ResourceId } from './recipes.js';
 import { effectiveSkillMultipliers, type NodeId, type SubPathId } from './skilltree.js';
+import {
+  effectiveSpecializationMultipliers,
+  IDENTITY_SPECIALIZATION,
+  type RoleId,
+  type SpecializationMultipliers,
+} from './specialization.js';
 
 /**
  * The mutable per-island runtime state. `IslandSpec` in world.ts is the
@@ -66,6 +72,18 @@ export interface IslandState {
    *  as 0 — `makeInitialIslandState` seeds all ResourceIds to 0 explicitly
    *  so the deductions in `accrueXp` never see undefined. */
   funnelPending: Record<ResourceId, number>;
+  /** §9.4 declared specialization role, or `null` for the Generalist
+   *  baseline. Step-10 mutates this exactly once per island (declaration is
+   *  one-way; the §9.7 Tier Reset path that clears it back to null is
+   *  deferred). The economy reads this each frame via
+   *  `effectiveSpecializationMultipliers` to fold the role's buff/penalty
+   *  into the rate, storage, and XP multipliers. */
+  specializationRole: RoleId | null;
+  /** Wall-clock timestamp (ms) at which the player declared the current role.
+   *  Null until the first declaration. Carries no economic semantics in
+   *  step 10 — it's a UX hook for the §9.7 Tier Reset cooldown timer
+   *  (reset disallowed within 24 real-time hours of the last reset). */
+  declaredAt: number | null;
   /** Wall-clock timestamp of the last advance, in milliseconds. */
   lastTick: number;
 }
@@ -90,8 +108,13 @@ export function inv(state: IslandState, r: ResourceId): number {
 export function cap(state: IslandState, r: ResourceId): number {
   const nominal = state.storageCaps[r] ?? 0;
   if (nominal === 0) return 0;
-  const mul = effectiveSkillMultipliers(state).storageCap;
-  return nominal * mul;
+  const skillMul = effectiveSkillMultipliers(state).storageCap;
+  // Specialization storage multiplier (§9.4 logistics_hub) reads from state
+  // so every cap()-call site (outputAvail, findNextCapEvent, applyRates, the
+  // HUD) sees the same effective cap without threading specMul as a param.
+  // Identity role → 1.0, composes cleanly.
+  const specMul = effectiveSpecializationMultipliers(state.specializationRole).storageCapMul;
+  return nominal * skillMul * specMul;
 }
 
 /**
@@ -211,6 +234,8 @@ export function computeRates(
   state: IslandState,
   modifierMul: ModifierMultipliers = IDENTITY_MODIFIER_MULTIPLIERS,
   defs: DefCatalog = BUILDING_DEFS,
+  specMul: SpecializationMultipliers = IDENTITY_SPECIALIZATION,
+  ncBuff: number = 1,
 ): {
   byBuilding: ReadonlyArray<BuildingRate>;
   production: Record<ResourceId, number>;
@@ -257,13 +282,16 @@ export function computeRates(
       continue;
     }
     // Recipe-rate multipliers compose: skill-tree (per-category) × modifier
-    // (per-category) × modifier (global). Stable / placeholder modifiers
-    // contribute 1×, so the identity-modifier path matches the pre-step-8
-    // behaviour exactly.
+    // (per-category) × modifier (global) × specialization (per-category) ×
+    // specialization (global) × NC global buff. Identity bundles in any of
+    // the new factors contribute 1× so existing callers see no change.
     const rateMul =
       (skillMul.recipeRate[recipe.category] ?? 1) *
       (modifierMul.recipeRateByCategory[recipe.category] ?? 1) *
-      modifierMul.globalRecipeRate;
+      modifierMul.globalRecipeRate *
+      (specMul.recipeRateByCategory[recipe.category] ?? 1) *
+      specMul.globalRecipeRate *
+      ncBuff;
     const baseRate = (1 / recipe.cycleSec) * buffStack * rateMul;
     tentative.push({ building: b, recipe, baseRate });
     for (const [r, yld] of Object.entries(recipe.outputs)) {
@@ -285,7 +313,10 @@ export function computeRates(
     const rateMul =
       (skillMul.recipeRate[t.recipe.category] ?? 1) *
       (modifierMul.recipeRateByCategory[t.recipe.category] ?? 1) *
-      modifierMul.globalRecipeRate;
+      modifierMul.globalRecipeRate *
+      (specMul.recipeRateByCategory[t.recipe.category] ?? 1) *
+      specMul.globalRecipeRate *
+      ncBuff;
     const nominalRate = (1 / t.recipe.cycleSec) * buffStack * rateMul;
     const externalSupply: Record<ResourceId, number> = {} as Record<ResourceId, number>;
     for (const r of Object.keys(tentSupply) as ResourceId[]) {
@@ -453,6 +484,7 @@ function accrueXp(
   production: Record<ResourceId, number>,
   consumption: Record<ResourceId, number>,
   dtSec: number,
+  xpMul: number = 1,
 ): void {
   let gain = 0;
   for (const r of Object.keys(production) as ResourceId[]) {
@@ -480,7 +512,11 @@ function accrueXp(
     state.funnelPending[r] = pending - drawn;
     gain += drawn;
   }
-  state.xp += gain;
+  // §9.4 research_beacon: total XP gain × xpMul (default 1, identity).
+  // Applied AFTER the funnel drain so funneled bonus XP also scales — the
+  // spec is silent on the interaction but treating the role as a uniform
+  // XP multiplier is the simpler invariant.
+  state.xp += gain * xpMul;
 }
 
 /** Local constant for the funnel-drain math. Mirrors `FUNNELING_BONUS_PERCENT`
@@ -552,6 +588,8 @@ export function advanceIsland(
   nowMs: number,
   modifierMul: ModifierMultipliers = IDENTITY_MODIFIER_MULTIPLIERS,
   defs: DefCatalog = BUILDING_DEFS,
+  specMul: SpecializationMultipliers = IDENTITY_SPECIALIZATION,
+  ncBuff: number = 1,
 ): void {
   if (nowMs <= state.lastTick) {
     state.lastTick = nowMs;
@@ -560,7 +598,7 @@ export function advanceIsland(
   let t = state.lastTick;
   for (let safety = 0; safety < 10000; safety++) {
     if (t >= nowMs) break;
-    const { production, consumption, net } = computeRates(state, modifierMul, defs);
+    const { production, consumption, net } = computeRates(state, modifierMul, defs, specMul, ncBuff);
     const nextEventMs = findNextCapEvent(state, net, t, nowMs);
     // Clamp to nowMs; findNextCapEvent already returns nowMs when nothing
     // changes, but if all rates are zero we still need to exit the loop.
@@ -568,7 +606,7 @@ export function advanceIsland(
     const dtSec = (segEndMs - t) / 1000;
     if (dtSec > 0) {
       applyRates(state, net, dtSec);
-      accrueXp(state, production, consumption, dtSec);
+      accrueXp(state, production, consumption, dtSec, specMul.xpMul);
       levelUpIfReady(state);
     }
     // Advance t. If no progress was made (dt = 0 and segEnd === t) but we

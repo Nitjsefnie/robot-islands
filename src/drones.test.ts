@@ -48,6 +48,8 @@ function makeIslandState(over: Partial<IslandState> = {}): IslandState {
     unlockedNodes: new Set(),
     subPathProgress: new Map(),
     funnelPending: emptyFunnel(),
+    specializationRole: null,
+    declaredAt: null,
     lastTick: 0,
     ...over,
   };
