@@ -28,7 +28,7 @@ import {
   zoomAt,
   type Camera,
 } from './camera.js';
-import { advanceIsland, computeRates } from './economy.js';
+import { advanceIsland, computeRates, type IslandState } from './economy.js';
 import { renderCellGrid } from './grid.js';
 import { mountHud } from './hud.js';
 import {
@@ -48,10 +48,13 @@ import {
   makeInitialWorld,
   renderIsland,
   VISION_RADIUS_TILES,
+  type IslandSpec,
   type WorldState,
 } from './world.js';
 import { mountDronesUi } from './drones-ui.js';
 import { tickDrones } from './drones.js';
+import { makeIslandScreenPosResolver, mountRoutesUi } from './routes-ui.js';
+import { tickRoutes } from './routes.js';
 
 /** Pan speed for keyboard input, in screen-pixels-per-frame. */
 const PAN_PX_PER_TICK = 8;
@@ -194,6 +197,7 @@ async function main(): Promise<void> {
   // Same pattern for drone ops: stub registered here, real handler bound
   // after the UI is mounted (which needs `homeState`).
   defineAction(reg, 'toggle-drones', () => undefined);
+  defineAction(reg, 'toggle-routes', () => undefined);
 
   // Map of "release" actions used to clear the held flag on keyup. The
   // action table itself is press-only; on keyup we resolve the binding and
@@ -312,19 +316,28 @@ async function main(): Promise<void> {
     { label: 'Center on Home (H)', action: 'center-home' },
     { label: 'Skill Tree (K)', action: 'toggle-skill-tree' },
     { label: 'Drones (J)', action: 'toggle-drones' },
+    { label: 'Routes (R)', action: 'toggle-routes' },
   ]);
 
   // -----------------------------------------------------------------------
-  // Economy state
+  // Economy state — multi-island
   // -----------------------------------------------------------------------
   //
-  // Only the home island carries a tick-loop state for now. Multi-island
-  // economies land when other islands become populated (deferred to a
-  // later step). `lastTick` is seeded with the current performance.now()
-  // so the first frame's `advanceIsland` call sees a zero-length interval.
+  // Step 7 promotes the single `homeState` to a Map keyed by island id, so
+  // routes can dispatch between any two populated islands. The HUD still
+  // tracks the home island only — multi-island HUD is a deferred step-14
+  // polish concern. `forest-ne` is hardcoded populated for the step-7 demo
+  // (see `world.ts`); settlement vehicles per §12 are deferred.
+  const islandStates = new Map<string, IslandState>();
   const homeSpec = worldState.islands.find((s) => s.id === 'home');
   if (!homeSpec) throw new Error('main: home island missing from worldState');
   const homeState = makeInitialIslandState(homeSpec, performance.now());
+  islandStates.set('home', homeState);
+  for (const spec of worldState.islands) {
+    if (spec.id === 'home') continue;
+    if (!spec.populated) continue;
+    islandStates.set(spec.id, makeInitialIslandState(spec, performance.now()));
+  }
 
   // HUD: bottom-right panel showing inventory, rates, and level. Updated
   // once per frame inside the ticker after the economy advance.
@@ -360,12 +373,32 @@ async function main(): Promise<void> {
     dronesUi.toggle();
   });
 
+  // Routes (freight-grid) side dock + screen-space route line + chevron layer.
+  // Lives in screen space (same discipline as the drone reticle): stroke
+  // widths stay 1.5px / chevrons stay ~10px regardless of zoom. Endpoint
+  // screen positions are computed each frame via the camera transform.
+  const islandSpecsById = new Map<string, IslandSpec>();
+  for (const s of worldState.islands) islandSpecsById.set(s.id, s);
+  const routesUi = mountRoutesUi(document.body, {
+    world: worldState,
+    islandStates,
+    islandSpecs: islandSpecsById,
+  });
+  routesUi.setIslandScreenPosResolver(
+    makeIslandScreenPosResolver(islandSpecsById, cam),
+  );
+  app.stage.addChild(routesUi.routeLayer);
+  defineAction(reg, 'toggle-routes', () => {
+    routesUi.toggle();
+  });
+
   // Update tick: apply held pan flags + sync camera state to the world
-  // container, advance the home island's economy, advance drone fleet,
-  // and update the HUD + side panels. One pass per frame keeps the
-  // camera→container assignment cheap and predictable; `advanceIsland`'s
-  // piecewise integration handles whatever elapsed interval the frame
-  // brings (matters on tab-blur catch-up).
+  // container, advance every populated island's economy, advance drone fleet,
+  // advance inter-island routes, and update the HUD + side panels. One pass
+  // per frame keeps the camera→container assignment cheap and predictable;
+  // `advanceIsland`'s piecewise integration handles whatever elapsed interval
+  // the frame brings (matters on tab-blur catch-up).
+  let lastFrameMs = performance.now();
   app.ticker.add(() => {
     let dx = 0;
     let dy = 0;
@@ -378,7 +411,13 @@ async function main(): Promise<void> {
     world.scale.set(cam.zoom);
 
     const now = performance.now();
-    advanceIsland(homeState, now);
+    const elapsedSec = Math.max(0, (now - lastFrameMs) / 1000);
+    lastFrameMs = now;
+    // Advance every populated island in turn. Routes are dispatched AFTER
+    // advance so the per-island production from this frame is visible to
+    // route dispatch; deliveries handed back to the next frame's advance
+    // get consumed (and the funnel-pending credit drained) on that frame.
+    for (const s of islandStates.values()) advanceIsland(s, now);
     // Drones tick AFTER economy so any biofuel changes from this frame
     // are visible to the dispatch UI on the same frame; drone returns
     // are processed independent of economy state.
@@ -386,6 +425,7 @@ async function main(): Promise<void> {
     if (droneResult.newlyDiscoveredIslandIds.length > 0) {
       rebuildWorldLayers();
     }
+    tickRoutes(worldState, islandStates, now, elapsedSec);
 
     // Recompute rates AFTER the tick so the HUD shows the current
     // post-advance state (e.g., a freshly-stalled building reads as
@@ -398,6 +438,7 @@ async function main(): Promise<void> {
     // should be reflected in the points / xp counters live.
     skillTree.refresh();
     dronesUi.refresh(now);
+    routesUi.refresh(now);
   });
 
   // Recenter the camera's reference point on resize so the world doesn't

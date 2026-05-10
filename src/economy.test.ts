@@ -55,6 +55,12 @@ function blankCaps(value: number): Record<ResourceId, number> {
   return caps;
 }
 
+function blankFunnel(): Record<ResourceId, number> {
+  const f = {} as Record<ResourceId, number>;
+  for (const r of ALL_RESOURCES) f[r] = 0;
+  return f;
+}
+
 function makeState(over: Partial<IslandState> = {}): IslandState {
   return {
     id: 'test',
@@ -66,6 +72,7 @@ function makeState(over: Partial<IslandState> = {}): IslandState {
     unspentSkillPoints: 0,
     unlockedNodes: new Set(),
     subPathProgress: new Map(),
+    funnelPending: blankFunnel(),
     lastTick: 0,
     ...over,
   };
@@ -459,5 +466,56 @@ describe('skill-tree integration (§9.3)', () => {
     // Mine ran for 10s before hitting the new cap (105). Time to fill from
     // 100 to 105 at 0.2/s = 25s; we ran 10s, so we picked up 2 units.
     expect(state.inventory.iron_ore).toBeCloseTo(102, 6);
+  });
+});
+
+describe('funneling — consumption drains pending bonus XP credit (§10)', () => {
+  it('drains funnel credit proportional to consumption, awards bonus XP', () => {
+    // Workshop consumes 0.1 iron_ore/s + 0.1 coal/s, produces 0.1 bolt/s.
+    // Production XP over 10s: 0.1 × 10 (bolt xp_weight) × 10s = 10.
+    // Pre-seed funnelPending.iron_ore = 5 XP-units (as if a route had
+    // delivered ~3.33 units of iron_ore — 3.33 × 1 (xp_weight) × 0.5
+    // (bonus) = 1.67. We just stuff 5 directly here to test the drain
+    // math without coupling to delivery-side multiplication.)
+    // Over 10s the Workshop consumes 1 unit iron_ore. Bonus drained
+    // per unit consumed = xp_weight[iron_ore] × 0.5 = 0.5 XP-units.
+    // 1 unit consumed → 0.5 drained, leaving 4.5 in the pending balance,
+    // and +0.5 added to total XP gain.
+    const state = makeState({
+      buildings: [WORKSHOP],
+      inventory: { ...blankInventory(), iron_ore: 10, coal: 10 },
+    });
+    state.funnelPending.iron_ore = 5;
+    advanceIsland(state, 10_000);
+    // Production XP: 0.1 bolt/s × 10s × 10 (xp_weight) = 10.
+    // + funnel-drain XP: 0.5.
+    expect(state.xp).toBeCloseTo(10.5, 6);
+    expect(state.funnelPending.iron_ore).toBeCloseTo(4.5, 6);
+  });
+
+  it('does not over-drain when credit is less than the bonus owed', () => {
+    // Same setup but pending = 0.2 (small). Owed bonus over 10s consumption
+    // would be 0.5; drain caps at 0.2 (the pending balance), and XP is
+    // 10 (production) + 0.2 (drain).
+    const state = makeState({
+      buildings: [WORKSHOP],
+      inventory: { ...blankInventory(), iron_ore: 10, coal: 10 },
+    });
+    state.funnelPending.iron_ore = 0.2;
+    advanceIsland(state, 10_000);
+    expect(state.xp).toBeCloseTo(10.2, 6);
+    expect(state.funnelPending.iron_ore).toBeCloseTo(0, 6);
+  });
+
+  it('does not drain when no consumption (cap-stalled / no recipe)', () => {
+    // Bolt at cap → workshop stalled, no consumption, funnel credit
+    // untouched.
+    const state = makeState({
+      buildings: [WORKSHOP],
+      inventory: { ...blankInventory(), iron_ore: 10, coal: 10, bolt: 100 },
+    });
+    state.funnelPending.iron_ore = 5;
+    advanceIsland(state, 10_000);
+    expect(state.funnelPending.iron_ore).toBeCloseTo(5, 6);
   });
 });

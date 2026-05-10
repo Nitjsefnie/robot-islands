@@ -1,0 +1,397 @@
+// Inter-island routes: pure logic for cargo transit + funneling credit
+// accumulation (SPEC §2.4 / §10 / §15.4).
+//
+// No PixiJS, no DOM. The renderer (`routes-ui.ts`) reads this module's state
+// and draws; the main ticker calls `tickRoutes` once per frame to deliver
+// arrivals and dispatch the next batch.
+//
+// Step-7 scope notes (deferred bits flagged inline):
+//   - T1 cargo only. T2 drone cargo, T3 airship, T4 teleporter, T5 spacetime
+//     anchor all share this `Route` shape but their tier-specific capacities
+//     and transit times are deferred.
+//   - No weather modulation of capacity or in-flight loss (no weather system
+//     yet — §2.6 deferred).
+//   - Multi-route contention on the same source resource IS implemented per
+//     §15.4 (proportional distribution by capacity).
+//   - Funneling tier-cap check uses `state.level < FUNNELING_TIER_CAP` as a
+//     placeholder. The proper §9.2 tier-breakpoint mapping (T3 ≈ level 50)
+//     is deferred to step 9 alongside tier-gating in general; `level < 3`
+//     here keeps the step-7 demo's funnel-stops-at-T3 behaviour qualitatively
+//     correct.
+
+import { cap, inv, type IslandState } from './economy.js';
+import { XP_WEIGHT, type ResourceId } from './recipes.js';
+import type { WorldState } from './world.js';
+
+/** Transport tier per §2.4. Step 7 only emits `cargo` routes; the field
+ *  exists so future tiers can be added without reshaping the data model. */
+export type RouteType =
+  | 'cargo'
+  | 'drone'
+  | 'airship'
+  | 'teleporter'
+  | 'cable'
+  | 'spacetime';
+
+/** A batch of cargo currently in transit on a route. Created at dispatch,
+ *  removed when `arrivalTime <= nowMs`. */
+export interface InFlightBatch {
+  readonly resourceId: ResourceId;
+  readonly amount: number;
+  /** Wall-clock ms when this batch arrives at the destination. */
+  readonly arrivalTime: number;
+  /** Wall-clock ms when this batch was dispatched (renderer uses both
+   *  timestamps for the interpolation parameter). */
+  readonly dispatchTime: number;
+}
+
+export interface Route {
+  readonly id: string;
+  readonly from: string;
+  readonly to: string;
+  readonly type: RouteType;
+  /** Capacity in units per second. For T1 cargo, placeholder 0.5 units/sec. */
+  readonly capacityPerSec: number;
+  /** Specific resource OR null for 'any' (with priorityList). */
+  readonly filter: ResourceId | null;
+  /** Ordered priority list when filter === null. Empty array if filter set. */
+  readonly priorityList: ReadonlyArray<ResourceId>;
+  /** Real-time-of-flight seconds. T1 cargo = distance / speed. T4 teleporter = 0. */
+  readonly transitTimeSec: number;
+  /** In-flight batches. Mutable (push on dispatch, splice on arrival). */
+  inFlight: InFlightBatch[];
+}
+
+// ---------------------------------------------------------------------------
+// Step-7 tuning constants
+// ---------------------------------------------------------------------------
+
+/** T1 cargo travel speed in tiles per second. Slower than drones (which are
+ *  2 tiles/sec) on the assumption that surface freight is slower than
+ *  airborne scouts. */
+export const T1_CARGO_SPEED_TILES_PER_SEC = 4;
+
+/** T1 cargo throughput in units per second. Placeholder; tuned so the step-7
+ *  demo route between home (0,0) and forest-ne (40,-10) — ~41 tiles, ~10s
+ *  transit — produces visible cargo flow without instantly saturating
+ *  forest-ne's storage caps. */
+export const T1_CARGO_CAPACITY_UNITS_PER_SEC = 0.5;
+
+/** Funneling bonus per §10 / Appendix A placeholder (50%). */
+export const FUNNELING_BONUS_PERCENT = 0.5;
+
+/** Tier at which funneling bonus zeroes out per §10 ("crosses Tier 3").
+ *  Placeholder: level-based. Proper §9.2 tier-breakpoint mapping deferred
+ *  to step 9. */
+export const FUNNELING_TIER_CAP = 3;
+
+// ---------------------------------------------------------------------------
+// Route id generation
+// ---------------------------------------------------------------------------
+
+let routeIdCounter = 0;
+export function nextRouteId(): string {
+  routeIdCounter += 1;
+  return `route-${routeIdCounter}`;
+}
+
+/** Test-only — reset the route-id counter so each test gets stable ids. */
+export function _resetRouteIdCounter(): void {
+  routeIdCounter = 0;
+}
+
+// ---------------------------------------------------------------------------
+// Pure helpers
+// ---------------------------------------------------------------------------
+
+/** Sum the amounts already in flight on `route` whose resourceId === `r`. */
+function inFlightSumFor(route: Route, r: ResourceId): number {
+  let s = 0;
+  for (const b of route.inFlight) {
+    if (b.resourceId === r) s += b.amount;
+  }
+  return s;
+}
+
+/** Sum in-flight cargo of `r` arriving at `destIslandId` across ALL routes.
+ *  Used to ensure dispatch doesn't over-fill destinations that have batches
+ *  already en route. */
+function totalInboundInFlight(
+  world: WorldState,
+  destIslandId: string,
+  r: ResourceId,
+): number {
+  let s = 0;
+  for (const route of world.routes) {
+    if (route.to !== destIslandId) continue;
+    s += inFlightSumFor(route, r);
+  }
+  return s;
+}
+
+/** Headroom for receiving more `r` at the destination right now: capacity
+ *  minus current inventory minus any in-flight units already addressed here.
+ *  Clamped to 0 (can't be negative). */
+function destinationHeadroom(
+  world: WorldState,
+  states: Map<string, IslandState>,
+  destIslandId: string,
+  r: ResourceId,
+): number {
+  const destState = states.get(destIslandId);
+  if (!destState) return 0;
+  const room = cap(destState, r) - inv(destState, r) - totalInboundInFlight(world, destIslandId, r);
+  return Math.max(0, room);
+}
+
+/** Pick the resource a route should ship this tick. Filter routes ship their
+ *  fixed resource if both source has >0 and dest has headroom; otherwise
+ *  return null. Any-routes walk `priorityList` in order. */
+function selectResource(
+  world: WorldState,
+  states: Map<string, IslandState>,
+  route: Route,
+): ResourceId | null {
+  const srcState = states.get(route.from);
+  if (!srcState) return null;
+
+  const candidates: ReadonlyArray<ResourceId> =
+    route.filter !== null ? [route.filter] : route.priorityList;
+  for (const r of candidates) {
+    if (inv(srcState, r) <= 0) continue;
+    if (destinationHeadroom(world, states, route.to, r) <= 0) continue;
+    return r;
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// Tick: dispatch + delivery
+// ---------------------------------------------------------------------------
+
+/**
+ * Deliver any in-flight batches whose `arrivalTime <= nowMs`. Returns the
+ * deliveries actually realized this call (after destination-cap clamping).
+ *
+ * Side effects:
+ *   - destination `state.inventory[r]` increases (clamped to cap).
+ *   - destination `state.funnelPending[r]` accumulates bonus-XP credit per
+ *     §10 IF the destination is below the funneling tier cap. Note that
+ *     the credit is added based on the AMOUNT delivered (post-cap-clamp);
+ *     units lost to the cap don't generate funnel credit because they were
+ *     never imported.
+ *   - in-flight batch removed from the route.
+ *
+ * Per §4.6 "if a storage building is destroyed, excess is lost": if the
+ * cap has been lowered between dispatch and arrival, the excess of the
+ * batch is lost. We don't model that loss as inventory or credit anywhere.
+ */
+export function deliverArrivals(
+  world: WorldState,
+  states: Map<string, IslandState>,
+  nowMs: number,
+): Array<{ destIslandId: string; resourceId: ResourceId; amount: number }> {
+  const delivered: Array<{ destIslandId: string; resourceId: ResourceId; amount: number }> = [];
+
+  for (const route of world.routes) {
+    const destState = states.get(route.to);
+    if (!destState) {
+      // Destination state missing (e.g., island despawned mid-flight). Drop
+      // the batches; the resources are lost.
+      route.inFlight = route.inFlight.filter((b) => b.arrivalTime > nowMs);
+      continue;
+    }
+    const kept: InFlightBatch[] = [];
+    for (const b of route.inFlight) {
+      if (b.arrivalTime > nowMs) {
+        kept.push(b);
+        continue;
+      }
+      const headroom = cap(destState, b.resourceId) - inv(destState, b.resourceId);
+      // Clamp against current cap headroom only — totalInboundInFlight at
+      // dispatch already accounted for siblings, so we don't subtract those
+      // again here.
+      const accept = Math.max(0, Math.min(b.amount, headroom));
+      if (accept > 0) {
+        destState.inventory[b.resourceId] = inv(destState, b.resourceId) + accept;
+        if (destState.level < FUNNELING_TIER_CAP) {
+          const credit = accept * (XP_WEIGHT[b.resourceId] ?? 0) * FUNNELING_BONUS_PERCENT;
+          destState.funnelPending[b.resourceId] =
+            (destState.funnelPending[b.resourceId] ?? 0) + credit;
+        }
+        delivered.push({
+          destIslandId: route.to,
+          resourceId: b.resourceId,
+          amount: accept,
+        });
+      }
+    }
+    route.inFlight = kept;
+  }
+
+  return delivered;
+}
+
+/** Internal: per-route demand entry produced in Phase 1 of dispatch. */
+interface RouteDemand {
+  readonly route: Route;
+  readonly resourceId: ResourceId;
+  /** Desired dispatch amount before cross-route source contention scaling. */
+  readonly desired: number;
+}
+
+/**
+ * Run one tick of dispatch + arrival across all routes.
+ *
+ * Order matters:
+ *   1. deliverArrivals first — freshly arrived inventory is available for
+ *      this tick's dispatch decisions (e.g., chained re-routes). Step 7 has
+ *      no chained re-routes, but the ordering keeps the invariant clean.
+ *   2. Phase 1: compute each route's desired ship per (source, resource),
+ *      clamped to source inventory and destination headroom.
+ *   3. Phase 2: when multiple routes share a (source, resource), scale all
+ *      desires by `sourceAvail / totalDesired` if that ratio < 1. Source
+ *      contention is partitioned per (source-island, resource-id) — two
+ *      routes shipping different resources from the same island don't
+ *      contend with each other.
+ *   4. Phase 3: execute — deduct from source, append InFlightBatch (or
+ *      deposit immediately if transitTimeSec === 0).
+ */
+export function tickRoutes(
+  world: WorldState,
+  states: Map<string, IslandState>,
+  nowMs: number,
+  elapsedSec: number,
+): {
+  dispatches: Array<{ routeId: string; resourceId: ResourceId; amount: number }>;
+  arrivals: Array<{ destIslandId: string; resourceId: ResourceId; amount: number }>;
+} {
+  const arrivals = deliverArrivals(world, states, nowMs);
+  const dispatches = dispatchPhase(world, states, nowMs, elapsedSec);
+  return { dispatches, arrivals };
+}
+
+/** Dispatch phase isolated for testing. Caller can invoke deliverArrivals
+ *  separately if a specific ordering is wanted. */
+function dispatchPhase(
+  world: WorldState,
+  states: Map<string, IslandState>,
+  nowMs: number,
+  elapsedSec: number,
+): Array<{ routeId: string; resourceId: ResourceId; amount: number }> {
+  if (elapsedSec <= 0) return [];
+
+  // Phase 1: per-route demand. NOTE: we deliberately do NOT clamp to source
+  // inventory here — that's Phase 2's job (proportional distribution per
+  // §15.4). Two routes sharing one source and one resource must see each
+  // other's demand at full capacity-ask; clamping here would let each route
+  // independently claim the entire source, defeating the proportional split.
+  // Destination headroom IS clamped here because two routes sharing a
+  // destination but pulling from different sources don't contend on the
+  // source side, so dest-cap clamping has to happen per-route.
+  const demands: RouteDemand[] = [];
+  for (const route of world.routes) {
+    const srcState = states.get(route.from);
+    if (!srcState) continue;
+    const r = selectResource(world, states, route);
+    if (r === null) continue;
+    const capDemand = route.capacityPerSec * elapsedSec;
+    const headroom = destinationHeadroom(world, states, route.to, r);
+    const desired = Math.min(capDemand, headroom);
+    if (desired <= 0) continue;
+    demands.push({ route, resourceId: r, desired });
+  }
+
+  // Phase 2: source contention. Group demands by (fromIslandId, resourceId).
+  // Source inventory is partitioned among contending routes proportionally
+  // to capacity, but our `desired` is already capacity × elapsedSec for
+  // each route, and the spec wording "distribute proportionally to capacity"
+  // is equivalent to "scale every desired by the same factor" because each
+  // route's desired share IS its capacity share of the partition.
+  const allocated = new Map<Route, number>();
+  const groups = new Map<string, RouteDemand[]>();
+  for (const d of demands) {
+    const key = `${d.route.from}|${d.resourceId}`;
+    let arr = groups.get(key);
+    if (!arr) {
+      arr = [];
+      groups.set(key, arr);
+    }
+    arr.push(d);
+  }
+  for (const [key, members] of groups) {
+    const [fromId, resId] = key.split('|');
+    if (fromId === undefined || resId === undefined) continue;
+    const srcState = states.get(fromId);
+    if (!srcState) continue;
+    const srcAvail = inv(srcState, resId as ResourceId);
+    let totalDesired = 0;
+    for (const m of members) totalDesired += m.desired;
+    if (totalDesired <= srcAvail || totalDesired === 0) {
+      for (const m of members) allocated.set(m.route, m.desired);
+    } else {
+      const scale = srcAvail / totalDesired;
+      for (const m of members) allocated.set(m.route, m.desired * scale);
+    }
+  }
+
+  // Phase 3: execute. Deduct source inventory and either append an in-flight
+  // batch or deposit immediately for instant-transit routes.
+  const dispatches: Array<{ routeId: string; resourceId: ResourceId; amount: number }> = [];
+  for (const d of demands) {
+    const amount = allocated.get(d.route) ?? 0;
+    if (amount <= 0) continue;
+    const srcState = states.get(d.route.from);
+    if (!srcState) continue;
+    srcState.inventory[d.resourceId] = Math.max(0, inv(srcState, d.resourceId) - amount);
+    if (d.route.transitTimeSec <= 0) {
+      // T4+ instant: deposit directly to destination. We still clamp at the
+      // current cap so we don't overshoot.
+      const destState = states.get(d.route.to);
+      if (destState) {
+        const room = cap(destState, d.resourceId) - inv(destState, d.resourceId);
+        const accept = Math.max(0, Math.min(amount, room));
+        if (accept > 0) {
+          destState.inventory[d.resourceId] = inv(destState, d.resourceId) + accept;
+          if (destState.level < FUNNELING_TIER_CAP) {
+            const credit = accept * (XP_WEIGHT[d.resourceId] ?? 0) * FUNNELING_BONUS_PERCENT;
+            destState.funnelPending[d.resourceId] =
+              (destState.funnelPending[d.resourceId] ?? 0) + credit;
+          }
+        }
+      }
+    } else {
+      d.route.inFlight.push({
+        resourceId: d.resourceId,
+        amount,
+        arrivalTime: nowMs + d.route.transitTimeSec * 1000,
+        dispatchTime: nowMs,
+      });
+    }
+    dispatches.push({ routeId: d.route.id, resourceId: d.resourceId, amount });
+  }
+
+  return dispatches;
+}
+
+/** Exposed for tests that want to exercise only the dispatch phase. */
+export function dispatchAttempt(
+  world: WorldState,
+  states: Map<string, IslandState>,
+  nowMs: number,
+  elapsedSec: number,
+): Array<{ routeId: string; resourceId: ResourceId; amount: number }> {
+  return dispatchPhase(world, states, nowMs, elapsedSec);
+}
+
+// ---------------------------------------------------------------------------
+// Route construction helpers
+// ---------------------------------------------------------------------------
+
+/** Compute a T1 cargo route's transit time from straight-line tile distance
+ *  between the two island centres. Pure helper; UI uses this when creating
+ *  a new route so player sees the ETA before committing. */
+export function transitTimeForDistance(distanceTiles: number, speedTilesPerSec = T1_CARGO_SPEED_TILES_PER_SEC): number {
+  if (speedTilesPerSec <= 0) return 0;
+  return distanceTiles / speedTilesPerSec;
+}

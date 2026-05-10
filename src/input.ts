@@ -89,6 +89,8 @@ export function installDefaultBindings(reg: InputRegistry): void {
   // get an Escape binding (Escape is reserved for modal dismissal of the
   // skill tree).
   bind(reg, 'KeyJ', 'toggle-drones');
+  // R = routes — opens the freight-grid side dock (step 7).
+  bind(reg, 'KeyR', 'toggle-routes');
   bind(reg, 'Equal', 'zoom-in'); // '=' / '+' on US layouts
   bind(reg, 'NumpadAdd', 'zoom-in');
   bind(reg, 'Minus', 'zoom-out');

@@ -26,6 +26,12 @@ function emptyInv(): Record<ResourceId, number> {
   return inv;
 }
 
+function emptyFunnel(): Record<ResourceId, number> {
+  const f = {} as Record<ResourceId, number>;
+  for (const r of ALL_RESOURCES) f[r] = 0;
+  return f;
+}
+
 function makeIslandState(over: Partial<IslandState> = {}): IslandState {
   return {
     id: 'home',
@@ -37,6 +43,7 @@ function makeIslandState(over: Partial<IslandState> = {}): IslandState {
     unspentSkillPoints: 0,
     unlockedNodes: new Set(),
     subPathProgress: new Map(),
+    funnelPending: emptyFunnel(),
     lastTick: 0,
     ...over,
   };
@@ -102,7 +109,7 @@ describe('pointToSegmentDistSq', () => {
 
 describe('dispatchDrone', () => {
   function freshWorld(): WorldState {
-    return { islands: [], drones: [] };
+    return { islands: [], drones: [], routes: [] };
   }
 
   it('happy path: deducts biofuel, appends drone, computes expectedReturnTime', () => {
@@ -189,7 +196,7 @@ describe('dispatchDrone', () => {
 
 describe('tickDrones', () => {
   function world(islands: IslandSpec[]): WorldState {
-    return { islands, drones: [] };
+    return { islands, drones: [], routes: [] };
   }
 
   it('returns empty when no drones are in flight', () => {

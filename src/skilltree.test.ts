@@ -27,6 +27,12 @@ function blankCaps(value: number): Record<ResourceId, number> {
   return caps;
 }
 
+function blankFunnel(): Record<ResourceId, number> {
+  const f = {} as Record<ResourceId, number>;
+  for (const r of ALL_RESOURCES) f[r] = 0;
+  return f;
+}
+
 function makeState(over: Partial<IslandState> = {}): IslandState {
   return {
     id: 'test',
@@ -38,6 +44,7 @@ function makeState(over: Partial<IslandState> = {}): IslandState {
     unspentSkillPoints: 0,
     unlockedNodes: new Set(),
     subPathProgress: new Map(),
+    funnelPending: blankFunnel(),
     lastTick: 0,
     ...over,
   };

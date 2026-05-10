@@ -33,6 +33,7 @@ import {
   TILE_PX,
 } from './island.js';
 import { ALL_RESOURCES, type ResourceId } from './recipes.js';
+import type { Route } from './routes.js';
 
 /** Stratification cell side length, in tiles. SPEC §2.1 calls this R. */
 export const CELL_SIZE_TILES = 16;
@@ -198,6 +199,14 @@ export const DEMO_ISLANDS: ReadonlyArray<IslandSpec> = [
     buildings: HOME_ISLAND_BUILDINGS,
     terrainAt: defaultTerrainAt,
   },
+  // forest-ne is hardcoded as populated for step 7 — it acts as the
+  // demo destination for inter-island routes. Settlement vehicles (§12)
+  // are deferred to a later step; until then we just flip `populated: true`
+  // on this island so it has an IslandState, a building set, and can
+  // receive funneled cargo. The buildings are a minimal demo: one Cargo
+  // Dock (route endpoint convention) and one Workshop (consumes iron_ore +
+  // coal so funneling has something to consume). Both sit inside the
+  // 10-tile-radius ellipse: (0,0) is the island centre.
   {
     id: 'forest-ne',
     biome: 'forest',
@@ -205,9 +214,12 @@ export const DEMO_ISLANDS: ReadonlyArray<IslandSpec> = [
     cy: -10,
     majorRadius: 10,
     minorRadius: 10,
-    populated: false,
+    populated: true,
     discovered: true,
-    buildings: [],
+    buildings: [
+      { kind: 'dock', x: 0, y: 0, width: 2, height: 2, fill: 0x3a7bd5, stroke: 0x0a2a55, label: 'Dock' },
+      { kind: 'workshop', x: -3, y: 0, width: 2, height: 2, fill: 0xe07b3a, stroke: 0x6b2f00, label: 'Workshop', power: { consumes: 60 } },
+    ],
     terrainAt: () => 'grass',
   },
   {
@@ -278,6 +290,11 @@ export interface WorldState {
    *  runtime dependency on `drones.ts` (the dependency goes the other way:
    *  `drones.ts` consumes `WorldState`). */
   drones: import('./drones.js').Drone[];
+  /** Mutable: player-created inter-island routes. Each route carries its own
+   *  in-flight batch buffer (§2.4 hybrid latency model). Like `drones`, the
+   *  module dependency points `routes.ts → world.ts`; the type-only import
+   *  keeps the back-edge cycle-free. */
+  routes: Route[];
 }
 
 /**
@@ -290,7 +307,7 @@ export interface WorldState {
  */
 export function makeInitialWorld(_nowMs: number): WorldState {
   const islands: IslandSpec[] = DEMO_ISLANDS.map((s) => ({ ...s }));
-  return { islands, drones: [] };
+  return { islands, drones: [], routes: [] };
 }
 
 // ---------------------------------------------------------------------------
@@ -334,6 +351,14 @@ function startingCaps(value = 100): Record<ResourceId, number> {
   return caps;
 }
 
+/** Empty per-resource funnel-pending map. Every key zeroed so the
+ *  `accrueXp` drain never sees `undefined`. */
+function startingFunnelPending(): Record<ResourceId, number> {
+  const f = {} as Record<ResourceId, number>;
+  for (const r of ALL_RESOURCES) f[r] = 0;
+  return f;
+}
+
 /**
  * Build a fresh `IslandState` for a spec. `nowMs` seeds `lastTick` so the
  * first `advanceIsland` call doesn't replay history from epoch zero.
@@ -349,6 +374,7 @@ export function makeInitialIslandState(spec: IslandSpec, nowMs: number): IslandS
     unspentSkillPoints: 0,
     unlockedNodes: new Set(),
     subPathProgress: new Map(),
+    funnelPending: startingFunnelPending(),
     lastTick: nowMs,
   };
 }

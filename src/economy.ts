@@ -55,6 +55,14 @@ export interface IslandState {
   unlockedNodes: Set<NodeId>;
   /** Per-sub-path progress, sparse: only sub-paths with ≥1 spent point have entries. */
   subPathProgress: Map<SubPathId, { spent: number; complete: boolean }>;
+  /** Pending bonus XP credits per resource per §10 (Funneling). When a route
+   *  delivers `r` to this island and the island is below the funneling tier
+   *  cap, `r × xp_weight[r] × funneling_bonus_percent` accumulates here. The
+   *  credit is drained when a local recipe CONSUMES `r` (one bonus-XP unit
+   *  per unit consumed, capped at the pending balance). Missing keys read
+   *  as 0 — `makeInitialIslandState` seeds all ResourceIds to 0 explicitly
+   *  so the deductions in `accrueXp` never see undefined. */
+  funnelPending: Record<ResourceId, number>;
   /** Wall-clock timestamp of the last advance, in milliseconds. */
   lastTick: number;
 }
@@ -194,6 +202,10 @@ export interface PowerBalance {
 export function computeRates(state: IslandState): {
   byBuilding: ReadonlyArray<BuildingRate>;
   production: Record<ResourceId, number>;
+  /** Gross consumption rates per resource (always positive). Mirrors
+   *  `production`: a building consuming `r` at rate × need contributes
+   *  `need × effectiveRate` here. Drives the §10 funneling-credit drain. */
+  consumption: Record<ResourceId, number>;
   net: Record<ResourceId, number>;
   power: PowerBalance;
 } {
@@ -296,6 +308,7 @@ export function computeRates(state: IslandState): {
   // buildings ignore it. Output-stalled buildings still finish at 0.
   const byBuilding: BuildingRate[] = [];
   const production: Record<ResourceId, number> = {} as Record<ResourceId, number>;
+  const consumption: Record<ResourceId, number> = {} as Record<ResourceId, number>;
   const net: Record<ResourceId, number> = {} as Record<ResourceId, number>;
   for (let i = 0; i < tentative.length; i++) {
     const t = tentative[i]!;
@@ -319,6 +332,7 @@ export function computeRates(state: IslandState): {
     for (const [r, need] of Object.entries(t.recipe.inputs)) {
       const id = r as ResourceId;
       const delta = (need ?? 0) * effectiveRate;
+      consumption[id] = (consumption[id] ?? 0) + delta;
       net[id] = (net[id] ?? 0) - delta;
     }
   }
@@ -326,6 +340,7 @@ export function computeRates(state: IslandState): {
   return {
     byBuilding,
     production,
+    consumption,
     net,
     power: { produced: powerProduced, consumed: powerConsumed, factor: powerFactor },
   };
@@ -399,10 +414,19 @@ function applyRates(state: IslandState, net: Record<ResourceId, number>, dtSec: 
  * Accrue XP from production over `dtSec`. Per §9.1, only PRODUCTION is
  * weighted (consumption does not subtract XP, and a building whose output
  * is at cap produces zero, so it earns nothing for that segment).
+ *
+ * §10 Funneling: in addition to production XP, this segment's consumption
+ * drains any pending funnel credit accrued from inbound routes. The
+ * credit was stored at delivery as `amount × xp_weight × bonus_percent`,
+ * so the drain per consumed unit of `r` is exactly `xp_weight × bonus_percent`
+ * — pulled from `funnelPending[r]` up to its current balance. Existing
+ * funnel credits continue to drain even after the island crosses the
+ * tier cap (only further accumulation stops, per §10 literal reading).
  */
 function accrueXp(
   state: IslandState,
   production: Record<ResourceId, number>,
+  consumption: Record<ResourceId, number>,
   dtSec: number,
 ): void {
   let gain = 0;
@@ -412,8 +436,32 @@ function accrueXp(
     const w = XP_WEIGHT[r];
     gain += rate * w * dtSec;
   }
+  // Funnel drain: per consumed unit, withdraw bonus XP credit. The pending
+  // balance holds units of XP (already multiplied by xp_weight × bonus at
+  // delivery time), so each consumed unit costs `xp_weight × bonus` of
+  // credit and returns the same amount as XP.
+  for (const r of Object.keys(consumption) as ResourceId[]) {
+    const rate = consumption[r] ?? 0;
+    if (rate <= 0) continue;
+    const consumed = rate * dtSec;
+    const pending = state.funnelPending[r] ?? 0;
+    if (pending <= 0) continue;
+    const want = consumed * (XP_WEIGHT[r] ?? 0) * FUNNELING_BONUS_PERCENT_FOR_DRAIN;
+    const drawn = Math.min(want, pending);
+    state.funnelPending[r] = pending - drawn;
+    gain += drawn;
+  }
   state.xp += gain;
 }
+
+/** Local constant for the funnel-drain math. Mirrors `FUNNELING_BONUS_PERCENT`
+ *  in `routes.ts` — the consumption-side drain rate has to match the
+ *  delivery-side credit rate, but `economy.ts` predates `routes.ts` and
+ *  importing across modules here would invert the dependency. Defining
+ *  the constant in both places with a load-bearing comment is the lesser
+ *  evil; if the two ever diverge the funnel-drain test (in
+ *  `economy.test.ts`) catches it. */
+const FUNNELING_BONUS_PERCENT_FOR_DRAIN = 0.5;
 
 /**
  * XP required to reach level `n` from level `n - 1`. Two-segment curve per
@@ -478,7 +526,7 @@ export function advanceIsland(state: IslandState, nowMs: number): void {
   let t = state.lastTick;
   for (let safety = 0; safety < 10000; safety++) {
     if (t >= nowMs) break;
-    const { production, net } = computeRates(state);
+    const { production, consumption, net } = computeRates(state);
     const nextEventMs = findNextCapEvent(state, net, t, nowMs);
     // Clamp to nowMs; findNextCapEvent already returns nowMs when nothing
     // changes, but if all rates are zero we still need to exit the loop.
@@ -486,7 +534,7 @@ export function advanceIsland(state: IslandState, nowMs: number): void {
     const dtSec = (segEndMs - t) / 1000;
     if (dtSec > 0) {
       applyRates(state, net, dtSec);
-      accrueXp(state, production, dtSec);
+      accrueXp(state, production, consumption, dtSec);
       levelUpIfReady(state);
     }
     // Advance t. If no progress was made (dt = 0 and segEnd === t) but we
