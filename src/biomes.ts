@@ -28,7 +28,7 @@
 // arrives.
 
 import type { Biome } from './world.js';
-import type { TerrainKind } from './island.js';
+import { defaultTerrainAt, type TerrainKind } from './island.js';
 import type { RecipeCategory } from './recipes.js';
 import { ALL_RECIPE_CATEGORIES } from './recipes.js';
 
@@ -58,12 +58,6 @@ export interface BiomeDef {
  * Per-biome static definition. Values from SPEC §3.2 / §3.4. The home island
  * uses the Plains values. Per-biome `terrainAtForBiome` consumes the
  * defaultTerrain and rareTerrain fields when generating non-home islands.
- *
- * `coal` is reused for Volcanic's "magma vent" rare type for now — there's
- * no `magma_vent` recipe consumer in step 8 (geothermal isn't wired), so
- * a dark warm tile via `coal` already reads correctly. Adding a dedicated
- * `magma_vent` TerrainKind would require palette + tests; deferred until
- * the geothermal building lands.
  */
 export const BIOME_DEFS: Readonly<Record<Biome, BiomeDef>> = {
   plains: {
@@ -81,8 +75,10 @@ export const BIOME_DEFS: Readonly<Record<Biome, BiomeDef>> = {
     initialMinorRadius: 10,
     powerSource: 'biomass',
     defaultTerrain: 'grass',
-    // Forest islands lean heavily on `tree` (§3.2 "tree, dense forest, grass,
-    // water"). Stone is a sparse rare, water shows up at the margins.
+    // §3.2 lists "tree, dense forest, grass, water" — tree first. Step 8
+    // keeps grass as default for buildability (the Logger that clears tree
+    // doesn't ship until a later step) and uses tree as a visual accent so
+    // the biome reads distinct. Tree/water are weighted 2× in rareTerrain.
     rareTerrain: ['tree', 'tree', 'stone', 'water'],
     displayName: 'Forest',
   },
@@ -318,6 +314,13 @@ export function effectiveModifierMultipliers(
       case 'aetheric_anomaly':
       case 'frozen_core':
         break;
+      default: {
+        // Exhaustiveness guard — adding a new ModifierId without wiring its
+        // effect here becomes a compile error rather than a silent no-op.
+        const _exhaustive: never = id;
+        void _exhaustive;
+        break;
+      }
     }
   }
   return { globalRecipeRate: global, recipeRateByCategory: cat };
@@ -474,7 +477,7 @@ export function terrainAtForBiome(
 ): TerrainKind {
   // Preserve home island's hand-placed layout exactly.
   if (islandId === 'home') {
-    return defaultTerrainAtHome(x, y);
+    return defaultTerrainAt(x, y);
   }
   const def = BIOME_DEFS[biome];
   const r = tileHash01(islandId, x, y);
@@ -491,29 +494,3 @@ export function terrainAtForBiome(
   return def.defaultTerrain;
 }
 
-/**
- * Inline copy of the home-island hand-placed map. We keep this in `biomes.ts`
- * (rather than re-importing `defaultTerrainAt` from `island.ts`) because
- * `island.ts` is a renderer module — biomes.ts must stay pure. The data is
- * mirrored exactly from `island.ts:defaultTerrainAt`; the visual is preserved
- * and a test asserts identity at every (x,y) in the home ellipse.
- */
-function defaultTerrainAtHome(x: number, y: number): TerrainKind {
-  const stoneTiles: ReadonlyArray<readonly [number, number]> = [
-    [-9, -2], [-8, 5], [3, 9], [7, -6], [10, 1], [-2, -10],
-  ];
-  const oreTiles: ReadonlyArray<readonly [number, number]> = [
-    [-7, 2], [-6, 2], [-7, 3], [-6, 3], [-5, 2], [-5, 3],
-  ];
-  const coalTiles: ReadonlyArray<readonly [number, number]> = [
-    [5, 6], [6, 6], [5, 7],
-  ];
-  const waterTiles: ReadonlyArray<readonly [number, number]> = [
-    [-1, -5], [0, -5], [-1, -4], [0, -4],
-  ];
-  for (const t of waterTiles) if (t[0] === x && t[1] === y) return 'water';
-  for (const t of coalTiles) if (t[0] === x && t[1] === y) return 'coal';
-  for (const t of oreTiles) if (t[0] === x && t[1] === y) return 'ore';
-  for (const t of stoneTiles) if (t[0] === x && t[1] === y) return 'stone';
-  return 'grass';
-}
