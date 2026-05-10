@@ -275,6 +275,8 @@ export function makeInitialIslandState(spec: IslandSpec, nowMs: number): IslandS
     xp: 0,
     level: 1,
     unspentSkillPoints: 0,
+    unlockedNodes: new Set(),
+    subPathProgress: new Map(),
     lastTick: nowMs,
   };
 }

@@ -26,6 +26,7 @@
 
 import type { Building } from './buildings.js';
 import { RECIPES, XP_WEIGHT, type Recipe, type ResourceId } from './recipes.js';
+import { effectiveSkillMultipliers, type NodeId, type SubPathId } from './skilltree.js';
 
 /**
  * The mutable per-island runtime state. `IslandSpec` in world.ts is the
@@ -48,9 +49,12 @@ export interface IslandState {
   xp: number;
   /** Current level. Starts at 1. Uncapped per §9.1. */
   level: number;
-  /** Skill points granted by level-ups but not yet spent. Step 3 has no
-   *  skill-tree UI so these only accumulate. */
+  /** Skill points granted by level-ups but not yet spent. */
   unspentSkillPoints: number;
+  /** Set of unlocked skill-tree node ids (§9.3). */
+  unlockedNodes: Set<NodeId>;
+  /** Per-sub-path progress, sparse: only sub-paths with ≥1 spent point have entries. */
+  subPathProgress: Map<SubPathId, { spent: number; complete: boolean }>;
   /** Wall-clock timestamp of the last advance, in milliseconds. */
   lastTick: number;
 }
@@ -63,9 +67,20 @@ export function inv(state: IslandState, r: ResourceId): number {
   return state.inventory[r] ?? 0;
 }
 
-/** Safe cap read; missing key means no storage for that resource. */
+/**
+ * Safe cap read; missing key means no storage for that resource. Applies the
+ * skill-tree storage multiplier (§9.3 Storage sub-path) so every read path —
+ * outputAvail, findNextCapEvent, applyRates — uses the same effective cap.
+ *
+ * The HUD reads `state.storageCaps[r]` directly (it predates skills) and so
+ * still displays nominal caps; the economy uses these effective caps. That
+ * UX inconsistency is left to a later step alongside the broader storage UI.
+ */
 export function cap(state: IslandState, r: ResourceId): number {
-  return state.storageCaps[r] ?? 0;
+  const nominal = state.storageCaps[r] ?? 0;
+  if (nominal === 0) return 0;
+  const mul = effectiveSkillMultipliers(state).storageCap;
+  return nominal * mul;
 }
 
 /**
@@ -193,6 +208,12 @@ export function computeRates(state: IslandState): {
   //   2. inputAvail per recipe, using the supply pool from pass 1.
   //   3. P_produced / P_consumed sums over `active` buildings; powerFactor.
   //   4. Final effectiveRate = baseRate × inputAvail × (consumes-power ? powerFactor : 1).
+  //
+  // Skill multipliers (§9.3) are read once at the top so every pass uses
+  // consistent values. Recipe-rate buffs apply to baseRate AND to pass-2's
+  // nominalRate (so producer/consumer supply ratios stay correct when only
+  // one side is buffed). Power multipliers apply in pass 3.
+  const skillMul = effectiveSkillMultipliers(state);
   const buffStack = 1;
   interface Tentative {
     readonly building: Building;
@@ -211,7 +232,8 @@ export function computeRates(state: IslandState): {
       tentative.push({ building: b, recipe, baseRate: 0 });
       continue;
     }
-    const baseRate = (1 / recipe.cycleSec) * buffStack;
+    const rateMul = skillMul.recipeRate[recipe.category] ?? 1;
+    const baseRate = (1 / recipe.cycleSec) * buffStack * rateMul;
     tentative.push({ building: b, recipe, baseRate });
     for (const [r, yld] of Object.entries(recipe.outputs)) {
       const id = r as ResourceId;
@@ -227,7 +249,8 @@ export function computeRates(state: IslandState): {
   const inputAvailByIdx = new Array<number>(tentative.length);
   for (let i = 0; i < tentative.length; i++) {
     const t = tentative[i]!;
-    const nominalRate = (1 / t.recipe.cycleSec) * buffStack;
+    const rateMul = skillMul.recipeRate[t.recipe.category] ?? 1;
+    const nominalRate = (1 / t.recipe.cycleSec) * buffStack * rateMul;
     const externalSupply: Record<ResourceId, number> = {} as Record<ResourceId, number>;
     for (const r of Object.keys(tentSupply) as ResourceId[]) {
       externalSupply[r] = tentSupply[r] ?? 0;
@@ -260,8 +283,10 @@ export function computeRates(state: IslandState): {
       active = ia > 0;
     }
     if (!active) continue;
-    powerProduced += b.power?.produces ?? 0;
-    powerConsumed += b.power?.consumes ?? 0;
+    powerProduced += (b.power?.produces ?? 0) * skillMul.powerProduction;
+    // powerConsumption is a "reduction" multiplier (>=1 means lower draw),
+    // so we divide. Default 1.0 leaves draw untouched.
+    powerConsumed += (b.power?.consumes ?? 0) / skillMul.powerConsumption;
   }
   const powerFactor =
     powerConsumed === 0 ? 1 : Math.min(1, powerProduced / powerConsumed);

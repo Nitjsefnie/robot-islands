@@ -64,6 +64,8 @@ function makeState(over: Partial<IslandState> = {}): IslandState {
     xp: 0,
     level: 1,
     unspentSkillPoints: 0,
+    unlockedNodes: new Set(),
+    subPathProgress: new Map(),
     lastTick: 0,
     ...over,
   };
@@ -392,6 +394,16 @@ describe('power (§5.1)', () => {
     expect(wsRate).toBeCloseTo(0.1 * 0.5, 9); // half-rate
   });
 
+  it('power_systems.1 unlocked: Coal Gen produces 105W instead of 100W', () => {
+    const state = makeState({
+      buildings: [COAL_GEN],
+      inventory: { ...blankInventory(), coal: 50 },
+      unlockedNodes: new Set(['power_systems.1']),
+    });
+    const { power } = computeRates(state);
+    expect(power.produced).toBeCloseTo(105, 9);
+  });
+
   it('Coal Gen with empty outputs is never output-stalled (cap doesn\'t apply)', () => {
     // The empty-outputs recipe path: no resource can be at cap because no
     // resource is produced. Coal Gen should remain active as long as it has
@@ -410,5 +422,42 @@ describe('power (§5.1)', () => {
     expect(power.factor).toBe(1);
     const cgRate = byBuilding.find((r) => r.building === COAL_GEN)?.effectiveRate;
     expect(cgRate).toBeCloseTo(0.2, 9); // 1 cycle / 5s
+  });
+});
+
+describe('skill-tree integration (§9.3)', () => {
+  it('mining.1 unlocked: Mine produces iron_ore at 1.05× base rate', () => {
+    // Base mine rate 0.2/s × 1.05 = 0.21/s.
+    const state = makeState({
+      buildings: [MINE],
+      inventory: blankInventory(),
+      unlockedNodes: new Set(['mining.1']),
+    });
+    const { production } = computeRates(state);
+    expect(production.iron_ore).toBeCloseTo(0.21, 9);
+  });
+
+  it('mining.1 + mining.2 stacks multiplicatively: Mine rate × 1.155', () => {
+    const state = makeState({
+      buildings: [MINE],
+      inventory: blankInventory(),
+      unlockedNodes: new Set(['mining.1', 'mining.2']),
+    });
+    const { production } = computeRates(state);
+    expect(production.iron_ore).toBeCloseTo(0.2 * 1.155, 9);
+  });
+
+  it('storage.1 unlocked: effective caps are 1.05× the nominal storageCaps map', () => {
+    // Mine alone, iron_ore start at 100 (nominal cap). With storage.1 the
+    // effective cap is 105 — there's headroom and the mine doesn't stall.
+    const state = makeState({
+      buildings: [MINE],
+      inventory: { ...blankInventory(), iron_ore: 100 },
+      unlockedNodes: new Set(['storage.1']),
+    });
+    advanceIsland(state, 10_000);
+    // Mine ran for 10s before hitting the new cap (105). Time to fill from
+    // 100 to 105 at 0.2/s = 25s; we ran 10s, so we picked up 2 units.
+    expect(state.inventory.iron_ore).toBeCloseTo(102, 6);
   });
 });

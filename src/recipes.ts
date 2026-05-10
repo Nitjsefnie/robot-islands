@@ -49,15 +49,44 @@ export const XP_WEIGHT: Readonly<Record<ResourceId, number>> = {
 };
 
 /**
+ * Recipe categories per SPEC §7.0 / §9.4. Skill-tree effects and (later)
+ * Specialization-passive buffs target recipes by category tag, not by
+ * building kind — this keeps edge cases (Cracker is petrochemical, not
+ * strictly smelting) consistent. The full catalog in §7 has more tags;
+ * step 5 needs the seven listed below.
+ */
+export type RecipeCategory =
+  | 'extraction'
+  | 'smelting'
+  | 'chemistry'
+  | 'manufacturing'
+  | 'electronics'
+  | 'power'
+  | 'logistics';
+
+/** All recipe categories, useful for initialising per-category records to 1.0. */
+export const ALL_RECIPE_CATEGORIES: ReadonlyArray<RecipeCategory> = [
+  'extraction',
+  'smelting',
+  'chemistry',
+  'manufacturing',
+  'electronics',
+  'power',
+  'logistics',
+];
+
+/**
  * A single recipe definition. `cycleSec` is the time for one production
  * cycle at base rate (rate = 1 / cycleSec). `inputs` lists per-cycle input
  * demand; `outputs` lists per-cycle output yield. Both are partial maps:
- * resources not listed are not involved.
+ * resources not listed are not involved. `category` tags the recipe for
+ * skill-tree and specialization effects (§9.3/§9.4).
  */
 export interface Recipe {
   readonly cycleSec: number;
   readonly inputs: Partial<Record<ResourceId, number>>;
   readonly outputs: Partial<Record<ResourceId, number>>;
+  readonly category: RecipeCategory;
 }
 
 /**
@@ -78,17 +107,22 @@ export const RECIPES: Partial<Record<BuildingKind, Recipe>> = {
     cycleSec: 5,
     inputs: {},
     outputs: { iron_ore: 1 },
+    category: 'extraction',
   },
   workshop: {
     cycleSec: 10,
     inputs: { iron_ore: 1, coal: 1 },
     outputs: { bolt: 1 },
+    category: 'manufacturing',
   },
   // Coal Gen burns 1 coal / 5s while active. Empty `outputs` is intentional —
   // the W contribution is on building.power.produces (§5.1), not a resource.
+  // The `power` category tag is mostly cosmetic for step 5: power_systems
+  // skill nodes multiply building.power.produces, not the recipe rate.
   coal_gen: {
     cycleSec: 5,
     inputs: { coal: 1 },
     outputs: {},
+    category: 'power',
   },
 };

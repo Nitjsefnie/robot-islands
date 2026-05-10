@@ -40,6 +40,7 @@ import {
 } from './input.js';
 import { TILE_PX } from './island.js';
 import { renderOcean } from './ocean.js';
+import { mountSkillTreeUi } from './skilltree-ui.js';
 import { mountUi } from './ui.js';
 import {
   DEMO_ISLANDS,
@@ -163,6 +164,10 @@ async function main(): Promise<void> {
   defineAction(reg, 'toggle-grid', () => {
     gridLayer.visible = !gridLayer.visible;
   });
+  // toggle-skill-tree handler is wired below once the home state exists; the
+  // action name is reserved here as a no-op stub so the binding never points
+  // at an undefined action (dispatch would silently fail otherwise).
+  defineAction(reg, 'toggle-skill-tree', () => undefined);
 
   // Map of "release" actions used to clear the held flag on keyup. The
   // action table itself is press-only; on keyup we resolve the binding and
@@ -232,6 +237,7 @@ async function main(): Promise<void> {
   mountUi(document.body, reg, [
     { label: 'Toggle Grid (G)', action: 'toggle-grid' },
     { label: 'Center on Home (H)', action: 'center-home' },
+    { label: 'Skill Tree (K)', action: 'toggle-skill-tree' },
   ]);
 
   // -----------------------------------------------------------------------
@@ -249,6 +255,13 @@ async function main(): Promise<void> {
   // HUD: bottom-right panel showing inventory, rates, and level. Updated
   // once per frame inside the ticker after the economy advance.
   const hud = mountHud(document.body);
+
+  // Skill tree panel — modal-ish DOM overlay, dismissed via KeyK or its
+  // close button. Hooks the previously-stubbed `toggle-skill-tree` action.
+  const skillTree = mountSkillTreeUi(document.body, homeState);
+  defineAction(reg, 'toggle-skill-tree', () => {
+    skillTree.toggle();
+  });
 
   // Update tick: apply held pan flags + sync camera state to the world
   // container, advance the home island's economy, and update the HUD.
@@ -272,6 +285,11 @@ async function main(): Promise<void> {
     // 0 rate, not the rate it was running at one event ago).
     const { net, power } = computeRates(homeState);
     hud.update(homeState, net, power);
+    // Skill tree only repaints while visible — DOM writes are wasted
+    // otherwise. show() also forces a paint on transition so we don't
+    // strictly need a per-frame call, but level-up while the panel is open
+    // should be reflected in the points / xp counters live.
+    skillTree.refresh();
   });
 
   // Recenter the camera's reference point on resize so the world doesn't

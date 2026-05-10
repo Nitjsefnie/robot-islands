@@ -83,6 +83,7 @@ export function installDefaultBindings(reg: InputRegistry): void {
   bind(reg, 'ArrowRight', 'pan-right');
   bind(reg, 'KeyG', 'toggle-grid');
   bind(reg, 'KeyH', 'center-home');
+  bind(reg, 'KeyK', 'toggle-skill-tree');
   bind(reg, 'Equal', 'zoom-in'); // '=' / '+' on US layouts
   bind(reg, 'NumpadAdd', 'zoom-in');
   bind(reg, 'Minus', 'zoom-out');

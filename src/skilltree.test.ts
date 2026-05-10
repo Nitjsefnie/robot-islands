@@ -1,0 +1,322 @@
+// Pure-logic tests for the skill tree (§9.3) — tier mapping, depth gating,
+// spend validation (already-owned / insufficient points / tier-locked /
+// depth-prereq / branch-locked), spend mutation, and effect aggregation.
+
+import { describe, expect, it } from 'vitest';
+
+import type { IslandState } from './economy.js';
+import { ALL_RESOURCES, type ResourceId } from './recipes.js';
+import {
+  canSpend,
+  effectiveSkillMultipliers,
+  nodeRequiredTier,
+  spendPoint,
+  tierForLevel,
+  type SkillNode,
+} from './skilltree.js';
+
+function blankInventory(): Record<ResourceId, number> {
+  const inv = {} as Record<ResourceId, number>;
+  for (const r of ALL_RESOURCES) inv[r] = 0;
+  return inv;
+}
+
+function blankCaps(value: number): Record<ResourceId, number> {
+  const caps = {} as Record<ResourceId, number>;
+  for (const r of ALL_RESOURCES) caps[r] = value;
+  return caps;
+}
+
+function makeState(over: Partial<IslandState> = {}): IslandState {
+  return {
+    id: 'test',
+    buildings: [],
+    inventory: blankInventory(),
+    storageCaps: blankCaps(100),
+    xp: 0,
+    level: 1,
+    unspentSkillPoints: 0,
+    unlockedNodes: new Set(),
+    subPathProgress: new Map(),
+    lastTick: 0,
+    ...over,
+  };
+}
+
+describe('tierForLevel (§9.2)', () => {
+  it('returns 1 for pre-T2 levels', () => {
+    expect(tierForLevel(1)).toBe(1);
+    expect(tierForLevel(4)).toBe(1);
+  });
+  it('returns 2 at the T2 breakpoint and above', () => {
+    expect(tierForLevel(5)).toBe(2);
+    expect(tierForLevel(14)).toBe(2);
+  });
+  it('returns 3 at the T3 breakpoint and above', () => {
+    expect(tierForLevel(15)).toBe(3);
+    expect(tierForLevel(29)).toBe(3);
+  });
+  it('returns 4 at the T4 breakpoint and above', () => {
+    expect(tierForLevel(30)).toBe(4);
+    expect(tierForLevel(49)).toBe(4);
+  });
+  it('returns 5 at the T5 breakpoint and above (AI-core gate elided pre-implementation)', () => {
+    expect(tierForLevel(50)).toBe(5);
+    expect(tierForLevel(75)).toBe(5);
+  });
+});
+
+describe('nodeRequiredTier', () => {
+  function mockNode(depth: number): SkillNode {
+    return {
+      id: `mock.${depth}`,
+      subPath: 'mining',
+      depth,
+      cost: 1,
+      magnitude: 0,
+      effect: { kind: 'placeholder' },
+      description: 'mock',
+    };
+  }
+  it('maps depth 1-2 to T2', () => {
+    expect(nodeRequiredTier(mockNode(1))).toBe(2);
+    expect(nodeRequiredTier(mockNode(2))).toBe(2);
+  });
+  it('maps depth 3 to T3', () => {
+    expect(nodeRequiredTier(mockNode(3))).toBe(3);
+  });
+  it('maps depth 4 to T4', () => {
+    expect(nodeRequiredTier(mockNode(4))).toBe(4);
+  });
+  it('maps depth 5-7 to T5', () => {
+    expect(nodeRequiredTier(mockNode(5))).toBe(5);
+    expect(nodeRequiredTier(mockNode(7))).toBe(5);
+  });
+  it('maps depth 8+ to T6', () => {
+    expect(nodeRequiredTier(mockNode(8))).toBe(6);
+    expect(nodeRequiredTier(mockNode(20))).toBe(6);
+  });
+});
+
+describe('canSpend', () => {
+  it('allows a T2 island with a point to buy mining.1', () => {
+    const s = makeState({ level: 5, unspentSkillPoints: 1 });
+    expect(canSpend(s, 'mining.1')).toEqual({ ok: true });
+  });
+
+  it('rejects when the player has no skill points', () => {
+    const s = makeState({ level: 5, unspentSkillPoints: 0 });
+    expect(canSpend(s, 'mining.1')).toEqual({
+      ok: false,
+      reason: 'insufficient-points',
+    });
+  });
+
+  it('rejects depth-1 nodes at T1 (level 1)', () => {
+    const s = makeState({ level: 1, unspentSkillPoints: 1 });
+    expect(canSpend(s, 'mining.1')).toEqual({
+      ok: false,
+      reason: 'tier-locked',
+    });
+  });
+
+  it('rejects re-purchasing an already-owned node', () => {
+    const s = makeState({
+      level: 5,
+      unspentSkillPoints: 5,
+      unlockedNodes: new Set(['mining.1']),
+      subPathProgress: new Map([['mining', { spent: 1, complete: false }]]),
+    });
+    expect(canSpend(s, 'mining.1')).toEqual({
+      ok: false,
+      reason: 'already-unlocked',
+    });
+  });
+
+  it('rejects depth-2 without depth-1 owned in the same sub-path', () => {
+    const s = makeState({ level: 5, unspentSkillPoints: 5 });
+    expect(canSpend(s, 'mining.2')).toEqual({
+      ok: false,
+      reason: 'depth-prereq',
+    });
+  });
+
+  it('allows depth-2 once depth-1 is owned', () => {
+    const s = makeState({
+      level: 5,
+      unspentSkillPoints: 5,
+      unlockedNodes: new Set(['mining.1']),
+      subPathProgress: new Map([['mining', { spent: 1, complete: false }]]),
+    });
+    expect(canSpend(s, 'mining.2')).toEqual({ ok: true });
+  });
+
+  it('allows parallel work in different branches (mining + smelting)', () => {
+    // Even with mining COMMITTED + INCOMPLETE in the extraction branch,
+    // smelting (refinement branch) is unaffected.
+    const s = makeState({
+      level: 5,
+      unspentSkillPoints: 5,
+      unlockedNodes: new Set(['mining.1']),
+      // Spent over the commit threshold to simulate "committed but incomplete"
+      // in mining; uses a synthetic spent count for the cross-branch test.
+      subPathProgress: new Map([['mining', { spent: 3, complete: false }]]),
+    });
+    expect(canSpend(s, 'smelting.1')).toEqual({ ok: true });
+  });
+});
+
+describe('canSpend — branch lock (synthetic catalog)', () => {
+  // Step-5 catalog has only depth 1+2 per sub-path, so committing at the
+  // 3-point threshold simultaneously completes the sub-path. To exercise
+  // the "committed but incomplete" branch lock, we inject a 3-node sub-path
+  // catalog with cost 1 each. Spending 3 points across all three nodes
+  // commits the sub-path; spending only 1 leaves it committed-incomplete.
+
+  const SYNTH_CATALOG: ReadonlyArray<SkillNode> = [
+    {
+      id: 'mining.1', subPath: 'mining', depth: 1, cost: 1, magnitude: 0.05,
+      effect: { kind: 'placeholder' }, description: 's1',
+    },
+    {
+      id: 'mining.2', subPath: 'mining', depth: 2, cost: 1, magnitude: 0.05,
+      effect: { kind: 'placeholder' }, description: 's2',
+    },
+    {
+      id: 'mining.3', subPath: 'mining', depth: 3, cost: 1, magnitude: 0.05,
+      effect: { kind: 'placeholder' }, description: 's3',
+    },
+    {
+      id: 'forestry.1', subPath: 'forestry', depth: 1, cost: 1, magnitude: 0.05,
+      effect: { kind: 'placeholder' }, description: 'sf',
+    },
+    {
+      id: 'smelting.1', subPath: 'smelting', depth: 1, cost: 1, magnitude: 0.05,
+      effect: { kind: 'placeholder' }, description: 'ssm',
+    },
+  ];
+
+  it('does not lock siblings before the commit threshold is reached', () => {
+    // 2 points spent on mining (depth 1 + 2) is below the threshold of 3.
+    // Forestry must still be reachable while mining is sub-threshold.
+    const s = makeState({ level: 30, unspentSkillPoints: 10 });
+    spendPoint(s, 'mining.1', SYNTH_CATALOG);
+    spendPoint(s, 'mining.2', SYNTH_CATALOG);
+    expect(canSpend(s, 'forestry.1', SYNTH_CATALOG)).toEqual({ ok: true });
+  });
+
+  it('locks sibling sub-paths when committed-incomplete (4-node mining)', () => {
+    const SYNTH4: ReadonlyArray<SkillNode> = [
+      {
+        id: 'mining.1', subPath: 'mining', depth: 1, cost: 1, magnitude: 0.05,
+        effect: { kind: 'placeholder' }, description: 's1',
+      },
+      {
+        id: 'mining.2', subPath: 'mining', depth: 2, cost: 1, magnitude: 0.05,
+        effect: { kind: 'placeholder' }, description: 's2',
+      },
+      {
+        id: 'mining.3', subPath: 'mining', depth: 3, cost: 1, magnitude: 0.05,
+        effect: { kind: 'placeholder' }, description: 's3',
+      },
+      {
+        id: 'mining.4', subPath: 'mining', depth: 4, cost: 1, magnitude: 0.05,
+        effect: { kind: 'placeholder' }, description: 's4',
+      },
+      {
+        id: 'forestry.1', subPath: 'forestry', depth: 1, cost: 1, magnitude: 0.05,
+        effect: { kind: 'placeholder' }, description: 'sf',
+      },
+      {
+        id: 'smelting.1', subPath: 'smelting', depth: 1, cost: 1, magnitude: 0.05,
+        effect: { kind: 'placeholder' }, description: 'ssm',
+      },
+    ];
+    const s = makeState({ level: 50, unspentSkillPoints: 10 });
+    spendPoint(s, 'mining.1', SYNTH4);
+    spendPoint(s, 'mining.2', SYNTH4);
+    spendPoint(s, 'mining.3', SYNTH4);
+    // 3 points spent on mining, 4 nodes in catalog → COMMITTED + INCOMPLETE.
+    // forestry.1 (same branch) must be blocked.
+    expect(canSpend(s, 'forestry.1', SYNTH4)).toEqual({
+      ok: false,
+      reason: 'branch-locked',
+    });
+    // smelting.1 (refinement branch) must be unaffected.
+    expect(canSpend(s, 'smelting.1', SYNTH4)).toEqual({ ok: true });
+    // Buying mining.4 completes the sub-path; forestry then unlocks.
+    spendPoint(s, 'mining.4', SYNTH4);
+    expect(canSpend(s, 'forestry.1', SYNTH4)).toEqual({ ok: true });
+  });
+});
+
+describe('spendPoint', () => {
+  it('decrements points, adds to unlockedNodes, updates sub-path progress', () => {
+    const s = makeState({ level: 5, unspentSkillPoints: 3 });
+    spendPoint(s, 'mining.1');
+    expect(s.unspentSkillPoints).toBe(2);
+    expect(s.unlockedNodes.has('mining.1')).toBe(true);
+    const prog = s.subPathProgress.get('mining');
+    expect(prog).toEqual({ spent: 1, complete: false });
+  });
+
+  it('marks a sub-path complete when both step-5 nodes are owned', () => {
+    const s = makeState({ level: 5, unspentSkillPoints: 5 });
+    spendPoint(s, 'mining.1');
+    spendPoint(s, 'mining.2');
+    expect(s.subPathProgress.get('mining')).toEqual({ spent: 3, complete: true });
+    expect(s.unspentSkillPoints).toBe(2);
+  });
+});
+
+describe('effectiveSkillMultipliers', () => {
+  it('returns all-1.0 multipliers for an empty unlock set', () => {
+    const s = makeState();
+    const m = effectiveSkillMultipliers(s);
+    expect(m.recipeRate.extraction).toBe(1);
+    expect(m.recipeRate.smelting).toBe(1);
+    expect(m.recipeRate.power).toBe(1);
+    expect(m.storageCap).toBe(1);
+    expect(m.powerProduction).toBe(1);
+    expect(m.powerConsumption).toBe(1);
+  });
+
+  it('applies a single mining.1 as extraction +5%', () => {
+    const s = makeState({ unlockedNodes: new Set(['mining.1']) });
+    const m = effectiveSkillMultipliers(s);
+    expect(m.recipeRate.extraction).toBeCloseTo(1.05, 9);
+    expect(m.recipeRate.smelting).toBe(1);
+    expect(m.storageCap).toBe(1);
+  });
+
+  it('composes mining.1 + mining.2 multiplicatively as 1.05 × 1.10 = 1.155×', () => {
+    const s = makeState({ unlockedNodes: new Set(['mining.1', 'mining.2']) });
+    const m = effectiveSkillMultipliers(s);
+    expect(m.recipeRate.extraction).toBeCloseTo(1.155, 9);
+  });
+
+  it('mining.1 + power_systems.1 stacks across distinct axes', () => {
+    const s = makeState({
+      unlockedNodes: new Set(['mining.1', 'power_systems.1']),
+    });
+    const m = effectiveSkillMultipliers(s);
+    expect(m.recipeRate.extraction).toBeCloseTo(1.05, 9);
+    expect(m.powerProduction).toBeCloseTo(1.05, 9);
+    expect(m.storageCap).toBe(1);
+  });
+
+  it('storage.1 applies a uniform 5% cap multiplier', () => {
+    const s = makeState({ unlockedNodes: new Set(['storage.1']) });
+    const m = effectiveSkillMultipliers(s);
+    expect(m.storageCap).toBeCloseTo(1.05, 9);
+    expect(m.recipeRate.extraction).toBe(1);
+  });
+
+  it('placeholder effects do not affect any multiplier', () => {
+    const s = makeState({ unlockedNodes: new Set(['robotics.1', 'robotics.2']) });
+    const m = effectiveSkillMultipliers(s);
+    expect(m.recipeRate.extraction).toBe(1);
+    expect(m.storageCap).toBe(1);
+    expect(m.powerProduction).toBe(1);
+  });
+});
