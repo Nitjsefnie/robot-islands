@@ -36,6 +36,33 @@ import {
 export const CELL_SIZE_TILES = 16;
 /** Vision radius from a populated island, in tiles. Placeholder: 5 cells. */
 export const VISION_RADIUS_TILES = 5 * CELL_SIZE_TILES;
+/** Discovery aura radius around any discovered island, in tiles. Placeholder:
+ *  ~1.5 cells. Drives the medium-blue ocean tier in `renderOcean`. */
+export const DISCOVERY_RADIUS_TILES = 24;
+
+// ---------------------------------------------------------------------------
+// Ocean-tier palette
+// ---------------------------------------------------------------------------
+//
+// Three discrete blues form the world's vision-state field. The colour step
+// itself indicates the boundary between tiers — there is no outline ring.
+//
+//   VISION_BLUE     — luminous cyan-leaning shallow. Reads as "lit water,
+//                     full information." Saturated and cool.
+//   DISCOVERED_BLUE — desaturated steel mid-blue. Reads as "we surveyed
+//                     this once; the lights are off now." Drops both
+//                     lightness and chroma vs vision so the perceptual
+//                     gap is two-axis, not just lightness.
+//   UNKNOWN_BLUE    — the page background exactly. Unknown ocean fuses
+//                     visually with the page void; "unknown" reads as
+//                     absence rather than as a competing dark colour.
+
+/** Tier A — vision (full info) ocean. Luminous cyan-tinged shallow. */
+export const VISION_BLUE = 0x7dd3e8;
+/** Tier B — discovered (no current info) ocean. Desaturated steel blue. */
+export const DISCOVERED_BLUE = 0x2d5878;
+/** Tier C — unknown ocean. Equals the page background `#0a0e14`. */
+export const UNKNOWN_BLUE = 0x0a0e14;
 
 export type Biome = 'plains' | 'forest' | 'coast' | 'volcanic' | 'desert' | 'arctic';
 

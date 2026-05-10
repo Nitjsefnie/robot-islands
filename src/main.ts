@@ -9,8 +9,14 @@
 //   - visible    → full color/alpha
 //   - discovered → dimmed + cool tint (player knows it exists, no current info)
 //   - unknown    → not rendered (dark page background shows through)
-// A faint outline ring around each populated island marks the vision boundary
-// as a UI affordance.
+//
+// Vision boundary: rendered as a three-tier ocean colour field (see
+// `ocean.ts`). The colour step between tiers IS the boundary indicator —
+// no outline ring. The ocean layer sits below islands so islands always
+// render on top of it. Per-island alpha/tint dimming on 'discovered'
+// islands stays as a complementary indicator: ocean colour shows the
+// world's vision state at that point, island dimming shows that island's
+// known state.
 
 import { Application, Container } from 'pixi.js';
 
@@ -31,8 +37,8 @@ import {
   makeRegistry,
 } from './input.js';
 import { TILE_PX } from './island.js';
+import { renderOcean } from './ocean.js';
 import { mountUi } from './ui.js';
-import { renderVisionRings } from './vision.js';
 import {
   DEMO_ISLANDS,
   islandRenderState,
@@ -70,6 +76,19 @@ async function main(): Promise<void> {
   world.label = 'world';
   app.stage.addChild(world);
 
+  // Ocean layer (BOTTOM). Three-tier coloured field: unknown rect → discovered
+  // circles → vision circles. Added first so islands draw on top.
+  const oceanLayer = renderOcean(
+    DEMO_ISLANDS.map((s) => ({
+      cx: s.cx,
+      cy: s.cy,
+      discovered: s.discovered,
+      populated: s.populated,
+    })),
+    WORLD_HALF_SIZE_TILES,
+  );
+  world.addChild(oceanLayer);
+
   // Island layer (terrain + buildings for each visible island).
   const islandLayer = new Container();
   islandLayer.label = 'islands';
@@ -94,16 +113,8 @@ async function main(): Promise<void> {
     );
   }
 
-  // Vision-ring overlay — faint outline circles at each populated island's
-  // vision radius, so the player can see where their "current info" boundary
-  // is. Above islands so it's never occluded by terrain.
-  const visionRingLayer = renderVisionRings(
-    populated.map((s) => ({ cx: s.cx, cy: s.cy })),
-  );
-  world.addChild(visionRingLayer);
-
-  // Cell grid (debug). Above vision rings so the lines are always visible
-  // when on.
+  // Cell grid (debug). Top of the world container so lines are always visible
+  // when toggled on.
   const gridLayer = renderCellGrid(WORLD_HALF_SIZE_TILES);
   world.addChild(gridLayer);
 
