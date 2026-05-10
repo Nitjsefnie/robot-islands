@@ -75,7 +75,9 @@ const TIER_BREAKPOINT: Readonly<Record<Tier, number>> = {
   3: 15,
   4: 30,
   5: 50,
-  6: 50,
+  // T6 needs Ascendant Core + Spaceport per §9.2, not a level threshold.
+  // Infinity keeps the proximity-warn math correct (always far-locked).
+  6: Number.POSITIVE_INFINITY,
 };
 
 function styled(el: HTMLElement, css: string): void {
