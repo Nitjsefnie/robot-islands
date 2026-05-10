@@ -89,6 +89,10 @@ export const FUNNELING_TIER_CAP = 3;
 // Route id generation
 // ---------------------------------------------------------------------------
 
+// FIXME(save-state): module-level counter resets on reload, which can collide
+// with persisted route ids when persistence lands. Move onto WorldState as
+// `nextRouteId: number`, or derive from `max(world.routes[*].id) + 1` at
+// allocation. Same class of issue as the drone id counter in drones.ts.
 let routeIdCounter = 0;
 export function nextRouteId(): string {
   routeIdCounter += 1;

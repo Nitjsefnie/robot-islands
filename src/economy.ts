@@ -440,6 +440,10 @@ function accrueXp(
   // balance holds units of XP (already multiplied by xp_weight × bonus at
   // delivery time), so each consumed unit costs `xp_weight × bonus` of
   // credit and returns the same amount as XP.
+  // FIXME(§10.1): drain treats any consumption of `r` as if it came from
+  // imports. Real spec requires per-batch provenance tracking — when local
+  // production also consumes `r`, this overcounts the funnel bonus. Invisible
+  // in step 7 because the demo has only one consumer per resource per island.
   for (const r of Object.keys(consumption) as ResourceId[]) {
     const rate = consumption[r] ?? 0;
     if (rate <= 0) continue;

@@ -825,9 +825,25 @@ export function mountRoutesUi(parentEl: HTMLElement, deps: RouteUiDeps): RouteUi
       .stroke({ width: 1, color: 0xf5a742, alpha: 0.6 });
   }
 
+  // Cache the populated-island id set so buildOptions() only re-runs when the
+  // set actually changes. Rebuilding <option> children every frame closes any
+  // dropdown the player is mid-interaction with. Today the set is static
+  // post-init, but the change-detection guard keeps this honest once
+  // settlement (§12) starts mutating populated mid-game.
+  let lastPopulatedKey = '';
+  function populatedKey(): string {
+    let k = '';
+    for (const s of deps.world.islands) if (s.populated) k += s.id + '|';
+    return k;
+  }
+
   // ---- API impl --------------------------------------------------------------
   function refresh(nowMs: number): void {
-    buildOptions();
+    const key = populatedKey();
+    if (key !== lastPopulatedKey) {
+      buildOptions();
+      lastPopulatedKey = key;
+    }
     refreshFormReadout();
     refreshStats();
     repaintLedger(nowMs);
