@@ -24,7 +24,8 @@ import { Container } from 'pixi.js';
 
 import type { ModifierId } from './biomes.js';
 import { terrainAtForBiome } from './biomes.js';
-import type { Building } from './buildings.js';
+import { BUILDING_DEFS } from './building-defs.js';
+import type { PlacedBuilding } from './buildings.js';
 import { HOME_ISLAND_BUILDINGS, renderBuildings } from './buildings.js';
 import type { IslandState } from './economy.js';
 import type { Tile, TerrainKind } from './island.js';
@@ -89,7 +90,7 @@ export interface IslandSpec {
    *  islands. The rest of the spec stays readonly — only this flag changes. */
   discovered: boolean;
   /** Buildings placed on this island, in island-local tile coords. */
-  readonly buildings: ReadonlyArray<Building>;
+  readonly buildings: ReadonlyArray<PlacedBuilding>;
   /** Terrain function in island-local coords. Defaults to grass everywhere. */
   readonly terrainAt?: (x: number, y: number) => TerrainKind;
   /** Active modifiers on this island per §3.5. Step 8 hard-codes the demo
@@ -232,9 +233,13 @@ export const DEMO_ISLANDS: ReadonlyArray<IslandSpec> = [
     minorRadius: 10,
     populated: true,
     discovered: true,
+    // Step-9: also adds a Logger so forest-ne has a local wood producer to
+    // pair with the demo Biomass Plant chain. 1×1 footprint inside the
+    // radius-10 ellipse.
     buildings: [
-      { kind: 'dock', x: 0, y: 0, width: 2, height: 2, fill: 0x3a7bd5, stroke: 0x0a2a55, label: 'Dock' },
-      { kind: 'workshop', x: -3, y: 0, width: 2, height: 2, fill: 0xe07b3a, stroke: 0x6b2f00, label: 'Workshop', power: { consumes: 60 } },
+      { id: 'forestne-dock-1',     defId: 'dock',     x: 0,  y: 0 },
+      { id: 'forestne-workshop-1', defId: 'workshop', x: -3, y: 0 },
+      { id: 'forestne-logger-1',   defId: 'logger',   x: 3,  y: 3 },
     ],
     terrainAt: (x, y) => terrainAtForBiome('forest', 'forest-ne', x, y),
     modifiers: ['fertile'],
@@ -364,11 +369,31 @@ function startingInventory(): Record<ResourceId, number> {
   return inv;
 }
 
-/** Step-3 storage caps. Hardcoded to 100 across the board until storage
- *  buildings exist (deferred to a later step). */
-function startingCaps(value = 100): Record<ResourceId, number> {
+/** Baseline cap before any storage building is placed. Per the step-3 demo
+ *  every resource started at 100; we keep the same baseline so an island
+ *  without any storage building still has minimal headroom for the tick
+ *  loop to demonstrate cap-stall behaviour. Storage buildings add on top. */
+const BASELINE_STORAGE_CAP = 100;
+
+/**
+ * Aggregate placement-time storage caps from a building list. Per §8.4
+ * spec, storage buildings carry per-resource specialisation (Silo →
+ * dry-goods, Tank → liquids/gases). For step 9 the simplification is
+ * "Crate/Silo/Tank apply uniformly to ALL resources" — the categorised
+ * routing system is deferred. The result: each resource cap = baseline +
+ * sum of every placed storage def's `storageCap`.
+ *
+ * Pure — no PixiJS, no DOM, no IslandState dependency.
+ */
+export function aggregateStorageCaps(
+  buildings: ReadonlyArray<PlacedBuilding>,
+): Record<ResourceId, number> {
+  let extra = 0;
+  for (const b of buildings) {
+    extra += BUILDING_DEFS[b.defId].storageCap ?? 0;
+  }
   const caps = {} as Record<ResourceId, number>;
-  for (const r of ALL_RESOURCES) caps[r] = value;
+  for (const r of ALL_RESOURCES) caps[r] = BASELINE_STORAGE_CAP + extra;
   return caps;
 }
 
@@ -389,7 +414,7 @@ export function makeInitialIslandState(spec: IslandSpec, nowMs: number): IslandS
     id: spec.id,
     buildings: spec.buildings,
     inventory: startingInventory(),
-    storageCaps: startingCaps(),
+    storageCaps: aggregateStorageCaps(spec.buildings),
     xp: 0,
     level: 1,
     unspentSkillPoints: 0,

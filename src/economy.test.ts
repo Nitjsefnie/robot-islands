@@ -13,36 +13,39 @@
 
 import { describe, expect, it } from 'vitest';
 
-import type { Building } from './buildings.js';
 import { effectiveModifierMultipliers } from './biomes.js';
+import { BUILDING_DEFS, type BuildingDef, type BuildingDefId } from './building-defs.js';
+import type { PlacedBuilding } from './buildings.js';
 import {
   advanceIsland,
   computeRates,
   xpForLevel,
+  type DefCatalog,
   type IslandState,
 } from './economy.js';
 import { ALL_RESOURCES, type ResourceId } from './recipes.js';
+import { aggregateStorageCaps } from './world.js';
 
-const MINE: Building = {
-  kind: 'mine',
-  x: 0,
-  y: 0,
-  width: 2,
-  height: 2,
-  fill: 0,
-  stroke: 0,
-  label: 'Mine',
-};
-const WORKSHOP: Building = {
-  kind: 'workshop',
-  x: 0,
-  y: 0,
-  width: 2,
-  height: 2,
-  fill: 0,
-  stroke: 0,
-  label: 'Workshop',
-};
+const MINE: PlacedBuilding = { id: 'b-mine', defId: 'mine', x: 0, y: 0 };
+const WORKSHOP: PlacedBuilding = { id: 'b-workshop', defId: 'workshop', x: 0, y: 0 };
+
+/** Test catalog where Mine and Workshop have NO power fields so the
+ *  power-free test paths exercise the "no consumers" branch in
+ *  computeRates. The production catalog (BUILDING_DEFS) gives both
+ *  buildings their power-burn defaults; tests that need power-neutral
+ *  behaviour swap to this one. */
+function powerFreeCatalog(): DefCatalog {
+  const base = { ...BUILDING_DEFS } as Record<BuildingDefId, BuildingDef>;
+  const strip = (id: BuildingDefId): void => {
+    const def = base[id];
+    const { power: _power, ...rest } = def;
+    base[id] = rest as BuildingDef;
+  };
+  strip('mine');
+  strip('workshop');
+  return base;
+}
+const POWER_FREE: DefCatalog = powerFreeCatalog();
 
 function blankInventory(): Record<ResourceId, number> {
   const inv = {} as Record<ResourceId, number>;
@@ -88,7 +91,7 @@ describe('advanceIsland — event-driven piecewise integration', () => {
       buildings: [MINE],
       inventory: { ...blankInventory(), iron_ore: 99 },
     });
-    advanceIsland(state, 10_000);
+    advanceIsland(state, 10_000, undefined, POWER_FREE);
     expect(state.inventory.iron_ore).toBeCloseTo(100, 9);
     // Cap is a hard ceiling, not just an integer floor — verify no overshoot.
     expect(state.inventory.iron_ore).toBeLessThanOrEqual(100);
@@ -101,7 +104,7 @@ describe('advanceIsland — event-driven piecewise integration', () => {
       buildings: [MINE],
       inventory: { ...blankInventory() },
     });
-    advanceIsland(state, 10_000);
+    advanceIsland(state, 10_000, undefined, POWER_FREE);
     expect(state.inventory.iron_ore).toBeCloseTo(2, 9);
   });
 
@@ -119,7 +122,7 @@ describe('advanceIsland — event-driven piecewise integration', () => {
       buildings: [MINE, WORKSHOP],
       inventory: { ...blankInventory(), coal: 50 },
     });
-    advanceIsland(state, 600_000);
+    advanceIsland(state, 600_000, undefined, POWER_FREE);
     expect(state.inventory.iron_ore).toBeCloseTo(70, 6);
     expect(state.inventory.coal).toBeCloseTo(0, 6);
     expect(state.inventory.bolt).toBeCloseTo(50, 6);
@@ -138,7 +141,7 @@ describe('advanceIsland — event-driven piecewise integration', () => {
         bolt: 100, // at cap
       },
     });
-    advanceIsland(state, 10_000);
+    advanceIsland(state, 10_000, undefined, POWER_FREE);
     expect(state.inventory.iron_ore).toBe(50); // untouched
     expect(state.inventory.coal).toBe(50); // untouched
     expect(state.inventory.bolt).toBe(100); // still at cap
@@ -152,7 +155,7 @@ describe('advanceIsland — event-driven piecewise integration', () => {
       buildings: [WORKSHOP],
       inventory: { ...blankInventory(), coal: 50, iron_ore: 0 },
     });
-    advanceIsland(state, 10_000);
+    advanceIsland(state, 10_000, undefined, POWER_FREE);
     expect(state.inventory.coal).toBe(50); // not eaten
     expect(state.inventory.bolt).toBe(0); // none produced
   });
@@ -166,7 +169,7 @@ describe('XP accrual', () => {
       buildings: [MINE],
       inventory: blankInventory(),
     });
-    advanceIsland(state, 10_000);
+    advanceIsland(state, 10_000, undefined, POWER_FREE);
     expect(state.xp).toBeCloseTo(2, 9);
   });
 
@@ -181,7 +184,7 @@ describe('XP accrual', () => {
       buildings: [MINE, WORKSHOP],
       inventory: { ...blankInventory(), coal: 50 },
     });
-    advanceIsland(state, 10_000);
+    advanceIsland(state, 10_000, undefined, POWER_FREE);
     expect(state.xp).toBeCloseTo(12, 6);
     // And verify the inventory looks right: iron_ore net = +0.1/s × 10 = 1
     expect(state.inventory.iron_ore).toBeCloseTo(1, 6);
@@ -194,7 +197,7 @@ describe('XP accrual', () => {
       buildings: [WORKSHOP],
       inventory: { ...blankInventory(), iron_ore: 0, coal: 50 }, // workshop stalls
     });
-    advanceIsland(state, 10_000);
+    advanceIsland(state, 10_000, undefined, POWER_FREE);
     expect(state.xp).toBe(0);
   });
 });
@@ -217,7 +220,7 @@ describe('Level up', () => {
       inventory: blankInventory(),
       xp: threshold - 0.5,
     });
-    advanceIsland(state, 5_000);
+    advanceIsland(state, 5_000, undefined, POWER_FREE);
     expect(state.level).toBe(2);
     expect(state.unspentSkillPoints).toBe(1);
     expect(state.xp).toBeGreaterThanOrEqual(0);
@@ -246,7 +249,7 @@ describe('computeRates', () => {
       buildings: [MINE, WORKSHOP],
       inventory: { ...blankInventory(), coal: 50 },
     });
-    const { production, net } = computeRates(state);
+    const { production, net } = computeRates(state, undefined, POWER_FREE);
     expect(production.iron_ore).toBeCloseTo(0.2, 9);
     expect(production.bolt).toBeCloseTo(0.1, 9);
     expect(net.iron_ore).toBeCloseTo(0.1, 9); // +0.2 - 0.1
@@ -259,7 +262,7 @@ describe('computeRates', () => {
       buildings: [WORKSHOP],
       inventory: { ...blankInventory(), iron_ore: 0, coal: 50 },
     });
-    const { byBuilding } = computeRates(state);
+    const { byBuilding } = computeRates(state, undefined, POWER_FREE);
     expect(byBuilding[0]?.effectiveRate).toBe(0);
   });
 
@@ -268,30 +271,28 @@ describe('computeRates', () => {
       buildings: [MINE],
       inventory: { ...blankInventory(), iron_ore: 100 }, // at cap
     });
-    const { byBuilding } = computeRates(state);
+    const { byBuilding } = computeRates(state, undefined, POWER_FREE);
     expect(byBuilding[0]?.effectiveRate).toBe(0);
   });
 });
 
-// Building fixtures with §5.1 power fields. Mine and Workshop here override
-// the un-powered MINE/WORKSHOP fixtures above so the original tests stay
-// power-neutral; the new tests use these explicit-power versions.
-const SOLAR: Building = {
-  kind: 'solar',
-  x: 0, y: 0, width: 1, height: 1,
-  fill: 0, stroke: 0, label: 'Solar',
-  power: { produces: 50 },
-};
-const COAL_GEN: Building = {
-  kind: 'coal_gen',
-  x: 0, y: 0, width: 2, height: 2,
-  fill: 0, stroke: 0, label: 'Coal Gen',
-  power: { produces: 100 },
-};
-const MINE_PWR: Building = { ...MINE, power: { consumes: 40 } };
-const WORKSHOP_PWR: Building = { ...WORKSHOP, power: { consumes: 60 } };
-// Heavier-draw Mine for the partial-brownout test.
-const MINE_PWR_80: Building = { ...MINE, power: { consumes: 80 } };
+// Building fixtures with §5.1 power fields. SOLAR and COAL_GEN inherit
+// their power values from BUILDING_DEFS. Mine and Workshop pick up the
+// production defs' 40W / 60W consumes via the production catalog. The
+// heavier-draw MINE_PWR_80 needs a one-off catalog where mine consumes 80W.
+const SOLAR: PlacedBuilding = { id: 'b-solar', defId: 'solar', x: 0, y: 0 };
+const COAL_GEN: PlacedBuilding = { id: 'b-coal-gen', defId: 'coal_gen', x: 0, y: 0 };
+const MINE_PWR: PlacedBuilding = MINE; // mine def already consumes 40W
+const WORKSHOP_PWR: PlacedBuilding = WORKSHOP; // workshop def already consumes 60W
+const MINE_PWR_80: PlacedBuilding = { id: 'b-mine-80', defId: 'mine', x: 0, y: 0 };
+
+/** Catalog with a heavier Mine (80W) for the partial-brownout fixture. */
+function mineHeavyCatalog(): DefCatalog {
+  const base = { ...BUILDING_DEFS } as Record<BuildingDefId, BuildingDef>;
+  base.mine = { ...base.mine, power: { consumes: 80 } };
+  return base;
+}
+const MINE_HEAVY: DefCatalog = mineHeavyCatalog();
 
 describe('power (§5.1)', () => {
   it('powerFactor = 1 when there are no power consumers', () => {
@@ -300,7 +301,7 @@ describe('power (§5.1)', () => {
       buildings: [MINE],
       inventory: blankInventory(),
     });
-    const { power, byBuilding } = computeRates(state);
+    const { power, byBuilding } = computeRates(state, undefined, POWER_FREE);
     expect(power.produced).toBe(0);
     expect(power.consumed).toBe(0);
     expect(power.factor).toBe(1);
@@ -332,7 +333,7 @@ describe('power (§5.1)', () => {
       buildings: [COAL_GEN, MINE_PWR_80, WORKSHOP_PWR],
       inventory: { ...blankInventory(), coal: 50 },
     });
-    const { power, byBuilding } = computeRates(state);
+    const { power, byBuilding } = computeRates(state, undefined, MINE_HEAVY);
     expect(power.produced).toBe(100);
     expect(power.consumed).toBe(140);
     expect(power.factor).toBeCloseTo(100 / 140, 9);
@@ -441,7 +442,7 @@ describe('skill-tree integration (§9.3)', () => {
       inventory: blankInventory(),
       unlockedNodes: new Set(['mining.1']),
     });
-    const { production } = computeRates(state);
+    const { production } = computeRates(state, undefined, POWER_FREE);
     expect(production.iron_ore).toBeCloseTo(0.21, 9);
   });
 
@@ -451,7 +452,7 @@ describe('skill-tree integration (§9.3)', () => {
       inventory: blankInventory(),
       unlockedNodes: new Set(['mining.1', 'mining.2']),
     });
-    const { production } = computeRates(state);
+    const { production } = computeRates(state, undefined, POWER_FREE);
     expect(production.iron_ore).toBeCloseTo(0.2 * 1.155, 9);
   });
 
@@ -463,7 +464,7 @@ describe('skill-tree integration (§9.3)', () => {
       inventory: { ...blankInventory(), iron_ore: 100 },
       unlockedNodes: new Set(['storage.1']),
     });
-    advanceIsland(state, 10_000);
+    advanceIsland(state, 10_000, undefined, POWER_FREE);
     // Mine ran for 10s before hitting the new cap (105). Time to fill from
     // 100 to 105 at 0.2/s = 25s; we ran 10s, so we picked up 2 units.
     expect(state.inventory.iron_ore).toBeCloseTo(102, 6);
@@ -487,7 +488,7 @@ describe('funneling — consumption drains pending bonus XP credit (§10)', () =
       inventory: { ...blankInventory(), iron_ore: 10, coal: 10 },
     });
     state.funnelPending.iron_ore = 5;
-    advanceIsland(state, 10_000);
+    advanceIsland(state, 10_000, undefined, POWER_FREE);
     // Production XP: 0.1 bolt/s × 10s × 10 (xp_weight) = 10.
     // + funnel-drain XP: 0.5.
     expect(state.xp).toBeCloseTo(10.5, 6);
@@ -503,7 +504,7 @@ describe('funneling — consumption drains pending bonus XP credit (§10)', () =
       inventory: { ...blankInventory(), iron_ore: 10, coal: 10 },
     });
     state.funnelPending.iron_ore = 0.2;
-    advanceIsland(state, 10_000);
+    advanceIsland(state, 10_000, undefined, POWER_FREE);
     expect(state.xp).toBeCloseTo(10.2, 6);
     expect(state.funnelPending.iron_ore).toBeCloseTo(0, 6);
   });
@@ -516,7 +517,7 @@ describe('funneling — consumption drains pending bonus XP credit (§10)', () =
       inventory: { ...blankInventory(), iron_ore: 10, coal: 10, bolt: 100 },
     });
     state.funnelPending.iron_ore = 5;
-    advanceIsland(state, 10_000);
+    advanceIsland(state, 10_000, undefined, POWER_FREE);
     expect(state.funnelPending.iron_ore).toBeCloseTo(5, 6);
   });
 });
@@ -531,7 +532,7 @@ describe('modifier integration in computeRates / advanceIsland (§3.5)', () => {
       inventory: blankInventory(),
     });
     const mul = effectiveModifierMultipliers(['mineral_rich']);
-    advanceIsland(state, 10_000, mul);
+    advanceIsland(state, 10_000, mul, POWER_FREE);
     expect(state.inventory.iron_ore).toBeCloseTo(2.5, 9);
   });
 
@@ -542,7 +543,7 @@ describe('modifier integration in computeRates / advanceIsland (§3.5)', () => {
       inventory: blankInventory(),
     });
     const mul = effectiveModifierMultipliers(['cursed_storms']);
-    advanceIsland(state, 10_000, mul);
+    advanceIsland(state, 10_000, mul, POWER_FREE);
     expect(state.inventory.iron_ore).toBeCloseTo(1.8, 9);
   });
 
@@ -552,7 +553,7 @@ describe('modifier integration in computeRates / advanceIsland (§3.5)', () => {
       inventory: blankInventory(),
     });
     const mul = effectiveModifierMultipliers(['fertile']);
-    advanceIsland(state, 10_000, mul);
+    advanceIsland(state, 10_000, mul, POWER_FREE);
     expect(state.inventory.iron_ore).toBeCloseTo(3, 9);
   });
 
@@ -562,7 +563,7 @@ describe('modifier integration in computeRates / advanceIsland (§3.5)', () => {
       inventory: blankInventory(),
     });
     const mul = effectiveModifierMultipliers(['stable']);
-    advanceIsland(state, 10_000, mul);
+    advanceIsland(state, 10_000, mul, POWER_FREE);
     expect(state.inventory.iron_ore).toBeCloseTo(2, 9);
   });
 
@@ -572,7 +573,7 @@ describe('modifier integration in computeRates / advanceIsland (§3.5)', () => {
       inventory: blankInventory(),
     });
     const mul = effectiveModifierMultipliers(['mineral_rich', 'cursed_storms']);
-    advanceIsland(state, 10_000, mul);
+    advanceIsland(state, 10_000, mul, POWER_FREE);
     expect(state.inventory.iron_ore).toBeCloseTo(0.2 * 1.25 * 0.9 * 10, 9);
   });
 
@@ -586,7 +587,7 @@ describe('modifier integration in computeRates / advanceIsland (§3.5)', () => {
       inventory: { ...blankInventory(), iron_ore: 10, coal: 10 },
     });
     const mul = effectiveModifierMultipliers(['cursed_storms']);
-    advanceIsland(state, 10_000, mul);
+    advanceIsland(state, 10_000, mul, POWER_FREE);
     expect(state.inventory.bolt).toBeCloseTo(0.9, 9);
   });
 
@@ -595,8 +596,8 @@ describe('modifier integration in computeRates / advanceIsland (§3.5)', () => {
     // to the no-modifier path.
     const stateA = makeState({ buildings: [MINE], inventory: blankInventory() });
     const stateB = makeState({ buildings: [MINE], inventory: blankInventory() });
-    advanceIsland(stateA, 10_000);
-    advanceIsland(stateB, 10_000, effectiveModifierMultipliers(['high_wind']));
+    advanceIsland(stateA, 10_000, undefined, POWER_FREE);
+    advanceIsland(stateB, 10_000, effectiveModifierMultipliers(['high_wind']), POWER_FREE);
     expect(stateA.inventory.iron_ore).toBeCloseTo(stateB.inventory.iron_ore, 12);
   });
 
@@ -607,8 +608,63 @@ describe('modifier integration in computeRates / advanceIsland (§3.5)', () => {
       inventory: blankInventory(),
     });
     const mul = effectiveModifierMultipliers(['mineral_rich']);
-    const { byBuilding, production } = computeRates(state, mul);
+    const { byBuilding, production } = computeRates(state, mul, POWER_FREE);
     expect(byBuilding[0]!.effectiveRate).toBeCloseTo(0.25, 9);
     expect(production.iron_ore).toBeCloseTo(0.25, 9);
+  });
+});
+
+// -----------------------------------------------------------------------
+// Step 9 — new chain + storage aggregation
+// -----------------------------------------------------------------------
+
+describe('step-9 chain — Smelter T1 + storage aggregation', () => {
+  it('Smelter on home produces iron_ingot at 1/8s with iron_ore + coal stocked', () => {
+    // Bare Smelter, no inputs deficit. Rate = 1 / 8s = 0.125/s. Over 10s
+    // = 1.25 ingots produced; 1 of each input consumed per 8s → 1.25
+    // each consumed over 10s.
+    const SMELTER: PlacedBuilding = { id: 'b-smelter', defId: 'smelter', x: 0, y: 0 };
+    // POWER_FREE only strips mine/workshop; smelter still consumes 50W per
+    // its def. Use a custom catalog stripping smelter for this test.
+    const noSmelterPower = ((): DefCatalog => {
+      const base = { ...BUILDING_DEFS } as Record<BuildingDefId, BuildingDef>;
+      const { power: _p, ...rest } = base.smelter;
+      base.smelter = rest as BuildingDef;
+      return base;
+    })();
+    const state = makeState({
+      buildings: [SMELTER],
+      inventory: { ...blankInventory(), iron_ore: 50, coal: 50 },
+    });
+    advanceIsland(state, 10_000, undefined, noSmelterPower);
+    expect(state.inventory.iron_ingot).toBeCloseTo(1.25, 6);
+    expect(state.inventory.iron_ore).toBeCloseTo(48.75, 6);
+    expect(state.inventory.coal).toBeCloseTo(48.75, 6);
+  });
+
+  it('aggregateStorageCaps: Silo on an island raises every cap to 2100', () => {
+    const buildings: PlacedBuilding[] = [
+      { id: 't-silo', defId: 'silo', x: 0, y: 0 },
+    ];
+    const caps = aggregateStorageCaps(buildings);
+    for (const r of ALL_RESOURCES) {
+      expect(caps[r]).toBe(2100); // baseline 100 + silo 2000
+    }
+  });
+
+  it('aggregateStorageCaps: no storage buildings → baseline 100 caps', () => {
+    const caps = aggregateStorageCaps([
+      { id: 'b-mine', defId: 'mine', x: 0, y: 0 },
+    ]);
+    for (const r of ALL_RESOURCES) expect(caps[r]).toBe(100);
+  });
+
+  it('aggregateStorageCaps: Crate + Silo + Tank stack additively (100 + 100 + 2000 + 2000)', () => {
+    const caps = aggregateStorageCaps([
+      { id: 't-crate', defId: 'crate', x: 0, y: 0 },
+      { id: 't-silo', defId: 'silo', x: 2, y: 0 },
+      { id: 't-tank', defId: 'tank', x: 4, y: 0 },
+    ]);
+    for (const r of ALL_RESOURCES) expect(caps[r]).toBe(4200);
   });
 });

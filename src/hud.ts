@@ -22,6 +22,7 @@
 import { BIOME_DEFS, MODIFIER_DEFS, type ModifierId } from './biomes.js';
 import { cap, type IslandState, type PowerBalance, xpForLevel } from './economy.js';
 import { ALL_RESOURCES, type ResourceId } from './recipes.js';
+import { tierForLevel, type Tier } from './skilltree.js';
 import type { IslandSpec } from './world.js';
 
 /**
@@ -53,6 +54,34 @@ function powerColor(factor: number): string {
   if (factor >= 1) return POWER_COLOR_NOMINAL;
   if (factor >= 0.5) return POWER_COLOR_MARGINAL;
   return POWER_COLOR_CRITICAL;
+}
+
+// Tier-breakpoint thresholds, mirroring `tierForLevel` in skilltree.ts.
+// Defined here as a lookup so the HUD can compute "N levels to next tier"
+// without re-deriving from the function. Keys are CURRENT tier; value is
+// the first level of the NEXT tier. T5 has no "next" — handled inline.
+const NEXT_TIER_LEVEL: Readonly<Record<Tier, number>> = {
+  1: 5,
+  2: 15,
+  3: 30,
+  4: 50,
+  5: Number.POSITIVE_INFINITY,
+  6: Number.POSITIVE_INFINITY,
+};
+
+// Tier badge colour palette per the frontend-design pass. ACCENT cyan when
+// the player has comfortable headroom; WARN amber when within 2 levels of
+// the next breakpoint (urgency cue); FG_DIM at T5 ceiling. The chip uses
+// border + text in the same colour ("currentColor" in the inline style).
+const TIER_BADGE_ACCENT = '#7dd3e8';
+const TIER_BADGE_WARN = '#f5a742';
+const TIER_BADGE_MUTED = '#6c7791';
+
+function tierBadgeColor(level: number, tier: Tier): string {
+  if (tier >= 5) return TIER_BADGE_MUTED;
+  const next = NEXT_TIER_LEVEL[tier];
+  if (next - level <= 2) return TIER_BADGE_WARN;
+  return TIER_BADGE_ACCENT;
 }
 
 // Modifier chip palette. Tied to ModifierDef.category in `biomes.ts`. Each
@@ -112,13 +141,67 @@ export function mountHud(parentEl: HTMLElement): HudHandle {
 
   // Stable DOM layout — three logical sections, each kept rebuild-free at
   // tick time:
-  //   1. headerNode: text with "Home Island / Level / Skill points".
+  //   1. headerBlock: "Home Island" line + "Level N [Tier badge] · N to TX"
+  //      line + "Skill points: N" line. The tier badge is a structured chip
+  //      inline with the Level number (one glance answers both questions).
   //   2. siteProfile: a mini-section with the biome line and a flex chip
   //      row. The chips themselves are recreated only when the modifier
   //      list signature changes (cached via a join-key on the prior set).
   //   3. powerNode + factorSpan + tailNode: existing power + inventory block.
-  const headerNode = document.createTextNode('');
-  panel.appendChild(headerNode);
+
+  const headerBlock = document.createElement('div');
+  headerBlock.style.cssText = [
+    'display: flex',
+    'flex-direction: column',
+    'gap: 1px',
+  ].join(';');
+  const titleNode = document.createTextNode('');
+  const titleLine = document.createElement('div');
+  titleLine.appendChild(titleNode);
+  headerBlock.appendChild(titleLine);
+
+  // Level + tier line — keeps Level number on the left, tier chip and
+  // "N to TX" remainder inline so the row is glanceable.
+  const levelLine = document.createElement('div');
+  levelLine.style.cssText = [
+    'display: flex',
+    'align-items: baseline',
+    'flex-wrap: wrap',
+    'gap: 6px',
+  ].join(';');
+  const levelText = document.createElement('span');
+  const tierBadge = document.createElement('span');
+  // Tier badge is a tight letter-spaced caps chip — matches the
+  // skill-tree panel's "TIER" stat block typography for cross-panel
+  // continuity. Colour swaps each refresh based on proximity to next tier.
+  tierBadge.style.cssText = [
+    'display: inline-block',
+    'padding: 1px 5px',
+    'font-size: 10px',
+    'letter-spacing: 0.10em',
+    'font-weight: 600',
+    'border-radius: 2px',
+    'border: 1px solid currentColor',
+    'line-height: 1.3',
+  ].join(';');
+  const tierRemainder = document.createElement('span');
+  tierRemainder.style.cssText = [
+    'color: #7a8294',
+    'font-size: 10.5px',
+    'letter-spacing: 0.04em',
+    'text-transform: uppercase',
+  ].join(';');
+  levelLine.appendChild(levelText);
+  levelLine.appendChild(tierBadge);
+  levelLine.appendChild(tierRemainder);
+  headerBlock.appendChild(levelLine);
+
+  const pointsNode = document.createTextNode('');
+  const pointsLine = document.createElement('div');
+  pointsLine.appendChild(pointsNode);
+  headerBlock.appendChild(pointsLine);
+
+  panel.appendChild(headerBlock);
 
   // Site profile — biome line + modifier chip row. Sits as its own block so
   // the chip flex-row doesn't break the monospace alignment of the inventory
@@ -256,11 +339,25 @@ export function mountHud(parentEl: HTMLElement): HudHandle {
     spec: IslandSpec,
   ): void {
     const need = xpForLevel(state.level + 1);
-    const headerLines: string[] = [];
-    headerLines.push(`Home Island`);
-    headerLines.push(`Level ${state.level}   XP ${fmt(state.xp)} / ${fmt(need)}`);
-    headerLines.push(`Skill points: ${state.unspentSkillPoints}`);
-    headerNode.textContent = headerLines.join('\n');
+    titleNode.textContent = 'Home Island';
+    levelText.textContent = `Level ${state.level}   XP ${fmt(state.xp)} / ${fmt(need)}`;
+    levelText.style.color = '#cdd6f4';
+
+    // Tier indicator: inline chip + "N levels to TX" remainder. Chip
+    // colour is amber (WARN) when within 2 levels of the next breakpoint
+    // (urgency cue), cyan (ACCENT) mid-tier, muted at the T5 ceiling.
+    const tier = tierForLevel(state.level);
+    tierBadge.textContent = `T${tier}`;
+    const palette = tierBadgeColor(state.level, tier);
+    tierBadge.style.color = palette;
+    if (tier >= 5) {
+      tierRemainder.textContent = '· MAX TIER';
+    } else {
+      const nextTierLevel = NEXT_TIER_LEVEL[tier];
+      const gap = nextTierLevel - state.level;
+      tierRemainder.textContent = `· ${gap} to T${tier + 1}`;
+    }
+    pointsNode.textContent = `Skill points: ${state.unspentSkillPoints}`;
 
     // Site profile — biome name + chip row. Skip DOM writes when the
     // payload is identical, since the chip row's DOM construction is the

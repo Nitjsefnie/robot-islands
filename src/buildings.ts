@@ -1,65 +1,69 @@
-// Hardcoded step-1 building placements + rendering.
+// Per-instance building placement + rendering.
 //
-// Per task: 4 buildings on the home island —
-//   - 1 Solar Panel  (1×1)  yellow
-//   - 1 Workshop     (2×2)  orange
-//   - 1 Mine         (2×2)  gray w/ darker outline, on an ore vein tile
-//   - 1 Cargo Dock   (2×2)  blue
+// `PlacedBuilding` is the per-instance runtime: a unique id, the BuildingDefId
+// pointer into the static catalog (`building-defs.ts`), and tile coordinates.
+// Static per-kind data — footprint, fill, stroke, recipe binding, power —
+// lives on `BuildingDef`; rendering looks it up via `BUILDING_DEFS[b.defId]`.
 //
-// A building's (x, y) is its top-left tile. Footprint extends to
-// (x + width - 1, y + height - 1). All footprint tiles are expected to be
-// in-island; for step 1 this is verified by eyeballing the rendered scene.
+// The split lands per SPEC §15.1: many instances share one def, the def
+// table drives the Building Catalog UI, and the placement runtime stays
+// minimal. Rotation lives here too — wired into the type as
+// `rotation: 0|1|2|3` but unused for step 9 (placement is deferred to
+// step 2.5, so every demo instance ships rotation: 0).
 
 import { Container, Graphics } from 'pixi.js';
 
+import { BUILDING_DEFS, type BuildingDefId } from './building-defs.js';
 import { TILE_PX } from './island.js';
 
-export type BuildingKind = 'solar' | 'workshop' | 'mine' | 'dock' | 'coal_gen' | 'dronepad';
-
-export interface Building {
-  readonly kind: BuildingKind;
+/** Per-instance placement. `id` is unique across the world; `defId` points
+ *  into BUILDING_DEFS. (x, y) is the top-left tile of the footprint —
+ *  footprint extends to (x + def.width - 1, y + def.height - 1). */
+export interface PlacedBuilding {
+  readonly id: string;
+  readonly defId: BuildingDefId;
   readonly x: number;
   readonly y: number;
-  readonly width: number;
-  readonly height: number;
-  readonly fill: number;
-  readonly stroke: number;
-  readonly label: string;
-  /** Per-§5.1 electrical contribution. Independent of `recipe`: a building may
-   *  produce, consume, both, or neither. Missing/undefined = no contribution. */
-  readonly power?: { readonly produces?: number; readonly consumes?: number };
+  /** Per §15.1 BuildingDef shape, but placement (step 2.5) isn't built;
+   *  every demo instance ships rotation: 0. Optional for forward-compat. */
+  readonly rotation?: 0 | 1 | 2 | 3;
 }
 
-export const HOME_ISLAND_BUILDINGS: ReadonlyArray<Building> = [
-  // Solar Panel — 1×1 sitting on grass near the center. Recipe-less producer.
-  { kind: 'solar', x: 2, y: -1, width: 1, height: 1, fill: 0xf2c84b, stroke: 0x6a4a00, label: 'Solar', power: { produces: 50 } },
-  // Workshop — 2×2 just south of center, on grass.
-  { kind: 'workshop', x: -1, y: 1, width: 2, height: 2, fill: 0xe07b3a, stroke: 0x6b2f00, label: 'Workshop', power: { consumes: 60 } },
-  // Mine — 2×2 sitting on the ore vein cluster at (-7, 2)..(-6, 3).
-  { kind: 'mine', x: -7, y: 2, width: 2, height: 2, fill: 0x9a9a9a, stroke: 0x222222, label: 'Mine', power: { consumes: 40 } },
-  // Cargo Dock — 2×2 near the east edge, on grass. Power deferred to step 7.
-  { kind: 'dock', x: 7, y: 1, width: 2, height: 2, fill: 0x3a7bd5, stroke: 0x0a2a55, label: 'Dock' },
-  // Coal Generator — 2×2 east of the workshop, burns 1 coal/5s for 100W while active.
-  { kind: 'coal_gen', x: 3, y: 4, width: 2, height: 2, fill: 0xd97a18, stroke: 0x4a2400, label: 'Coal Gen', power: { produces: 100 } },
-  // Drone Pad — 1×1 on grass at (5, -3). Tier-gating (Drone Pad is T2 per
-  // SPEC §11.7) is deferred to step 9; for step 6 we hardcode placement on
-  // the home island, mirroring how Mine/Workshop are hardcoded above. No
-  // recipe — Drone Pad has no resource flow, only dispatch (handled in
-  // drones.ts). No power draw for step 6 (placeholder).
-  { kind: 'dronepad', x: 5, y: -3, width: 1, height: 1, fill: 0x4a6b78, stroke: 0x14222a, label: 'Drone Pad' },
+// Step-9 home-island layout. Tile coords are island-local; the home island's
+// ellipse has radius 14. Footprints are verified non-overlapping; the Smelter
+// at (-4, 6) sits inside the radius-14 ellipse and below the workshop.
+export const HOME_ISLAND_BUILDINGS: ReadonlyArray<PlacedBuilding> = [
+  // T1 staples preserved from step 1-8 (same positions, defId redirects).
+  { id: 'home-solar-1',    defId: 'solar',    x: 2,  y: -1 },
+  { id: 'home-workshop-1', defId: 'workshop', x: -1, y: 1 },
+  { id: 'home-mine-1',     defId: 'mine',     x: -7, y: 2 },
+  { id: 'home-dock-1',     defId: 'dock',     x: 7,  y: 1 },
+  { id: 'home-coalgen-1',  defId: 'coal_gen', x: 3,  y: 4 },
+  { id: 'home-dronepad-1', defId: 'dronepad', x: 5,  y: -3 },
+  // New for step 9 — Smelter at (-4, 6). 2×2 footprint: (-4,6),(-3,6),(-4,7),
+  // (-3,7). All inside the radius-14 ellipse; no overlap with other tiles.
+  // Demo intent: with Mine seeding iron_ore + coal already on the home island,
+  // Smelter immediately starts producing iron_ingot, showing the new T1
+  // refining link.
+  { id: 'home-smelter-1',  defId: 'smelter',  x: -4, y: 6 },
+  // Silo for storage-aggregation demo — single 2×2 at (-7, -3). All four
+  // tiles (-7,-3),(-6,-3),(-7,-2),(-6,-2) inside radius 14. Raises every
+  // resource cap on the home island from 100 → 2100, per the §15.7-step-9
+  // aggregation rule (see world.ts `aggregateStorageCaps`).
+  { id: 'home-silo-1',     defId: 'silo',     x: -7, y: -3 },
 ];
 
 /**
- * Render buildings into a container. Coordinates align with island.ts: a
- * building's footprint origin is shifted by -TILE_PX/2 in both axes so that
- * world (0, 0) is the centre of tile (0, 0) — matching renderIslandTiles. A
- * building's screen position is therefore
- *   (x * TILE_PX - TILE_PX/2, y * TILE_PX - TILE_PX/2)
- * (plus the inset). The inset leaves a thin gap so the underlying terrain tile
- * colour is still visible around the building, and the stroke makes the
- * building distinct.
+ * Render PlacedBuildings into a fresh container. Each instance's screen
+ * rectangle is computed from its def's width/height + fill/stroke (so a
+ * single rendering function handles every building kind uniformly).
+ *
+ * Coordinate convention matches `renderIslandTiles`: world (0,0) is the
+ * centre of tile (0,0), so a footprint origin shifts by -TILE_PX/2 in each
+ * axis. The inset leaves a thin gap so the underlying terrain colour is
+ * still visible around the building edge.
  */
-export function renderBuildings(buildings: ReadonlyArray<Building>): Container {
+export function renderBuildings(buildings: ReadonlyArray<PlacedBuilding>): Container {
   const layer = new Container();
   layer.label = 'buildings';
 
@@ -67,13 +71,14 @@ export function renderBuildings(buildings: ReadonlyArray<Building>): Container {
   const inset = 2;
   const g = new Graphics();
   for (const b of buildings) {
+    const def = BUILDING_DEFS[b.defId];
     const px = b.x * TILE_PX - half + inset;
     const py = b.y * TILE_PX - half + inset;
-    const w = b.width * TILE_PX - inset * 2;
-    const h = b.height * TILE_PX - inset * 2;
+    const w = def.width * TILE_PX - inset * 2;
+    const h = def.height * TILE_PX - inset * 2;
     g.rect(px, py, w, h)
-      .fill(b.fill)
-      .stroke({ width: 2, color: b.stroke, alignment: 1 });
+      .fill(def.fill)
+      .stroke({ width: 2, color: def.stroke, alignment: 1 });
   }
   layer.addChild(g);
   return layer;

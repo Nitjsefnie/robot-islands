@@ -37,7 +37,11 @@ function makeIslandState(over: Partial<IslandState> = {}): IslandState {
     id: 'home',
     buildings: [],
     inventory: emptyInv(),
-    storageCaps: { wood: 100, iron_ore: 100, coal: 100, iron_ingot: 100, bolt: 100, biofuel: 100 },
+    storageCaps: {
+      wood: 100, iron_ore: 100, coal: 100, biofuel: 100,
+      iron_ingot: 100, coke: 100, pig_iron: 100,
+      bolt: 100, steel: 100, gear: 100,
+    },
     xp: 0,
     level: 1,
     unspentSkillPoints: 0,

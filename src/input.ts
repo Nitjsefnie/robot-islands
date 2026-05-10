@@ -84,10 +84,17 @@ export function installDefaultBindings(reg: InputRegistry): void {
   bind(reg, 'KeyG', 'toggle-grid');
   bind(reg, 'KeyH', 'center-home');
   bind(reg, 'KeyK', 'toggle-skill-tree');
-  bind(reg, 'Escape', 'dismiss-skill-tree');
+  // KeyB = Buildings (step 9 catalog modal). Sister panel to the skill
+  // tree; both share the Escape dismissal action so users get one
+  // consistent "close modal" key. The dispatch handler resolves which
+  // modal is open and hides it — see `defineAction('dismiss-modal')`
+  // wiring in main.ts.
+  bind(reg, 'KeyB', 'toggle-buildings');
+  // Escape dispatches a generic dismiss action; main.ts wires it to
+  // close whichever modal is currently visible (skill tree OR buildings).
+  bind(reg, 'Escape', 'dismiss-modal');
   // J = "journey/jet" — toggles the drone-ops side dock. Side panels don't
-  // get an Escape binding (Escape is reserved for modal dismissal of the
-  // skill tree).
+  // get an Escape binding (Escape is reserved for modal dismissal).
   bind(reg, 'KeyJ', 'toggle-drones');
   // R = routes — opens the freight-grid side dock (step 7).
   bind(reg, 'KeyR', 'toggle-routes');

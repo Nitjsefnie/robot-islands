@@ -25,7 +25,8 @@
 // regardless of `now - lastTick`, so multi-day offline catchup is cheap.
 
 import { IDENTITY_MODIFIER_MULTIPLIERS, type ModifierMultipliers } from './biomes.js';
-import type { Building } from './buildings.js';
+import { BUILDING_DEFS, type BuildingDef, type BuildingDefId } from './building-defs.js';
+import type { PlacedBuilding } from './buildings.js';
 import { RECIPES, XP_WEIGHT, type Recipe, type ResourceId } from './recipes.js';
 import { effectiveSkillMultipliers, type NodeId, type SubPathId } from './skilltree.js';
 
@@ -39,8 +40,9 @@ export interface IslandState {
   /** Stable id matching the IslandSpec this state belongs to. */
   readonly id: string;
   /** Buildings on this island (mirrored from spec, kept here so the economy
-   *  loop never needs the spec). Recipe lookup is via RECIPES[kind]. */
-  readonly buildings: ReadonlyArray<Building>;
+   *  loop never needs the spec). Recipe lookup is via RECIPES[b.defId];
+   *  per-kind static data (power, footprint) is via BUILDING_DEFS[b.defId]. */
+  readonly buildings: ReadonlyArray<PlacedBuilding>;
   /** Current per-resource stockpile. Missing keys read as 0. */
   inventory: Record<ResourceId, number>;
   /** Per-resource storage cap. Missing keys read as 0 (no storage). */
@@ -108,11 +110,16 @@ export function cap(state: IslandState, r: ResourceId): number {
  * inputAvail, post-applied powerFactor).
  */
 interface BuildingRate {
-  readonly building: Building;
+  readonly building: PlacedBuilding;
   readonly recipe: Recipe;
   /** Cycles per second this building is currently running at. */
   readonly effectiveRate: number;
 }
+
+/** Per-kind catalog lookup. Production callers pass `BUILDING_DEFS` (the
+ *  default); tests pass a custom catalog when they need to vary per-kind
+ *  power values (e.g., the partial-brownout fixture using a 80W Mine). */
+export type DefCatalog = Readonly<Record<BuildingDefId, BuildingDef>>;
 
 /**
  * Compute the binary output-availability factor for a recipe.
@@ -203,6 +210,7 @@ export interface PowerBalance {
 export function computeRates(
   state: IslandState,
   modifierMul: ModifierMultipliers = IDENTITY_MODIFIER_MULTIPLIERS,
+  defs: DefCatalog = BUILDING_DEFS,
 ): {
   byBuilding: ReadonlyArray<BuildingRate>;
   production: Record<ResourceId, number>;
@@ -232,7 +240,7 @@ export function computeRates(
   const skillMul = effectiveSkillMultipliers(state);
   const buffStack = 1;
   interface Tentative {
-    readonly building: Building;
+    readonly building: PlacedBuilding;
     readonly recipe: Recipe;
     /** Base cycles/sec before input-availability throttling. */
     readonly baseRate: number;
@@ -241,7 +249,7 @@ export function computeRates(
   /** Gross production by resource from all tentatively-running buildings. */
   const tentSupply: Record<ResourceId, number> = {} as Record<ResourceId, number>;
   for (const b of state.buildings) {
-    const recipe = RECIPES[b.kind];
+    const recipe = RECIPES[b.defId];
     if (!recipe) continue;
     const oa = outputAvail(state, recipe);
     if (oa === 0) {
@@ -301,7 +309,8 @@ export function computeRates(
   let powerProduced = 0;
   let powerConsumed = 0;
   for (const b of state.buildings) {
-    const recipe = RECIPES[b.kind];
+    const recipe = RECIPES[b.defId];
+    const def = defs[b.defId];
     let active: boolean;
     if (!recipe) {
       active = true;
@@ -311,10 +320,10 @@ export function computeRates(
       active = ia > 0;
     }
     if (!active) continue;
-    powerProduced += (b.power?.produces ?? 0) * skillMul.powerProduction;
+    powerProduced += (def.power?.produces ?? 0) * skillMul.powerProduction;
     // powerConsumption is a "reduction" multiplier (>=1 means lower draw),
     // so we divide. Default 1.0 leaves draw untouched.
-    powerConsumed += (b.power?.consumes ?? 0) / skillMul.powerConsumption;
+    powerConsumed += (def.power?.consumes ?? 0) / skillMul.powerConsumption;
   }
   const powerFactor =
     powerConsumed === 0 ? 1 : Math.min(1, powerProduced / powerConsumed);
@@ -333,7 +342,7 @@ export function computeRates(
       continue;
     }
     const ia = inputAvailByIdx[i] ?? 0;
-    const consumesPower = (t.building.power?.consumes ?? 0) > 0;
+    const consumesPower = (defs[t.building.defId].power?.consumes ?? 0) > 0;
     const pf = consumesPower ? powerFactor : 1;
     const effectiveRate = t.baseRate * ia * pf;
     byBuilding.push({ building: t.building, recipe: t.recipe, effectiveRate });
@@ -542,6 +551,7 @@ export function advanceIsland(
   state: IslandState,
   nowMs: number,
   modifierMul: ModifierMultipliers = IDENTITY_MODIFIER_MULTIPLIERS,
+  defs: DefCatalog = BUILDING_DEFS,
 ): void {
   if (nowMs <= state.lastTick) {
     state.lastTick = nowMs;
@@ -550,7 +560,7 @@ export function advanceIsland(
   let t = state.lastTick;
   for (let safety = 0; safety < 10000; safety++) {
     if (t >= nowMs) break;
-    const { production, consumption, net } = computeRates(state, modifierMul);
+    const { production, consumption, net } = computeRates(state, modifierMul, defs);
     const nextEventMs = findNextCapEvent(state, net, t, nowMs);
     // Clamp to nowMs; findNextCapEvent already returns nowMs when nothing
     // changes, but if all rates are zero we still need to exit the loop.

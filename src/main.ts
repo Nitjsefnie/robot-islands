@@ -41,6 +41,7 @@ import {
 } from './input.js';
 import { TILE_PX } from './island.js';
 import { renderOcean } from './ocean.js';
+import { mountBuildingsUi } from './buildings-ui.js';
 import { mountSkillTreeUi } from './skilltree-ui.js';
 import { mountUi } from './ui.js';
 import {
@@ -195,6 +196,8 @@ async function main(): Promise<void> {
   // action name is reserved here as a no-op stub so the binding never points
   // at an undefined action (dispatch would silently fail otherwise).
   defineAction(reg, 'toggle-skill-tree', () => undefined);
+  defineAction(reg, 'toggle-buildings', () => undefined);
+  defineAction(reg, 'dismiss-modal', () => undefined);
   // Same pattern for drone ops: stub registered here, real handler bound
   // after the UI is mounted (which needs `homeState`).
   defineAction(reg, 'toggle-drones', () => undefined);
@@ -316,6 +319,7 @@ async function main(): Promise<void> {
     { label: 'Toggle Grid (G)', action: 'toggle-grid' },
     { label: 'Center on Home (H)', action: 'center-home' },
     { label: 'Skill Tree (K)', action: 'toggle-skill-tree' },
+    { label: 'Buildings (B)', action: 'toggle-buildings' },
     { label: 'Drones (J)', action: 'toggle-drones' },
     { label: 'Routes (R)', action: 'toggle-routes' },
   ]);
@@ -363,14 +367,26 @@ async function main(): Promise<void> {
 
   // Skill tree panel — modal-ish DOM overlay, dismissed via KeyK, Escape,
   // or its close button. Hooks the previously-stubbed `toggle-skill-tree`
-  // action. `dismiss-skill-tree` is hide-only (idempotent on closed) so
-  // Escape doesn't reopen a closed panel — standard modal etiquette.
+  // action.
   const skillTree = mountSkillTreeUi(document.body, homeState);
   defineAction(reg, 'toggle-skill-tree', () => {
     skillTree.toggle();
   });
-  defineAction(reg, 'dismiss-skill-tree', () => {
+
+  // Buildings catalog — sister modal panel to the skill tree. KeyB toggles;
+  // Escape routes to whichever modal is visible (`dismiss-modal` below).
+  const buildingsUi = mountBuildingsUi(document.body, homeState);
+  defineAction(reg, 'toggle-buildings', () => {
+    buildingsUi.toggle();
+  });
+
+  // Generic modal dismissal: hide whichever modal is open. Both modals'
+  // hide() are idempotent, so the no-modal-open case is a free no-op.
+  // Mutual-exclusion isn't enforced — if both happen to be open Escape
+  // closes both at once.
+  defineAction(reg, 'dismiss-modal', () => {
     skillTree.hide();
+    buildingsUi.hide();
   });
 
   // Drone-ops side dock + canvas reticle + drone-dot layer.
@@ -457,6 +473,7 @@ async function main(): Promise<void> {
     // strictly need a per-frame call, but level-up while the panel is open
     // should be reflected in the points / xp counters live.
     skillTree.refresh();
+    buildingsUi.refresh();
     dronesUi.refresh(now);
     routesUi.refresh(now);
   });
