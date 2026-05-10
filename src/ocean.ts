@@ -13,8 +13,8 @@
 //
 //   1. one big rect filling the world bounds in UNKNOWN_BLUE (alpha 1)
 //   2. one radial-gradient sprite per *discovered* island in DISCOVERED_BLUE
-//      (~70% solid centre, fades to transparent at the rim, so unknown
-//      bleeds through softly at the edge)
+//      (solid centre with a small EDGE_FADE_PX anti-aliasing band at the
+//      rim — reads as a crisp tier circle, not a wash)
 //   3. one radial-gradient sprite per *populated* island in VISION_BLUE
 //      (same gradient profile, larger radius)
 //
@@ -46,11 +46,12 @@ export interface OceanIsland {
   readonly populated: boolean;
 }
 
-/** Fraction of the radius that stays at solid colour before the fade starts.
- *  0.7 = inner 70% solid, outer 30% fades to transparent. Picked so the
- *  inner band is unambiguously "the colour" while still giving a visible,
- *  generous soft edge that reads as a fade rather than a halo. */
-const INNER_SOLID_FRACTION = 0.7;
+/** Width of the soft fade band at the rim, in pixels. The inner
+ *  `radius - EDGE_FADE_PX` is solid colour; the outer EDGE_FADE_PX fades
+ *  to transparent. Sized as an anti-aliasing band, not a visible gradient
+ *  — the tier boundary should read as a crisp circle with the rim softened
+ *  just enough to avoid pixel staircase. */
+const EDGE_FADE_PX = 4;
 
 /**
  * Build a radial-gradient texture: a square canvas of side `2 * radiusPx`
@@ -60,19 +61,21 @@ const INNER_SOLID_FRACTION = 0.7;
  *   stop innerSolid  — colour @ alpha 1   (flat plateau out to this radius)
  *   stop 1           — colour @ alpha 0   (fully transparent at the rim)
  *
+ * `edgePx` is the absolute pixel width of the fade band; `innerSolid` is
+ * computed as `(radiusPx - edgePx) / radiusPx`. Using an absolute pixel
+ * width (rather than a fraction) keeps the fade looking the same on every
+ * sprite regardless of radius — a tiny soft AA edge on both the 24-tile
+ * discovery halo and the 80-tile vision halo, instead of a fraction-based
+ * fade that scales up dramatically on the larger sprite.
+ *
  * The colour stays the same across stops; only alpha animates. Drawing as
  * a Sprite anchored at (0.5, 0.5) places the gradient's centre at the
  * sprite's transform position, so the caller just sets `sprite.position`
  * to the island centre in world pixels.
- *
- * The texture's pixel dimensions also bound how soft the fade looks at
- * extreme zoom-in. With `2 * radiusPx` resolution we match the on-screen
- * size at 1:1 zoom; further zoom-in shows the gradient nicely interpolated
- * by the GPU sampler.
  */
 function buildRadialGradientTexture(
   radiusPx: number,
-  innerSolidFraction: number,
+  edgePx: number,
   colorHex: number,
 ): Texture {
   const size = Math.ceil(radiusPx * 2);
@@ -90,9 +93,15 @@ function buildRadialGradientTexture(
   const b = colorHex & 0xff;
   const rgb = (alpha: number): string => `rgba(${r}, ${g}, ${b}, ${alpha})`;
 
+  // Clamp innerStop to a valid range. If edgePx >= radiusPx the whole
+  // sprite is fade with no solid centre; if edgePx <= 0 there's no fade
+  // at all. Neither is expected in normal use but we guard anyway so
+  // canvas doesn't throw on out-of-order stops.
+  const innerStop = Math.max(0, Math.min(1, (radiusPx - edgePx) / radiusPx));
+
   const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, radiusPx);
   grad.addColorStop(0, rgb(1));
-  grad.addColorStop(innerSolidFraction, rgb(1));
+  grad.addColorStop(innerStop, rgb(1));
   grad.addColorStop(1, rgb(0));
 
   ctx.fillStyle = grad;
@@ -109,7 +118,7 @@ function makeGradientSprite(
   colorHex: number,
 ): Sprite {
   const radiusPx = radiusTiles * TILE_PX;
-  const tex = buildRadialGradientTexture(radiusPx, INNER_SOLID_FRACTION, colorHex);
+  const tex = buildRadialGradientTexture(radiusPx, EDGE_FADE_PX, colorHex);
   const s = new Sprite(tex);
   s.anchor.set(0.5);
   s.position.set(centreXTiles * TILE_PX, centreYTiles * TILE_PX);
