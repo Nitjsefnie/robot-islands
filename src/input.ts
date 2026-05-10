@@ -98,6 +98,10 @@ export function installDefaultBindings(reg: InputRegistry): void {
   bind(reg, 'KeyJ', 'toggle-drones');
   // R = routes — opens the freight-grid side dock (step 7).
   bind(reg, 'KeyR', 'toggle-routes');
+  // C = construction — opens the artificial-island construction modal
+  // (step 11). Same modal pattern as buildings + skill tree; Escape
+  // dismisses via the shared `dismiss-modal` action wired in main.ts.
+  bind(reg, 'KeyC', 'toggle-construction');
   bind(reg, 'Equal', 'zoom-in'); // '=' / '+' on US layouts
   bind(reg, 'NumpadAdd', 'zoom-in');
   bind(reg, 'Minus', 'zoom-out');

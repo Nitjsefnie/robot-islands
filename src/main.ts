@@ -49,6 +49,7 @@ import {
 import { TILE_PX } from './island.js';
 import { renderOcean } from './ocean.js';
 import { mountBuildingsUi } from './buildings-ui.js';
+import { mountConstructionUi } from './construction-ui.js';
 import { mountSkillTreeUi } from './skilltree-ui.js';
 import { mountUi } from './ui.js';
 import {
@@ -209,6 +210,8 @@ async function main(): Promise<void> {
   // after the UI is mounted (which needs `homeState`).
   defineAction(reg, 'toggle-drones', () => undefined);
   defineAction(reg, 'toggle-routes', () => undefined);
+  // Step-11 modal — bound below after the UI is mounted.
+  defineAction(reg, 'toggle-construction', () => undefined);
 
   // Map of "release" actions used to clear the held flag on keyup. The
   // action table itself is press-only; on keyup we resolve the binding and
@@ -329,6 +332,7 @@ async function main(): Promise<void> {
     { label: 'Buildings (B)', action: 'toggle-buildings' },
     { label: 'Drones (J)', action: 'toggle-drones' },
     { label: 'Routes (R)', action: 'toggle-routes' },
+    { label: 'Construct (C)', action: 'toggle-construction' },
   ]);
 
   // -----------------------------------------------------------------------
@@ -349,6 +353,20 @@ async function main(): Promise<void> {
     if (spec.id === 'home') continue;
     if (!spec.populated) continue;
     islandStates.set(spec.id, makeInitialIslandState(spec, performance.now()));
+  }
+  // Step-11 demo seed: bump forest-ne to level 20 (T3) and pre-load enough
+  // construction materials so the player can fire off a 4×4 artificial
+  // island construction without first grinding the smelting chain. The
+  // values exceed the 4×4 Plains cost (~252 steel / 151 iron_ingot / 503
+  // wood) with comfortable headroom for one construct + a second attempt.
+  // This seed is demo-only — once the natural economy reaches forest-ne
+  // (via funneled routes from the home island), the seed is removed.
+  const forestNe = islandStates.get('forest-ne');
+  if (forestNe) {
+    forestNe.level = 20;
+    forestNe.inventory.steel = 300;
+    forestNe.inventory.iron_ingot = 200;
+    forestNe.inventory.wood = 600;
   }
   // Spec lookup by id — also needed by routes UI later. Built once; spec
   // identity is stable across the session (drones flip discovered, but
@@ -387,13 +405,39 @@ async function main(): Promise<void> {
     buildingsUi.toggle();
   });
 
-  // Generic modal dismissal: hide whichever modal is open. Both modals'
-  // hide() are idempotent, so the no-modal-open case is a free no-op.
-  // Mutual-exclusion isn't enforced — if both happen to be open Escape
-  // closes both at once.
+  // Step-11 Construction modal — sister to skill tree + buildings catalog.
+  // Inserts the new island into worldState/islandStates, registers its
+  // caches, and rebuilds render layers in the onConstruct callback.
+  // Cache strategy (per advisor): "append on construction" rather than
+  // "rebuild caches every frame" — artificial islands ship with empty
+  // modifiers, so the modifier cache entry is one line.
+  const constructionUi = mountConstructionUi(document.body, {
+    world: worldState,
+    islandStates,
+    onConstruct: ({ newSpec, newState }) => {
+      worldState.islands.push(newSpec);
+      islandStates.set(newSpec.id, newState);
+      islandSpecsById.set(newSpec.id, newSpec);
+      // Artificial islands carry empty modifiers, so the bundle is identity —
+      // but call effectiveModifierMultipliers([]) for symmetry with the
+      // demo-island init loop above (and so adding a non-empty modifier set
+      // later doesn't accidentally skip the fold).
+      modifierMulsById.set(newSpec.id, effectiveModifierMultipliers([]));
+      rebuildWorldLayers();
+    },
+  });
+  defineAction(reg, 'toggle-construction', () => {
+    constructionUi.toggle();
+  });
+
+  // Generic modal dismissal: hide whichever modal is open. All modal hide()
+  // calls are idempotent, so the no-modal-open case is a free no-op.
+  // Mutual-exclusion isn't enforced — if multiple modals happen to be open
+  // Escape closes them all at once.
   defineAction(reg, 'dismiss-modal', () => {
     skillTree.hide();
     buildingsUi.hide();
+    constructionUi.hide();
   });
 
   // Drone-ops side dock + canvas reticle + drone-dot layer.

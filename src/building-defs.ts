@@ -55,7 +55,8 @@ export type BuildingDefId =
   | 'assembler'
   | 'tank'
   // New T3
-  | 'electric_arc_furnace';
+  | 'electric_arc_furnace'
+  | 'platform_constructor';
 
 /**
  * Per-kind static definition. Step 9 fills the fields needed by the
@@ -297,6 +298,22 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     height: 3,
     fill: 0x4a8ae0,
     stroke: 0x1a3a78,
+    power: { consumes: 200 },
+  },
+  // §8.9: Platform Constructor (a.k.a. Foundry of Lands). T3 special building
+  // — gates artificial-island construction (§2.5). Step 11 only checks for the
+  // building's PRESENCE on the founder island; placement/power/heat enforcement
+  // is deferred. Power-consumption is declared per §5.1 so a future-step
+  // brownout properly throttles construction availability.
+  platform_constructor: {
+    id: 'platform_constructor',
+    displayName: 'Platform Constructor',
+    category: 'special',
+    tier: 3,
+    width: 4,
+    height: 4,
+    fill: 0x6a4a8c, // dusky violet — "foundry"-coded
+    stroke: 0x2a1a40,
     power: { consumes: 200 },
   },
 };

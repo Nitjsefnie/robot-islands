@@ -114,6 +114,7 @@ describe('InputRegistry', () => {
     expect(reg.bindings.get('Escape')).toBe('dismiss-modal');
     expect(reg.bindings.get('KeyJ')).toBe('toggle-drones');
     expect(reg.bindings.get('KeyR')).toBe('toggle-routes');
+    expect(reg.bindings.get('KeyC')).toBe('toggle-construction');
     expect(reg.bindings.get('Equal')).toBe('zoom-in');
     expect(reg.bindings.get('Minus')).toBe('zoom-out');
   });

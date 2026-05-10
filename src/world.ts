@@ -97,6 +97,11 @@ export interface IslandSpec {
    *  set on `DEMO_ISLANDS`; future steps roll from `rollModifiers` at
    *  generation. Empty array means no modifiers active. */
   readonly modifiers: ReadonlyArray<ModifierId>;
+  /** §2.5: islands built via Platform Constructor are flagged so future
+   *  systems can deny natural-only content (rare-biome modifiers per §3.5,
+   *  biome-locked uniques per §9.5). For step 11 the flag is metadata only —
+   *  no current consumer; reserved for step 12. Undefined ≡ false (natural). */
+  readonly artificial?: boolean;
 }
 
 /** Convenience: world-tile coords → world-pixel coords. */
@@ -236,10 +241,16 @@ export const DEMO_ISLANDS: ReadonlyArray<IslandSpec> = [
     // Step-9: also adds a Logger so forest-ne has a local wood producer to
     // pair with the demo Biomass Plant chain. 1×1 footprint inside the
     // radius-10 ellipse.
+    // Step-11: adds a Platform Constructor (4×4 at (-4,-4)..(-1,-1)) so
+    // forest-ne can demonstrate the §2.5 artificial-island construction
+    // path. Outermost corner at (-4, -4) sits at distance √32 ≈ 5.66 from
+    // the centre — well inside the radius-10 ellipse; no overlap with
+    // dock(0,0), workshop(-3,0), or logger(3,3).
     buildings: [
-      { id: 'forestne-dock-1',     defId: 'dock',     x: 0,  y: 0 },
-      { id: 'forestne-workshop-1', defId: 'workshop', x: -3, y: 0 },
-      { id: 'forestne-logger-1',   defId: 'logger',   x: 3,  y: 3 },
+      { id: 'forestne-dock-1',                defId: 'dock',                 x: 0,  y: 0 },
+      { id: 'forestne-workshop-1',            defId: 'workshop',             x: -3, y: 0 },
+      { id: 'forestne-logger-1',              defId: 'logger',               x: 3,  y: 3 },
+      { id: 'forestne-platform-constructor-1', defId: 'platform_constructor', x: -4, y: -4 },
     ],
     terrainAt: (x, y) => terrainAtForBiome('forest', 'forest-ne', x, y),
     modifiers: ['fertile'],

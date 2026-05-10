@@ -1,4 +1,8 @@
 // Tests for the event-driven economy tick loop.
+// (Step 11 also adds an integration test for artificial-island construction
+// — placed at the end of this file alongside the chain/step-9 + spec-step-10
+// integration tests.)
+
 //
 // These are the hard correctness tests for §15.3 piecewise integration:
 //
@@ -806,5 +810,57 @@ describe('step-10 — specialization role integration (§9.4)', () => {
     // over 10s = 2.0 × 1.05 = 2.1 units.
     expect(t1.inventory.iron_ore).toBeCloseTo(2.0, 9);
     expect(t3.inventory.iron_ore).toBeCloseTo(2.1, 9);
+  });
+});
+
+// -----------------------------------------------------------------------
+// Step 11 — artificial-island construction integration
+// -----------------------------------------------------------------------
+
+describe('step-11 — artificial-island construction integration (§2.5)', () => {
+  it('founder Plains/T3 with sufficient materials constructs a Plains 4×4 artificial island', async () => {
+    // Local import keeps the artificial-island module out of the file-level
+    // import block where chain/step-9 tests live. Same vitest-supported
+    // import-during-test pattern used by world.ts in step 8 demo wiring.
+    const { computeConstructionCost, constructIsland } = await import('./artificial-island.js');
+    const PC: PlacedBuilding = { id: 'pc-founder', defId: 'platform_constructor', x: 0, y: 0 };
+    // Founder spec: level 15 (T3), one Platform Constructor.
+    const founderSpec = {
+      id: 'founder',
+      biome: 'plains' as const,
+      cx: 0,
+      cy: 0,
+      majorRadius: 14,
+      minorRadius: 14,
+      populated: true,
+      discovered: true,
+      buildings: [PC],
+      modifiers: [],
+    };
+    const founderState = makeState({
+      buildings: [PC],
+      inventory: { ...blankInventory(), steel: 1000, iron_ingot: 1000, wood: 2000 },
+      storageCaps: blankCaps(10000),
+      level: 15,
+    });
+    const cost = computeConstructionCost({ biome: 'plains', majorRadius: 4, minorRadius: 4 });
+    const result = constructIsland(
+      founderState,
+      founderSpec,
+      { biome: 'plains', majorRadius: 4, minorRadius: 4 },
+      { cx: 200, cy: 200 },
+      'art-plains-1',
+      0,
+    );
+    // Founder inventory deducted by exactly the cost.
+    expect(founderState.inventory.steel).toBe(1000 - cost.steel);
+    expect(founderState.inventory.iron_ingot).toBe(1000 - cost.iron_ingot);
+    expect(founderState.inventory.wood).toBe(2000 - cost.wood);
+    // New island spec/state correctly initialised.
+    expect(result.newSpec.artificial).toBe(true);
+    expect(result.newSpec.populated).toBe(true);
+    expect(result.newSpec.biome).toBe('plains');
+    expect(result.newState.level).toBe(1);
+    expect(result.newState.id).toBe('art-plains-1');
   });
 });

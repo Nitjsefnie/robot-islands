@@ -37,6 +37,7 @@ const KNOWN_DEF_IDS: ReadonlyArray<BuildingDefId> = [
   'assembler',
   'tank',
   'electric_arc_furnace',
+  'platform_constructor',
 ];
 
 describe('BUILDING_DEFS catalog', () => {
