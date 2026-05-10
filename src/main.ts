@@ -1,25 +1,52 @@
-// Robot Islands — step 1 bootstrap.
+// Robot Islands — step 2 bootstrap.
 //
-// Static single-island scene: compute tile membership for a circular Plains
-// island (radius 14), render terrain + 4 hardcoded buildings, center in the
-// viewport. No interaction, no animation, no economy.
+// Camera + multi-island map + vision/fog + config-driven input. The world
+// container's position/scale is now driven by the camera state every frame;
+// no more "recenter on resize" call. Islands outside the home island's vision
+// radius are culled (their containers never enter the scene graph), and a
+// fog layer covers the rest of the visible world with a soft hole where
+// vision exists.
 
 import { Application, Container } from 'pixi.js';
 
 import {
-  computeIslandTiles,
-  defaultTerrainAt,
-  renderIslandTiles,
-} from './island.js';
-import { HOME_ISLAND_BUILDINGS, renderBuildings } from './buildings.js';
+  centerOn,
+  clampZoom,
+  makeCamera,
+  pan as panCam,
+  zoomAt,
+  type Camera,
+} from './camera.js';
+import { renderCellGrid } from './grid.js';
+import {
+  bind,
+  defineAction,
+  dispatchKey,
+  installDefaultBindings,
+  makeRegistry,
+} from './input.js';
+import { renderFogLayer } from './fog.js';
+import { TILE_PX } from './island.js';
+import { mountUi } from './ui.js';
+import {
+  DEMO_ISLANDS,
+  isIslandVisible,
+  renderIsland,
+  VISION_RADIUS_TILES,
+} from './world.js';
 
-const HOME_RADIUS = 14;
+/** Pan speed for keyboard input, in screen-pixels-per-frame. */
+const PAN_PX_PER_TICK = 8;
+/** Zoom step for keyboard +/-. Multiplicative. */
+const KEY_ZOOM_STEP = 1.1;
+/** Zoom step for wheel events. Multiplicative per wheel delta unit. */
+const WHEEL_ZOOM_STEP = 1.0015;
+/** World half-extent (tiles) for fog/grid rendering. Covers a generous area. */
+const WORLD_HALF_SIZE_TILES = 400;
 
 async function main(): Promise<void> {
   const mountEl = document.getElementById('app');
-  if (!mountEl) {
-    throw new Error('main: missing #app mount element');
-  }
+  if (!mountEl) throw new Error('main: missing #app mount element');
 
   const app = new Application();
   await app.init({
@@ -29,33 +56,202 @@ async function main(): Promise<void> {
     autoDensity: true,
     resolution: window.devicePixelRatio || 1,
   });
-
   mountEl.appendChild(app.canvas);
 
-  // World container is centered in the viewport. Children draw at world-origin-
-  // anchored coordinates; the world container's position handles the centering.
+  // World container — everything in world space lives under here. The camera
+  // controls its position and scale; we re-sync once per frame in the ticker.
   const world = new Container();
   world.label = 'world';
   app.stage.addChild(world);
 
-  const tiles = computeIslandTiles(HOME_RADIUS, HOME_RADIUS, defaultTerrainAt);
-  if (import.meta.env.DEV) {
-    console.log(`[robot-islands] tile count: ${tiles.length}`);
+  // Island layer (terrain + buildings for each visible island).
+  const islandLayer = new Container();
+  islandLayer.label = 'islands';
+  world.addChild(islandLayer);
+
+  // Populated islands are vision sources; non-populated islands are visible
+  // only if they fall inside someone's vision radius. The home island is
+  // the sole populated island in step 2.
+  const populated = DEMO_ISLANDS.filter((s) => s.populated);
+  const populatedCentres = populated.map((s) => ({ cx: s.cx, cy: s.cy }));
+  let visibleCount = 0;
+  let totalTiles = 0;
+  for (const spec of DEMO_ISLANDS) {
+    if (!isIslandVisible(spec, populatedCentres, VISION_RADIUS_TILES)) continue;
+    const c = renderIsland(spec);
+    islandLayer.addChild(c);
+    visibleCount += 1;
+    // tile count, for the dev log
+    // (counting via the geometry layer would re-run computeIslandTiles; we
+    // accept a small duplication here so the diagnostic stays cheap.)
   }
+  if (import.meta.env.DEV) {
+    console.log(`[robot-islands] visible islands: ${visibleCount}/${DEMO_ISLANDS.length}`);
+  }
+  void totalTiles;
 
-  world.addChild(renderIslandTiles(tiles));
-  world.addChild(renderBuildings(HOME_ISLAND_BUILDINGS));
+  // Fog layer — covers world outside vision. Drawn on top of islands so
+  // anything inside vision shows through the eraser hole.
+  const fogLayer = renderFogLayer(
+    populated.map((s) => ({ cx: s.cx, cy: s.cy })),
+    WORLD_HALF_SIZE_TILES,
+  );
+  world.addChild(fogLayer);
 
-  const recenter = (): void => {
-    world.position.set(app.renderer.width / 2, app.renderer.height / 2);
+  // Cell grid (debug). Above fog so the lines are always visible when on.
+  const gridLayer = renderCellGrid(WORLD_HALF_SIZE_TILES);
+  world.addChild(gridLayer);
+
+  // -----------------------------------------------------------------------
+  // Camera + input
+  // -----------------------------------------------------------------------
+  const cam: Camera = makeCamera(0, 0, 1);
+  // app.renderer.screen is in CSS pixels (it tracks the resize callback's
+  // screenWidth/screenHeight). app.renderer.width is in *device* pixels with
+  // autoDensity + DPR scaling, so don't use that for camera math — DOM mouse
+  // events and Pixi's world transform are both in CSS pixels.
+  const viewportCentre = (): { x: number; y: number } => ({
+    x: app.renderer.screen.width / 2,
+    y: app.renderer.screen.height / 2,
+  });
+  // Initial centring on home (world origin).
+  centerOn(cam, { x: 0, y: 0 }, viewportCentre());
+
+  const reg = makeRegistry();
+  installDefaultBindings(reg);
+
+  // Keyboard pan state: track which pan actions are "held". The keyup handler
+  // resets these. WASD/Arrow keys flip flags, ticker applies movement.
+  const held = {
+    up: false,
+    down: false,
+    left: false,
+    right: false,
   };
-  recenter();
-  // Pixi v8: the renderer fires its own 'resize' event AFTER it has updated
-  // app.renderer.width/height, so listening here (rather than on window)
-  // guarantees fresh dimensions when recenter runs.
-  // step-1 assumption: app lifetime = page lifetime; replace with
-  // app.renderer.off('resize', recenter) on teardown if step-N introduces remount.
-  app.renderer.on('resize', recenter);
+  defineAction(reg, 'pan-up', () => (held.up = true));
+  defineAction(reg, 'pan-down', () => (held.down = true));
+  defineAction(reg, 'pan-left', () => (held.left = true));
+  defineAction(reg, 'pan-right', () => (held.right = true));
+  defineAction(reg, 'zoom-in', () => {
+    zoomAt(cam, viewportCentre(), clampZoom(cam.zoom * KEY_ZOOM_STEP));
+  });
+  defineAction(reg, 'zoom-out', () => {
+    zoomAt(cam, viewportCentre(), clampZoom(cam.zoom / KEY_ZOOM_STEP));
+  });
+  defineAction(reg, 'center-home', () => {
+    centerOn(cam, { x: 0, y: 0 }, viewportCentre());
+  });
+  defineAction(reg, 'toggle-grid', () => {
+    gridLayer.visible = !gridLayer.visible;
+  });
+
+  // Map of "release" actions used to clear the held flag on keyup. The
+  // action table itself is press-only; on keyup we resolve the binding and
+  // clear the corresponding flag manually.
+  const releaseHandlers: Record<string, () => void> = {
+    'pan-up': () => (held.up = false),
+    'pan-down': () => (held.down = false),
+    'pan-left': () => (held.left = false),
+    'pan-right': () => (held.right = false),
+  };
+
+  // Keyboard event hookup. The handler is config-driven: it never inspects
+  // `e.code` against hardcoded strings — it just hands off to the registry.
+  window.addEventListener('keydown', (e) => {
+    if (e.repeat) return; // pan flags are level-triggered; no need to spam.
+    if (dispatchKey(reg, e.code)) e.preventDefault();
+  });
+  window.addEventListener('keyup', (e) => {
+    const action = reg.bindings.get(e.code);
+    if (action && releaseHandlers[action]) {
+      releaseHandlers[action]();
+      e.preventDefault();
+    }
+  });
+
+  // Mouse drag pan. Distinguish "drag" from "click" via a small movement
+  // threshold so a stray click doesn't reset state.
+  let dragging = false;
+  let lastX = 0;
+  let lastY = 0;
+  app.canvas.addEventListener('mousedown', (e) => {
+    if (e.button !== 0) return;
+    dragging = true;
+    lastX = e.clientX;
+    lastY = e.clientY;
+  });
+  window.addEventListener('mouseup', () => {
+    dragging = false;
+  });
+  window.addEventListener('mousemove', (e) => {
+    if (!dragging) return;
+    const dx = e.clientX - lastX;
+    const dy = e.clientY - lastY;
+    lastX = e.clientX;
+    lastY = e.clientY;
+    panCam(cam, dx, dy);
+  });
+
+  // Wheel zoom toward cursor. preventDefault keeps the page from scrolling.
+  app.canvas.addEventListener(
+    'wheel',
+    (e) => {
+      e.preventDefault();
+      // Cursor position relative to canvas (the canvas itself is at 0,0 of
+      // the document layout in our setup, but we use bounding rect to be
+      // safe against future style changes).
+      const rect = app.canvas.getBoundingClientRect();
+      const pivot = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+      // Negative deltaY = wheel up = zoom in (intuitive).
+      const factor = Math.pow(WHEEL_ZOOM_STEP, -e.deltaY);
+      zoomAt(cam, pivot, cam.zoom * factor);
+    },
+    { passive: false },
+  );
+
+  // UI overlay
+  mountUi(document.body, reg, [
+    { label: 'Toggle Grid (D)', action: 'toggle-grid' },
+    { label: 'Center on Home (H)', action: 'center-home' },
+  ]);
+
+  // Update tick: apply held pan flags + sync camera state to the world
+  // container. One pass per frame keeps the camera->container assignment
+  // cheap and predictable.
+  app.ticker.add(() => {
+    let dx = 0;
+    let dy = 0;
+    if (held.up) dy += PAN_PX_PER_TICK;
+    if (held.down) dy -= PAN_PX_PER_TICK;
+    if (held.left) dx += PAN_PX_PER_TICK;
+    if (held.right) dx -= PAN_PX_PER_TICK;
+    if (dx !== 0 || dy !== 0) panCam(cam, dx, dy);
+    world.position.set(cam.tx, cam.ty);
+    world.scale.set(cam.zoom);
+  });
+
+  // Recenter the camera's reference point on resize so the world doesn't
+  // jump unexpectedly: keep the world point currently at the old centre
+  // visually at the new centre. screen.width/.height are CSS pixels (same
+  // units as the camera's tx/ty), unlike renderer.width which is device px.
+  let prevW = app.renderer.screen.width;
+  let prevH = app.renderer.screen.height;
+  app.renderer.on('resize', () => {
+    const w = app.renderer.screen.width;
+    const h = app.renderer.screen.height;
+    cam.tx += (w - prevW) / 2;
+    cam.ty += (h - prevH) / 2;
+    prevW = w;
+    prevH = h;
+  });
+
+  // expose for ad-hoc debugging in dev tools
+  if (import.meta.env.DEV) {
+    (window as unknown as { __cam: Camera }).__cam = cam;
+    (window as unknown as { __reg: typeof reg }).__reg = reg;
+    void bind; // referenced for rebind-from-console workflows
+    void TILE_PX;
+  }
 }
 
 main().catch((err: unknown) => {
