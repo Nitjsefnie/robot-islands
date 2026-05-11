@@ -111,6 +111,11 @@ export function installDefaultBindings(reg: InputRegistry): void {
   // Sister panel to drones-ui + routes-ui; same side-dock idiom. No
   // Escape binding (Escape is reserved for modal dismissal).
   bind(reg, 'KeyV', 'toggle-settlement');
+  // I = inventory — opens the full per-resource inventory modal (step 19).
+  // The HUD only shows building counts + alarms now; the catalog table
+  // moved here. Same modal pattern as buildings + skill tree; Escape
+  // dismisses via the shared `dismiss-modal` action.
+  bind(reg, 'KeyI', 'toggle-inventory');
   bind(reg, 'Equal', 'zoom-in'); // '=' / '+' on US layouts
   bind(reg, 'NumpadAdd', 'zoom-in');
   bind(reg, 'Minus', 'zoom-out');

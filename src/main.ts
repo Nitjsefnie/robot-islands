@@ -54,6 +54,7 @@ import type { PlacedBuilding } from './buildings.js';
 import { mountBuildingsUi } from './buildings-ui.js';
 import { mountConstructionUi } from './construction-ui.js';
 import { mountInspectorUi, type InspectorTarget } from './inspector-ui.js';
+import { mountInventoryUi } from './inventory-ui.js';
 import { buildingAtTile, demolishBuilding, footprintTiles, type Rotation } from './placement.js';
 import { mountPlacementUi } from './placement-ui.js';
 import { mountSkillTreeUi } from './skilltree-ui.js';
@@ -236,6 +237,8 @@ async function main(): Promise<void> {
   defineAction(reg, 'toggle-settlement', () => undefined);
   // Step-11 modal — bound below after the UI is mounted.
   defineAction(reg, 'toggle-construction', () => undefined);
+  // Step-19 inventory modal — bound below after the UI is mounted.
+  defineAction(reg, 'toggle-inventory', () => undefined);
   // Step-2.5 placement rotation — bound below after the placement UI is
   // mounted (it needs the home spec/state, which are constructed further
   // down). Stub here so KeyT presses don't silently drop while the UI is
@@ -491,6 +494,7 @@ async function main(): Promise<void> {
     { label: 'Center on Active (H)', action: 'center-home' },
     { label: 'Skill Tree (K)', action: 'toggle-skill-tree' },
     { label: 'Buildings (B)', action: 'toggle-buildings' },
+    { label: 'Inventory (I)', action: 'toggle-inventory' },
     { label: 'Drones (J)', action: 'toggle-drones' },
     { label: 'Routes (R)', action: 'toggle-routes' },
     { label: 'Settle (V)', action: 'toggle-settlement' },
@@ -835,6 +839,19 @@ async function main(): Promise<void> {
     constructionUi.toggle();
   });
 
+  // Step-19 inventory modal — sister to buildings catalog + skill tree.
+  // Toggled via KeyI. Reads through the active getters so click-to-switch
+  // retargets the panel without remount. Refresh() is called from the
+  // ticker after the post-tick computeRates so the visible net rates are
+  // for the current frame.
+  const inventoryUi = mountInventoryUi(document.body, {
+    getState: activeState,
+    getSpec: activeSpec,
+  });
+  defineAction(reg, 'toggle-inventory', () => {
+    inventoryUi.toggle();
+  });
+
   // Generic modal dismissal: hide whichever modal is open. All modal hide()
   // calls are idempotent, so the no-modal-open case is a free no-op.
   // Mutual-exclusion isn't enforced — if multiple modals happen to be open
@@ -845,6 +862,7 @@ async function main(): Promise<void> {
     skillTree.hide();
     buildingsUi.hide();
     constructionUi.hide();
+    inventoryUi.hide();
     placementUi.cancel();
     // §4 inspector: Escape also closes the inspector + clears the
     // selection outline. Idempotent; closing while already hidden is a
@@ -1084,6 +1102,9 @@ async function main(): Promise<void> {
     // should be reflected in the points / xp counters live.
     skillTree.refresh();
     buildingsUi.refresh();
+    // Inventory panel — cheap when hidden (early-returns in refresh()).
+    // Reads the active state through deps + the live `net` snapshot.
+    inventoryUi.refresh(activeS, net);
     dronesUi.refresh(now);
     routesUi.refresh(now);
     settlementUi.refresh(now);

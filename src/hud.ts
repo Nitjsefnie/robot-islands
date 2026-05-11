@@ -6,21 +6,36 @@
 // real estate.
 //
 // `mountHud` creates and returns the panel + an `update` callback. The
-// PixiJS ticker calls `update(state, net, power)` once per frame after
-// `advanceIsland`. To support a per-frame colour change on the brownout
-// factor without HTML reparse cost, the panel holds a stable three-node
-// tree: text-node + span + text-node. Each frame writes only the three
-// textContents and a single inline-style colour. This is faster than
-// rebuilding innerHTML and avoids any node churn for a monospace block.
+// PixiJS ticker calls `update(state, net, power, …)` once per frame after
+// `advanceIsland`. To keep the per-frame update cheap, the panel holds a
+// stable DOM tree and writes only textContents + a handful of inline styles.
+// Sections that depend on infrequently-changing inputs (the modifier chip
+// row, the buildings enumeration) gate their rebuilds behind cached
+// signature keys — the chip row uses `lastModifiersKey`; the buildings
+// section uses `lastBuildingsKey`.
+//
+// Step-19 refactor: the per-resource Inventory block (one row per
+// ResourceId) was retired. The full inventory moved to a dedicated
+// KeyI-toggled panel (`inventory-ui.ts`). The HUD now surfaces:
+//
+//   1. Header (active-island title)
+//   2. Level + tier badge + skill points
+//   3. Site profile (biome name + modifier chips)
+//   4. Network Consciousness line (above Power per the refactor brief)
+//   5. Power line (produced / consumed / factor)
+//   6. Saved indicator
+//   7. Buildings — compact per-category enumeration of placed defs
+//   8. Alarms — surfaces resources at cap or trending to empty
+//   9. Inventory hint (KeyI)
 //
 // Why DOM rather than PixiJS Text: the HUD updates every frame with
-// changing strings, and the surrounding game UI (button panel) is already
-// DOM. Mixing renderers for a static text overlay adds complexity without
-// payoff. DOM text rendering is also crisper at any zoom level than PixiJS
-// Text (which would need to be drawn at a fixed device pixel ratio).
+// changing strings, and the surrounding game UI is already DOM. DOM text
+// rendering is also crisper at any zoom level than PixiJS Text.
 
 import { BIOME_DEFS, MODIFIER_DEFS, type ModifierId } from './biomes.js';
-import { cap, type IslandState, type PowerBalance, xpForLevel } from './economy.js';
+import { BUILDING_DEFS, type BuildingCategory, type BuildingDefId } from './building-defs.js';
+import type { PlacedBuilding } from './buildings.js';
+import { cap, inv, type IslandState, type PowerBalance, xpForLevel } from './economy.js';
 import type { NetworkConsciousnessState } from './network-consciousness.js';
 import { ALL_RESOURCES, type ResourceId } from './recipes.js';
 import { tierForLevel, type Tier } from './skilltree.js';
@@ -28,19 +43,16 @@ import type { IslandSpec } from './world.js';
 
 /**
  * Mounts a fixed-position panel and returns an `update` function. Calling
- * `update(state, net, power)` rewrites the panel's contents to match the
+ * `update(state, net, power, …)` rewrites the panel's contents to match the
  * given state. The `net` argument carries per-resource net production rate
- * (units/sec), rendered alongside each inventory line. The `power` argument
- * carries the §5.1 electrical balance, rendered as its own line group above
- * Inventory; the `factor` field colour-codes brownout severity.
+ * (units/sec), consumed by the alarms section. The `power` argument carries
+ * the §5.1 electrical balance; `factor` colour-codes brownout severity.
  */
 export interface HudHandle {
   readonly el: HTMLDivElement;
   /** Per-frame refresh. `saveAgeSec` is the integer seconds since the last
-   *  successful save (`null` if no save has happened yet this session — the
-   *  "Saved" indicator falls back to a placeholder). The wider HUD update
-   *  surface comprises every field below; lastSaveAt threading is the only
-   *  step-14 polish addition. */
+   *  successful save (`null` if no save has happened yet this session).
+   *  `vehiclesEnRoute` (§12) is the count of in-flight settlement vehicles. */
   update(
     state: IslandState,
     net: Record<ResourceId, number>,
@@ -48,10 +60,6 @@ export interface HudHandle {
     spec: IslandSpec,
     ncState: NetworkConsciousnessState,
     saveAgeSec: number | null,
-    /** Step-12: count of in-flight settlement vehicles. Extends the
-     *  Network line with `... · +N en route` so the player has visual
-     *  feedback that a dispatched ship/heli is still under way. 0 hides
-     *  the suffix. */
     vehiclesEnRoute: number,
   ): void;
 }
@@ -70,9 +78,6 @@ function powerColor(factor: number): string {
 }
 
 // Tier-breakpoint thresholds, mirroring `tierForLevel` in skilltree.ts.
-// Defined here as a lookup so the HUD can compute "N levels to next tier"
-// without re-deriving from the function. Keys are CURRENT tier; value is
-// the first level of the NEXT tier. T5 has no "next" — handled inline.
 const NEXT_TIER_LEVEL: Readonly<Record<Tier, number>> = {
   1: 5,
   2: 15,
@@ -82,10 +87,6 @@ const NEXT_TIER_LEVEL: Readonly<Record<Tier, number>> = {
   6: Number.POSITIVE_INFINITY,
 };
 
-// Tier badge colour palette per the frontend-design pass. ACCENT cyan when
-// the player has comfortable headroom; WARN amber when within 2 levels of
-// the next breakpoint (urgency cue); FG_DIM at T5 ceiling. The chip uses
-// border + text in the same colour ("currentColor" in the inline style).
 const TIER_BADGE_ACCENT = '#7dd3e8';
 const TIER_BADGE_WARN = '#f5a742';
 const TIER_BADGE_MUTED = '#6c7791';
@@ -97,11 +98,7 @@ function tierBadgeColor(level: number, tier: Tier): string {
   return TIER_BADGE_ACCENT;
 }
 
-// Modifier chip palette. Tied to ModifierDef.category in `biomes.ts`. Each
-// category gets a (text, background-wash, border) triple — the wash is a
-// 10%-alpha tint over the panel background, the border a 40%-alpha pick of
-// the same hue. Stable lands in the muted-neutral bucket because every
-// fresh game starts with it; loud styling there would create constant noise.
+// Modifier chip palette. Tied to ModifierDef.category in `biomes.ts`.
 const CHIP_PALETTE: Readonly<Record<
   'positive' | 'warning' | 'exotic' | 'neutral',
   { readonly fg: string; readonly bg: string; readonly border: string }
@@ -128,6 +125,151 @@ const CHIP_PALETTE: Readonly<Record<
   },
 };
 
+// ---------------------------------------------------------------------------
+// Pure helpers — exported for tests
+// ---------------------------------------------------------------------------
+
+/**
+ * Display label for a BuildingCategory, used by the HUD's per-category
+ * enumeration. The mapping is a tight 1:1 rename of the canonical category
+ * ids: `extraction → Extract`, `smelting → Refine`, the rest title-cased.
+ */
+export const CATEGORY_HUD_LABEL: Readonly<Record<BuildingCategory, string>> = {
+  extraction: 'Extract',
+  smelting: 'Refine',
+  chemistry: 'Chemistry',
+  manufacturing: 'Manufacturing',
+  electronics: 'Electronics',
+  power: 'Power',
+  storage: 'Storage',
+  logistics: 'Logistics',
+  special: 'Special',
+  cooling: 'Cooling',
+};
+
+/** HUD display order for category rows. Categories absent from a building
+ *  list are suppressed at render time. */
+export const HUD_CATEGORY_ORDER: ReadonlyArray<BuildingCategory> = [
+  'extraction',
+  'smelting',
+  'chemistry',
+  'manufacturing',
+  'electronics',
+  'power',
+  'storage',
+  'logistics',
+  'special',
+  'cooling',
+];
+
+/** A single defId entry in the buildings enumeration. */
+export interface BuildingsEnumerationEntry {
+  readonly defId: BuildingDefId;
+  readonly displayName: string;
+  readonly count: number;
+}
+
+/** A category row in the buildings enumeration. */
+export interface BuildingsEnumerationRow {
+  readonly category: BuildingCategory;
+  readonly label: string;
+  readonly entries: ReadonlyArray<BuildingsEnumerationEntry>;
+}
+
+/**
+ * Group the placed buildings on an island by category, collapsing instances
+ * of the same defId into a single `defId × count` entry. Returns rows in
+ * `HUD_CATEGORY_ORDER`; categories with no buildings are omitted entirely.
+ * Within a category, entries are sorted by descending count (most-deployed
+ * first), with defId as a stable tiebreaker.
+ *
+ * Pure — no DOM, no PixiJS. Caller can stringify a row's entries as
+ * `${name} ×${count}` joined by ` · `.
+ */
+export function enumerateBuildings(
+  buildings: ReadonlyArray<PlacedBuilding>,
+): ReadonlyArray<BuildingsEnumerationRow> {
+  // Per-category aggregation: defId → count.
+  const buckets = new Map<BuildingCategory, Map<BuildingDefId, number>>();
+  for (const b of buildings) {
+    const def = BUILDING_DEFS[b.defId];
+    let bucket = buckets.get(def.category);
+    if (!bucket) {
+      bucket = new Map<BuildingDefId, number>();
+      buckets.set(def.category, bucket);
+    }
+    bucket.set(b.defId, (bucket.get(b.defId) ?? 0) + 1);
+  }
+  const rows: BuildingsEnumerationRow[] = [];
+  for (const category of HUD_CATEGORY_ORDER) {
+    const bucket = buckets.get(category);
+    if (!bucket || bucket.size === 0) continue;
+    const entries: BuildingsEnumerationEntry[] = [];
+    for (const [defId, count] of bucket) {
+      entries.push({ defId, count, displayName: BUILDING_DEFS[defId].displayName });
+    }
+    // Sort by count desc, then defId for stability.
+    entries.sort((a, b) => {
+      if (b.count !== a.count) return b.count - a.count;
+      return a.defId < b.defId ? -1 : a.defId > b.defId ? 1 : 0;
+    });
+    rows.push({ category, label: CATEGORY_HUD_LABEL[category], entries });
+  }
+  return rows;
+}
+
+/** Per-frame alarm classification result. Resources listed in `full` are at
+ *  ≥95% of cap; resources in `low` are draining and will hit zero within 60s
+ *  at the current negative net rate. Empty arrays = no alarm; HUD suppresses
+ *  the row in that case. */
+export interface AlarmsReport {
+  readonly full: ReadonlyArray<ResourceId>;
+  readonly low: ReadonlyArray<ResourceId>;
+}
+
+/** Threshold at which a resource is considered "full" for alarm purposes. */
+const ALARM_FULL_FRACTION = 0.95;
+/** Lookahead window (seconds) for the trending-low alarm. */
+const ALARM_LOW_LOOKAHEAD_SEC = 60;
+
+/**
+ * Compute the alarm sets for an island given current per-resource net rates.
+ *
+ * `full` — resources whose stored amount is ≥ 95% of capped capacity AND
+ *          cap > 0 (skip resources with no storage at all).
+ * `low`  — resources whose net rate is negative AND whose current stockpile
+ *          would be exhausted within `ALARM_LOW_LOOKAHEAD_SEC` seconds at
+ *          that rate. Skip resources at zero (they're already empty — the
+ *          downstream recipe stall is the real signal).
+ *
+ * Pure — reads through `inv()`/`cap()` for skill+specialization-adjusted
+ * caps. No DOM, no PixiJS.
+ */
+export function computeAlarms(
+  state: IslandState,
+  net: Record<ResourceId, number>,
+): AlarmsReport {
+  const full: ResourceId[] = [];
+  const low: ResourceId[] = [];
+  for (const r of ALL_RESOURCES) {
+    const capVal = cap(state, r);
+    const have = inv(state, r);
+    if (capVal > 0 && have >= capVal * ALARM_FULL_FRACTION) {
+      full.push(r);
+    }
+    const rate = net[r] ?? 0;
+    if (rate < 0 && have > 0) {
+      const secToZero = have / -rate;
+      if (secToZero < ALARM_LOW_LOOKAHEAD_SEC) low.push(r);
+    }
+  }
+  return { full, low };
+}
+
+// ---------------------------------------------------------------------------
+// Mount
+// ---------------------------------------------------------------------------
+
 export function mountHud(parentEl: HTMLElement): HudHandle {
   const panel = document.createElement('div');
   panel.id = 'hud-economy';
@@ -135,7 +277,8 @@ export function mountHud(parentEl: HTMLElement): HudHandle {
     'position: fixed',
     'bottom: 8px',
     'right: 8px',
-    'min-width: 220px',
+    'min-width: 260px',
+    'max-width: 360px',
     'padding: 8px 10px',
     'background: rgba(20, 24, 32, 0.78)',
     'border: 1px solid #3a4452',
@@ -146,22 +289,12 @@ export function mountHud(parentEl: HTMLElement): HudHandle {
     'line-height: 1.5',
     'z-index: 100',
     'pointer-events: none',
-    'white-space: pre',
-    // Tabular numerals so digits line up in inventory rows.
+    // Tabular numerals so digits line up in counts.
     'font-variant-numeric: tabular-nums',
   ].join(';');
   parentEl.appendChild(panel);
 
-  // Stable DOM layout — three logical sections, each kept rebuild-free at
-  // tick time:
-  //   1. headerBlock: "Home Island" line + "Level N [Tier badge] · N to TX"
-  //      line + "Skill points: N" line. The tier badge is a structured chip
-  //      inline with the Level number (one glance answers both questions).
-  //   2. siteProfile: a mini-section with the biome line and a flex chip
-  //      row. The chips themselves are recreated only when the modifier
-  //      list signature changes (cached via a join-key on the prior set).
-  //   3. powerNode + factorSpan + tailNode: existing power + inventory block.
-
+  // ---- Header block: title + level/tier + skill points -------------------
   const headerBlock = document.createElement('div');
   headerBlock.style.cssText = [
     'display: flex',
@@ -173,8 +306,6 @@ export function mountHud(parentEl: HTMLElement): HudHandle {
   titleLine.appendChild(titleNode);
   headerBlock.appendChild(titleLine);
 
-  // Level + tier line — keeps Level number on the left, tier chip and
-  // "N to TX" remainder inline so the row is glanceable.
   const levelLine = document.createElement('div');
   levelLine.style.cssText = [
     'display: flex',
@@ -184,9 +315,6 @@ export function mountHud(parentEl: HTMLElement): HudHandle {
   ].join(';');
   const levelText = document.createElement('span');
   const tierBadge = document.createElement('span');
-  // Tier badge is a tight letter-spaced caps chip — matches the
-  // skill-tree panel's "TIER" stat block typography for cross-panel
-  // continuity. Colour swaps each refresh based on proximity to next tier.
   tierBadge.style.cssText = [
     'display: inline-block',
     'padding: 1px 5px',
@@ -216,11 +344,7 @@ export function mountHud(parentEl: HTMLElement): HudHandle {
 
   panel.appendChild(headerBlock);
 
-  // Site profile — biome line + modifier chip row. Sits as its own block so
-  // the chip flex-row doesn't break the monospace alignment of the inventory
-  // block below. A thin top/bottom border separates it visually from the
-  // header above and the power+inventory block below — matches the panel's
-  // existing engineering-readout vibe (cf. the brownout factor colour-band).
+  // ---- Site profile: biome + modifier chips ------------------------------
   const siteProfile = document.createElement('div');
   siteProfile.style.cssText = [
     'margin: 4px 0',
@@ -232,8 +356,6 @@ export function mountHud(parentEl: HTMLElement): HudHandle {
     'gap: 3px',
   ].join(';');
 
-  // Biome line: label "Site" left, biome display name right, mimicking
-  // the column layout the rest of the panel uses ("Power", "Inventory").
   const biomeLine = document.createElement('div');
   biomeLine.style.cssText = [
     'display: flex',
@@ -255,34 +377,18 @@ export function mountHud(parentEl: HTMLElement): HudHandle {
   biomeLine.appendChild(biomeValue);
   siteProfile.appendChild(biomeLine);
 
-  // Chip row container.
   const chipRow = document.createElement('div');
   chipRow.style.cssText = [
     'display: flex',
     'flex-wrap: wrap',
     'gap: 4px',
     'align-items: center',
-    'min-height: 16px', // keeps the row from collapsing when empty
+    'min-height: 16px',
   ].join(';');
   siteProfile.appendChild(chipRow);
   panel.appendChild(siteProfile);
 
-  // Power + inventory block — preNode/factorSpan/postNode mirrors the
-  // pre-step-8 layout so the per-frame update remains a small fixed number
-  // of textContent writes.
-  const powerNode = document.createTextNode('');
-  const factorSpan = document.createElement('span');
-  factorSpan.style.fontWeight = '600';
-  const powerTailNode = document.createTextNode('\n');
-  panel.appendChild(powerNode);
-  panel.appendChild(factorSpan);
-  panel.appendChild(powerTailNode);
-
-  // Network Consciousness line (§9.6). Sits between the Power line and the
-  // Inventory block. Label uses the same FG_DIM/uppercase letter-spaced
-  // typography as the Site row; value carries the active milestone summary
-  // or an em-dash when no T3+ islands exist yet. The line lives in a flex
-  // row so the value can right-align cleanly without monospace padding.
+  // ---- Network line (refactor moves this ABOVE Power) --------------------
   const networkLine = document.createElement('div');
   networkLine.style.cssText = [
     'display: flex',
@@ -309,11 +415,19 @@ export function mountHud(parentEl: HTMLElement): HudHandle {
   networkLine.appendChild(networkValue);
   panel.appendChild(networkLine);
 
-  // Save indicator (§15.6 persistence). One-line "Saved · Ns ago" status,
-  // in FG_DIM grey so it sits under the other engineering readouts without
-  // competing for attention. The string is rebuilt once per frame from the
-  // integer seconds-since-last-save the ticker threads in. "just now" for
-  // anything below 2s.
+  // ---- Power line --------------------------------------------------------
+  // Format: `Power  <prod>W / <con>W  factor X.XX`. Stays a fixed three-
+  // textNode + colored span so the per-frame update is cheap.
+  const powerLine = document.createElement('div');
+  powerLine.style.cssText = ['white-space: pre'].join(';');
+  const powerNode = document.createTextNode('');
+  const factorSpan = document.createElement('span');
+  factorSpan.style.fontWeight = '600';
+  powerLine.appendChild(powerNode);
+  powerLine.appendChild(factorSpan);
+  panel.appendChild(powerLine);
+
+  // ---- Saved indicator ---------------------------------------------------
   const savedLine = document.createElement('div');
   savedLine.style.cssText = [
     'display: flex',
@@ -334,15 +448,62 @@ export function mountHud(parentEl: HTMLElement): HudHandle {
   savedLine.appendChild(savedValue);
   panel.appendChild(savedLine);
 
-  const postNode = document.createTextNode('');
-  panel.appendChild(postNode);
+  // ---- Buildings enumeration section -------------------------------------
+  // A thin divider rule + a flex column. The row layout per category is a
+  // grid: [label][entries]. The whole section's DOM is rebuilt only when
+  // the buildings signature changes (see `lastBuildingsKey`); otherwise the
+  // per-frame branch is a single string-compare.
+  const buildingsSection = document.createElement('div');
+  buildingsSection.style.cssText = [
+    'margin: 4px 0 0',
+    'padding-top: 4px',
+    'border-top: 1px solid rgba(58, 68, 82, 0.6)',
+    'display: flex',
+    'flex-direction: column',
+    'gap: 2px',
+  ].join(';');
+  panel.appendChild(buildingsSection);
 
-  /** Last-rendered modifier signature — used to skip chip rebuild when the
-   *  set is unchanged. The signature is just the comma-joined ids; cheap
-   *  to compute and zero false-positives. */
+  // ---- Alarms row --------------------------------------------------------
+  // Conditional — only present in the DOM when an alarm fires. We keep the
+  // container around (and toggle display:none) so layout doesn't shift.
+  const alarmsRow = document.createElement('div');
+  alarmsRow.style.cssText = [
+    'margin-top: 3px',
+    'padding: 2px 0',
+    'color: #f5a742', // WARN amber
+    'font-size: 11px',
+    'letter-spacing: 0.02em',
+    'display: none',
+    // Long resource lists wrap rather than overflow.
+    'word-break: break-word',
+  ].join(';');
+  panel.appendChild(alarmsRow);
+
+  // ---- Inventory hint ---------------------------------------------------
+  const inventoryHint = document.createElement('div');
+  inventoryHint.textContent = 'Inventory (I)';
+  inventoryHint.style.cssText = [
+    'margin-top: 3px',
+    'padding-top: 3px',
+    'border-top: 1px solid rgba(58, 68, 82, 0.4)',
+    'color: #4a5365', // FG_MUTED
+    'font-size: 10px',
+    'letter-spacing: 0.08em',
+    'text-transform: uppercase',
+  ].join(';');
+  panel.appendChild(inventoryHint);
+
+  // Cached signatures — skip DOM writes when input is unchanged.
   let lastModifiersKey = '';
-  /** Last-rendered biome id — same skip logic. */
   let lastBiome = '';
+  /** Last-rendered buildings signature. Walked from `enumerateBuildings`:
+   *  category|defId:count joined. The buildings section rebuilds only when
+   *  this string changes. */
+  let lastBuildingsKey = '';
+  /** Last-rendered alarms signature so the alarm DOM stays stable when the
+   *  fires don't change frame-to-frame. */
+  let lastAlarmsKey = '';
 
   function buildChip(id: ModifierId): HTMLSpanElement {
     const def = MODIFIER_DEFS[id];
@@ -361,17 +522,11 @@ export function mountHud(parentEl: HTMLElement): HudHandle {
       'letter-spacing: 0.05em',
       'text-transform: uppercase',
       'line-height: 1.4',
-      // Placeholder modifiers get a dashed border to flag "this exists in
-      // the catalog but doesn't affect the economy yet". Subtle enough not
-      // to overwhelm the active-modifier signal but visible on close read.
       def.placeholder ? 'border-style: dashed' : '',
     ].filter(Boolean).join(';');
     return chip;
   }
 
-  /** Rebuild the chip row. Called when `lastModifiersKey` changes. Empty
-   *  modifier list shows an em-dash placeholder so the layout stays stable
-   *  between "no modifiers" and "1+ modifiers" states. */
   function renderChipRow(modifiers: ReadonlyArray<ModifierId>): void {
     while (chipRow.firstChild) chipRow.removeChild(chipRow.firstChild);
     if (modifiers.length === 0) {
@@ -388,20 +543,99 @@ export function mountHud(parentEl: HTMLElement): HudHandle {
     for (const id of modifiers) chipRow.appendChild(buildChip(id));
   }
 
-  /** Format a number for the HUD. Integers shown without decimal; otherwise
+  /** Render the per-category buildings rows. Called only when the signature
+   *  changes. Empty buildings → a single muted "no buildings placed" line. */
+  function renderBuildingsSection(rows: ReadonlyArray<BuildingsEnumerationRow>): void {
+    while (buildingsSection.firstChild) {
+      buildingsSection.removeChild(buildingsSection.firstChild);
+    }
+    if (rows.length === 0) {
+      const empty = document.createElement('div');
+      empty.textContent = 'no buildings placed';
+      empty.style.cssText = [
+        'color: #4d5566',
+        'font-size: 11px',
+        'letter-spacing: 0.04em',
+        'font-style: italic',
+      ].join(';');
+      buildingsSection.appendChild(empty);
+      return;
+    }
+    for (const row of rows) {
+      const rowEl = document.createElement('div');
+      rowEl.style.cssText = [
+        'display: grid',
+        'grid-template-columns: 70px 1fr',
+        'align-items: baseline',
+        'gap: 6px',
+        'padding: 1px 0',
+      ].join(';');
+
+      const labelEl = document.createElement('span');
+      labelEl.textContent = row.label;
+      labelEl.style.cssText = [
+        'color: #7a8294', // FG_DIM
+        'font-size: 10px',
+        'letter-spacing: 0.08em',
+        'text-transform: uppercase',
+      ].join(';');
+
+      const entriesEl = document.createElement('span');
+      entriesEl.textContent = row.entries
+        .map((e) => `${e.displayName} ×${e.count}`)
+        .join(' · ');
+      entriesEl.style.cssText = [
+        'color: #cdd6f4', // FG
+        'font-size: 11px',
+        'word-break: break-word',
+      ].join(';');
+
+      rowEl.appendChild(labelEl);
+      rowEl.appendChild(entriesEl);
+      buildingsSection.appendChild(rowEl);
+    }
+  }
+
+  /** Build a deterministic signature string for a buildings enumeration so
+   *  the section's DOM can be cached frame-to-frame. */
+  function buildingsKey(rows: ReadonlyArray<BuildingsEnumerationRow>): string {
+    return rows
+      .map((r) => r.category + '|' + r.entries.map((e) => `${e.defId}:${e.count}`).join(','))
+      .join(';');
+  }
+
+  /** Build a signature for the alarms state — order-insensitive within each
+   *  bucket (the helper returns them in ALL_RESOURCES order anyway). */
+  function alarmsKey(rep: AlarmsReport): string {
+    return 'F:' + rep.full.join(',') + '|L:' + rep.low.join(',');
+  }
+
+  function renderAlarms(rep: AlarmsReport): void {
+    if (rep.full.length === 0 && rep.low.length === 0) {
+      alarmsRow.style.display = 'none';
+      alarmsRow.textContent = '';
+      return;
+    }
+    while (alarmsRow.firstChild) alarmsRow.removeChild(alarmsRow.firstChild);
+    if (rep.full.length > 0) {
+      const fullEl = document.createElement('div');
+      fullEl.textContent = `FULL: ${rep.full.join(', ')}`;
+      alarmsRow.appendChild(fullEl);
+    }
+    if (rep.low.length > 0) {
+      const lowEl = document.createElement('div');
+      lowEl.textContent = `LOW: ${rep.low.join(', ')}`;
+      alarmsRow.appendChild(lowEl);
+    }
+    alarmsRow.style.display = 'block';
+  }
+
+  /** Format a number for display. Integers shown without decimal; otherwise
    *  one decimal place. The economy uses fractional inventories internally
    *  (rate × dt) so we round for display. */
   const fmt = (n: number): string => {
     if (Number.isInteger(n)) return n.toString();
     return n.toFixed(1);
-  };
-
-  /** Format a rate with sign and one decimal — small numbers around 0.1
-   *  are typical for this tier. */
-  const fmtRate = (n: number): string => {
-    if (n === 0) return '   .   ';
-    const sign = n > 0 ? '+' : '';
-    return `${sign}${n.toFixed(2)}/s`;
   };
 
   function update(
@@ -414,17 +648,11 @@ export function mountHud(parentEl: HTMLElement): HudHandle {
     vehiclesEnRoute: number,
   ): void {
     const need = xpForLevel(state.level + 1);
-    // §3: every populated island is first-class. Title reads "Starting
-    // Island" for the special-cased home id (the demo seed), otherwise
-    // surfaces the active-island id verbatim — short demo ids like
-    // `forest-ne` read fine without title-casing.
     titleNode.textContent = state.id === 'home' ? 'Starting Island' : state.id;
     levelText.textContent = `Level ${state.level}   XP ${fmt(state.xp)} / ${fmt(need)}`;
     levelText.style.color = '#cdd6f4';
 
-    // Tier indicator: inline chip + "N levels to TX" remainder. Chip
-    // colour is amber (WARN) when within 2 levels of the next breakpoint
-    // (urgency cue), cyan (ACCENT) mid-tier, muted at the T5 ceiling.
+    // Tier indicator chip + "N levels to TX" remainder.
     const tier = tierForLevel(state.level);
     tierBadge.textContent = `T${tier}`;
     const palette = tierBadgeColor(state.level, tier);
@@ -438,9 +666,7 @@ export function mountHud(parentEl: HTMLElement): HudHandle {
     }
     pointsNode.textContent = `Skill points: ${state.unspentSkillPoints}`;
 
-    // Site profile — biome name + chip row. Skip DOM writes when the
-    // payload is identical, since the chip row's DOM construction is the
-    // most expensive piece of HUD per-frame work.
+    // Site profile — biome name + chip row.
     if (spec.biome !== lastBiome) {
       biomeValue.textContent = BIOME_DEFS[spec.biome].displayName;
       lastBiome = spec.biome;
@@ -451,21 +677,7 @@ export function mountHud(parentEl: HTMLElement): HudHandle {
       lastModifiersKey = modifiersKey;
     }
 
-    // Power line group. Format: `Power      <prod> / <con>  factor X.XX`.
-    // Numbers right-padded so the columns don't jitter as production swings.
-    const prodStr = fmt(power.produced).padStart(4, ' ');
-    const conStr = fmt(power.consumed).padStart(4, ' ');
-    const factorStr = power.factor.toFixed(2);
-    powerNode.textContent = `Power      ${prodStr}W / ${conStr}W  factor `;
-
-    factorSpan.textContent = factorStr;
-    factorSpan.style.color = powerColor(power.factor);
-
-    // Network Consciousness line. No T3+ islands → muted em-dash. Active
-    // milestone → "{N} at T3+ · NC tier {milestone} · +X%" in ACCENT.
-    // The buff percentage rounds to 0 places (1.05 → "+5%") — matches the
-    // §9.6 placeholders exactly.
-    // Step-12: append "+N en route" when settlement vehicles are in flight.
+    // Network Consciousness line.
     const enRouteSuffix = vehiclesEnRoute > 0 ? ` · +${vehiclesEnRoute} en route` : '';
     if (ncState.tier3PlusCount === 0) {
       networkValue.textContent = enRouteSuffix === '' ? '—' : `—${enRouteSuffix}`;
@@ -477,10 +689,15 @@ export function mountHud(parentEl: HTMLElement): HudHandle {
       networkValue.style.color = '#7dd3e8';
     }
 
-    // Save-age indicator. Null when no save has happened yet this session
-    // (cold restart with no prior data, the tab is still booting). Below
-    // 2s shows "just now" so the just-saved moment doesn't flicker between
-    // "0s ago" and "1s ago".
+    // Power line.
+    const prodStr = fmt(power.produced).padStart(4, ' ');
+    const conStr = fmt(power.consumed).padStart(4, ' ');
+    const factorStr = power.factor.toFixed(2);
+    powerNode.textContent = `Power      ${prodStr}W / ${conStr}W  factor `;
+    factorSpan.textContent = factorStr;
+    factorSpan.style.color = powerColor(power.factor);
+
+    // Save-age indicator.
     if (saveAgeSec === null) {
       savedValue.textContent = '—';
     } else if (saveAgeSec < 2) {
@@ -489,21 +706,22 @@ export function mountHud(parentEl: HTMLElement): HudHandle {
       savedValue.textContent = `${saveAgeSec}s ago`;
     }
 
-    const tailLines: string[] = [];
-    tailLines.push(``);
-    tailLines.push(`Inventory`);
-    for (const r of ALL_RESOURCES) {
-      const have = state.inventory[r] ?? 0;
-      // cap() applies storageCapMul from any unlocked skills; reading
-      // state.storageCaps[r] directly would lie about the real cap.
-      const capVal = cap(state, r);
-      const rate = net[r] ?? 0;
-      const name = (r + ':').padEnd(11, ' ');
-      const have5 = fmt(have).padStart(5, ' ');
-      const cap5 = fmt(capVal).padStart(5, ' ');
-      tailLines.push(`  ${name}${have5} / ${cap5}  ${fmtRate(rate)}`);
+    // Buildings enumeration — gated on signature.
+    const rows = enumerateBuildings(spec.buildings);
+    const bkey = buildingsKey(rows);
+    if (bkey !== lastBuildingsKey) {
+      renderBuildingsSection(rows);
+      lastBuildingsKey = bkey;
     }
-    postNode.textContent = '\n' + tailLines.join('\n');
+
+    // Alarms — gated on signature so the WARN amber row doesn't redraw
+    // every frame when nothing changed.
+    const alarms = computeAlarms(state, net);
+    const akey = alarmsKey(alarms);
+    if (akey !== lastAlarmsKey) {
+      renderAlarms(alarms);
+      lastAlarmsKey = akey;
+    }
   }
 
   return { el: panel, update };

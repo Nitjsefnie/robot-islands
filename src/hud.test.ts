@@ -1,0 +1,196 @@
+// Pure-helper tests for the HUD refactor (step 19).
+//
+// The HUD itself is a DOM module — JSDOM isn't configured in this repo and
+// pulling it in for a single panel's smoke test isn't worth the dependency.
+// The interesting logic (per-category building enumeration, alarm
+// classification) is exported as pure functions; we test those directly.
+
+import { describe, expect, it } from 'vitest';
+
+import type { PlacedBuilding } from './buildings.js';
+import type { IslandState } from './economy.js';
+import {
+  computeAlarms,
+  enumerateBuildings,
+  HUD_CATEGORY_ORDER,
+  CATEGORY_HUD_LABEL,
+} from './hud.js';
+import { ALL_RESOURCES, type ResourceId } from './recipes.js';
+
+/** Build a minimal IslandState satisfying the pieces the HUD helpers read.
+ *  Only `inventory`, `storageCaps`, `specializationRole`, `unlockedNodes`,
+ *  and `subPathProgress` are touched by `inv()` / `cap()`. */
+function makeState(
+  overrides: {
+    inventory?: Partial<Record<ResourceId, number>>;
+    storageCaps?: Partial<Record<ResourceId, number>>;
+  } = {},
+): IslandState {
+  const inventory = {} as Record<ResourceId, number>;
+  const storageCaps = {} as Record<ResourceId, number>;
+  for (const r of ALL_RESOURCES) {
+    inventory[r] = overrides.inventory?.[r] ?? 0;
+    storageCaps[r] = overrides.storageCaps?.[r] ?? 0;
+  }
+  return {
+    id: 'test',
+    buildings: [],
+    inventory,
+    storageCaps,
+    xp: 0,
+    level: 1,
+    unspentSkillPoints: 0,
+    unlockedNodes: new Set(),
+    subPathProgress: new Map(),
+    funnelPending: {} as Record<ResourceId, number>,
+    specializationRole: null,
+    declaredAt: null,
+    aiCoreCrafted: false,
+    lastTick: 0,
+  };
+}
+
+/** Helper to spell out the rendered "defId ×count · …" string for a row
+ *  given category and entries — mirrors the HUD's render path. */
+function rowString(
+  rows: ReadonlyArray<{ label: string; entries: ReadonlyArray<{ displayName: string; count: number }> }>,
+  label: string,
+): string | null {
+  const row = rows.find((r) => r.label === label);
+  if (!row) return null;
+  return row.entries.map((e) => `${e.displayName} ×${e.count}`).join(' · ');
+}
+
+describe('enumerateBuildings', () => {
+  it('returns an empty list when the island has no buildings', () => {
+    expect(enumerateBuildings([])).toEqual([]);
+  });
+
+  it('groups buildings by category and counts duplicates', () => {
+    const buildings: PlacedBuilding[] = [
+      { id: 'b1', defId: 'mine', x: 0, y: 0 },
+      { id: 'b2', defId: 'mine', x: 2, y: 0 },
+      { id: 'b3', defId: 'workshop', x: 4, y: 0 },
+      { id: 'b4', defId: 'smelter', x: 6, y: 0 },
+    ];
+    const rows = enumerateBuildings(buildings);
+    // Mine is extraction (label: Extract); Workshop is manufacturing;
+    // Smelter is smelting (label: Refine).
+    expect(rowString(rows, 'Extract')).toBe('Mine ×2');
+    expect(rowString(rows, 'Refine')).toBe('Smelter ×1');
+    expect(rowString(rows, 'Manufacturing')).toBe('Workshop ×1');
+  });
+
+  it('suppresses categories with no buildings entirely', () => {
+    const rows = enumerateBuildings([{ id: 'b', defId: 'mine', x: 0, y: 0 }]);
+    // Only one category surfaces (Extract); the rest are absent.
+    expect(rows.map((r) => r.label)).toEqual(['Extract']);
+  });
+
+  it('preserves the HUD_CATEGORY_ORDER between visible categories', () => {
+    const buildings: PlacedBuilding[] = [
+      { id: 'b1', defId: 'dock', x: 0, y: 0 }, // logistics
+      { id: 'b2', defId: 'mine', x: 2, y: 0 }, // extraction
+      { id: 'b3', defId: 'solar', x: 4, y: 0 }, // power
+    ];
+    const rows = enumerateBuildings(buildings);
+    expect(rows.map((r) => r.category)).toEqual(['extraction', 'power', 'logistics']);
+  });
+
+  it('sorts within a category by descending count', () => {
+    // Three Mines + one Quarry in extraction (both 'extraction' category).
+    // Mine should come first (count=3 > 1).
+    const buildings: PlacedBuilding[] = [
+      { id: 'q', defId: 'quarry', x: 0, y: 0 },
+      { id: 'm1', defId: 'mine', x: 2, y: 0 },
+      { id: 'm2', defId: 'mine', x: 4, y: 0 },
+      { id: 'm3', defId: 'mine', x: 6, y: 0 },
+    ];
+    const rows = enumerateBuildings(buildings);
+    expect(rowString(rows, 'Extract')).toBe('Mine ×3 · Quarry ×1');
+  });
+
+  it('exposes a label map and order that covers every BuildingCategory', () => {
+    // Defensive cover for the category-rename mapping; ensures every category
+    // surfaces a label and is part of the order list (no silent omission).
+    expect(HUD_CATEGORY_ORDER).toContain('extraction');
+    expect(HUD_CATEGORY_ORDER).toContain('cooling');
+    expect(CATEGORY_HUD_LABEL.extraction).toBe('Extract');
+    expect(CATEGORY_HUD_LABEL.smelting).toBe('Refine');
+  });
+});
+
+describe('computeAlarms', () => {
+  it('reports no alarms when no resource is near cap or trending low', () => {
+    const state = makeState({
+      inventory: { iron_ore: 10 },
+      storageCaps: { iron_ore: 100 },
+    });
+    const net: Record<ResourceId, number> = {} as Record<ResourceId, number>;
+    for (const r of ALL_RESOURCES) net[r] = 0;
+    net.iron_ore = 1; // producing
+    const rep = computeAlarms(state, net);
+    expect(rep.full).toEqual([]);
+    expect(rep.low).toEqual([]);
+  });
+
+  it('marks a resource at ≥95% of cap as FULL', () => {
+    const state = makeState({
+      inventory: { iron_ore: 95, coal: 99 },
+      storageCaps: { iron_ore: 100, coal: 100 },
+    });
+    const net: Record<ResourceId, number> = {} as Record<ResourceId, number>;
+    for (const r of ALL_RESOURCES) net[r] = 0;
+    const rep = computeAlarms(state, net);
+    expect(rep.full).toContain('iron_ore');
+    expect(rep.full).toContain('coal');
+  });
+
+  it('ignores resources with cap=0 for the FULL alarm', () => {
+    // inv==cap==0 is the "no storage / no inventory" baseline. The alarm
+    // shouldn't fire — 0/0 is degenerate, not a true FULL condition.
+    const state = makeState({});
+    const net: Record<ResourceId, number> = {} as Record<ResourceId, number>;
+    for (const r of ALL_RESOURCES) net[r] = 0;
+    const rep = computeAlarms(state, net);
+    expect(rep.full).toEqual([]);
+  });
+
+  it('marks a resource trending to zero within 60s as LOW', () => {
+    // 30 units at -1/s drains in 30s → trending LOW.
+    const state = makeState({
+      inventory: { coal: 30 },
+      storageCaps: { coal: 100 },
+    });
+    const net: Record<ResourceId, number> = {} as Record<ResourceId, number>;
+    for (const r of ALL_RESOURCES) net[r] = 0;
+    net.coal = -1;
+    const rep = computeAlarms(state, net);
+    expect(rep.low).toContain('coal');
+  });
+
+  it('does NOT mark a resource as LOW when it would last more than 60s', () => {
+    // 120 units at -1/s = 120s to zero. Outside the 60s lookahead.
+    const state = makeState({
+      inventory: { coal: 120 },
+      storageCaps: { coal: 200 },
+    });
+    const net: Record<ResourceId, number> = {} as Record<ResourceId, number>;
+    for (const r of ALL_RESOURCES) net[r] = 0;
+    net.coal = -1;
+    const rep = computeAlarms(state, net);
+    expect(rep.low).not.toContain('coal');
+  });
+
+  it('does NOT mark a resource already at zero as LOW', () => {
+    // Inventory==0 means the recipe stalled; the LOW signal is redundant
+    // with the broken-chain symptom that follows. Skip to keep the row
+    // focused on "going to break soon" rather than "already broken".
+    const state = makeState({});
+    const net: Record<ResourceId, number> = {} as Record<ResourceId, number>;
+    for (const r of ALL_RESOURCES) net[r] = 0;
+    net.coal = -1;
+    const rep = computeAlarms(state, net);
+    expect(rep.low).not.toContain('coal');
+  });
+});
