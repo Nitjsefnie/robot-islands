@@ -36,6 +36,12 @@ import {
 } from './skilltree.js';
 import { type IslandState, xpForLevel } from './economy.js';
 import { ALL_ROLES, ROLE_DEFS, type RoleId } from './specialization.js';
+import {
+  TIER_RESET_COOLDOWN_MS,
+  canTierReset,
+  executeTierReset,
+  tierResetCost,
+} from './tier-reset.js';
 
 export interface SkillTreeUi {
   readonly el: HTMLDivElement;
@@ -961,6 +967,162 @@ export function mountSkillTreeUi(
 
   for (const id of ALL_ROLES) buildCard(id);
 
+  // -------------------------------------------------------------------------
+  // §9.7 Tier Reset row — sits inside the specialization section, just below
+  // the role cards. The button is visible at T3+, shows cost + cooldown
+  // countdown, and disables itself with a reason string when canTierReset
+  // returns ok: false. Confirmation via window.confirm() — same pattern as
+  // the §9.4 declaration buttons.
+  // -------------------------------------------------------------------------
+  const tierResetRow = document.createElement('div');
+  styled(
+    tierResetRow,
+    [
+      'display: flex',
+      'align-items: center',
+      'justify-content: space-between',
+      'gap: 12px',
+      `border-top: 1px solid ${PANEL_BORDER}`,
+      'padding-top: 10px',
+      'margin-top: 4px',
+    ].join(';'),
+  );
+  const tierResetLeft = document.createElement('div');
+  styled(tierResetLeft, 'display: flex; flex-direction: column; gap: 2px');
+  const tierResetTitle = document.createElement('span');
+  tierResetTitle.textContent = 'TIER RESET';
+  styled(
+    tierResetTitle,
+    [
+      `color: ${WARN}`,
+      'font-size: 11px',
+      'font-weight: 600',
+      'letter-spacing: 0.18em',
+    ].join(';'),
+  );
+  const tierResetSub = document.createElement('span');
+  styled(
+    tierResetSub,
+    [
+      `color: ${FG_DIM}`,
+      'font-size: 10px',
+      'letter-spacing: 0.04em',
+    ].join(';'),
+  );
+  tierResetSub.textContent = '§9.7 / revert to T1, preserve construction';
+  tierResetLeft.appendChild(tierResetTitle);
+  tierResetLeft.appendChild(tierResetSub);
+  const tierResetDetail = document.createElement('span');
+  styled(
+    tierResetDetail,
+    [`color: ${FG_DIM}`, 'font-size: 10px', 'letter-spacing: 0.02em'].join(';'),
+  );
+  tierResetLeft.appendChild(tierResetDetail);
+
+  const tierResetBtn = document.createElement('button');
+  styled(
+    tierResetBtn,
+    [
+      'background: transparent',
+      `color: ${WARN}`,
+      `border: 1px solid ${WARN}`,
+      'padding: 5px 12px',
+      'cursor: pointer',
+      'font-family: ui-monospace, monospace',
+      'font-size: 11px',
+      'letter-spacing: 0.14em',
+      'text-transform: uppercase',
+      'border-radius: 2px',
+      'transition: background 80ms ease, color 80ms ease, border-color 80ms ease',
+      'flex: 0 0 auto',
+    ].join(';'),
+  );
+  tierResetBtn.addEventListener('click', () => {
+    const state = getState();
+    const now = performance.now();
+    const r = canTierReset(state, now);
+    if (!r.ok) return;
+    const cost = tierResetCost(state.level);
+    const proceed = window.confirm(
+      'TIER RESET (§9.7)\n\n' +
+        `Cost: ${cost.steel} steel, ${cost.gear} gear\n\n` +
+        'Reverts this island to Tier 1.\n' +
+        'Clears: level, XP, skill points, specialization role, sub-path commitments.\n' +
+        'Preserves: buildings, inventory (minus cost), storage caps, modifiers.\n\n' +
+        'T2+ buildings remain placed but stall until the island re-climbs.\n' +
+        '24-hour cooldown before another reset on this island.\n\n' +
+        'Proceed?',
+    );
+    if (!proceed) {
+      tierResetBtn.blur();
+      return;
+    }
+    executeTierReset(state, now);
+    refresh();
+    tierResetBtn.blur();
+  });
+  tierResetBtn.addEventListener('mouseenter', () => {
+    if (tierResetBtn.style.cursor === 'pointer') {
+      tierResetBtn.style.background = 'rgba(245, 167, 66, 0.10)';
+    }
+  });
+  tierResetBtn.addEventListener('mouseleave', () => {
+    tierResetBtn.style.background = 'transparent';
+  });
+  tierResetRow.appendChild(tierResetLeft);
+  tierResetRow.appendChild(tierResetBtn);
+  specSection.appendChild(tierResetRow);
+
+  /** Repaint the Tier Reset row from current state. The row is always
+   *  visible inside the specialization section (so the player knows the
+   *  feature exists), but the button label + enabled-state reflect the
+   *  active gates: 'tier-too-low', 'cooldown-active' (with countdown),
+   *  'insufficient-resources' (with cost + held amounts), or enabled. */
+  function refreshTierReset(): void {
+    const state = getState();
+    const now = performance.now();
+    const cost = tierResetCost(state.level);
+    const r = canTierReset(state, now);
+    // Detail line always shows the cost so the player can see the cost
+    // grow as they level up. Append the cooldown remaining when relevant.
+    let detail = `cost: ${cost.steel} steel · ${cost.gear} gear`;
+    if (state.lastResetAt !== null) {
+      const elapsed = now - state.lastResetAt;
+      const remaining = TIER_RESET_COOLDOWN_MS - elapsed;
+      if (remaining > 0) {
+        const h = Math.floor(remaining / 3_600_000);
+        const m = Math.floor((remaining % 3_600_000) / 60_000);
+        detail += `  ·  cooldown: ${h}h ${m.toString().padStart(2, '0')}m`;
+      }
+    }
+    tierResetDetail.textContent = detail;
+    if (r.ok) {
+      tierResetBtn.textContent = '▼ RESET';
+      tierResetBtn.style.color = WARN;
+      tierResetBtn.style.borderColor = WARN;
+      tierResetBtn.style.cursor = 'pointer';
+      tierResetBtn.style.opacity = '1';
+    } else {
+      let label: string;
+      switch (r.reason) {
+        case 'tier-too-low':
+          label = 'LOCKED · T3+';
+          break;
+        case 'cooldown-active':
+          label = 'COOLDOWN';
+          break;
+        case 'insufficient-resources':
+          label = 'NEED STEEL+GEAR';
+          break;
+      }
+      tierResetBtn.textContent = label;
+      tierResetBtn.style.color = FG_MUTED;
+      tierResetBtn.style.borderColor = FG_MUTED;
+      tierResetBtn.style.cursor = 'not-allowed';
+      tierResetBtn.style.opacity = '0.6';
+    }
+  }
+
   panel.appendChild(header);
   panel.appendChild(specSection);
   panel.appendChild(body);
@@ -1125,6 +1287,8 @@ export function mountSkillTreeUi(
 
     // Specialization section refresh — caption status + per-card state.
     refreshSpecialization();
+    // §9.7 Tier Reset row — refreshes the cost / cooldown / enabled state.
+    refreshTierReset();
 
     for (const node of NODE_CATALOG) {
       const ref = nodeRefs.get(node.id);

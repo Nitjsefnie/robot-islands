@@ -364,6 +364,17 @@ export function deserializeWorld(
       'ascendantCoreCrafted' in s && typeof (s as { ascendantCoreCrafted?: unknown }).ascendantCoreCrafted === 'boolean'
         ? (s as { ascendantCoreCrafted: boolean }).ascendantCoreCrafted
         : false;
+    // Forward-compat backfill: §9.7 Tier Reset added `lastResetAt` to
+    // IslandState. Defaults to `null` (never reset) on legacy saves —
+    // the cooldown gate trivially passes, matching the player's pre-§9.7
+    // experience. Same SCHEMA_VERSION as ascendantCoreCrafted's backfill,
+    // for the same "no need to invalidate every save" reasoning.
+    const lastResetAt =
+      'lastResetAt' in s &&
+      (typeof (s as { lastResetAt?: unknown }).lastResetAt === 'number' ||
+        (s as { lastResetAt?: unknown }).lastResetAt === null)
+        ? (s as { lastResetAt: number | null }).lastResetAt
+        : null;
     const live: IslandState = {
       ...s,
       // Defensive inventory + storageCaps + funnelPending clones so the
@@ -374,6 +385,7 @@ export function deserializeWorld(
       unlockedNodes: new Set(s.unlockedNodes),
       subPathProgress: new Map(s.subPathProgress),
       ascendantCoreCrafted,
+      lastResetAt,
       // Remap lastTick from the saved performance.now() domain into the
       // current session's performance.now() domain. The save preserved
       // lastTick literally; we shift by the offline delta so the

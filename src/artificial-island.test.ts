@@ -79,6 +79,7 @@ function makeFounderState(
     declaredAt: null,
     aiCoreCrafted: false,
     ascendantCoreCrafted: false,
+    lastResetAt: null,
     lastTick: 0,
   };
 }

@@ -558,6 +558,9 @@ export function makeInitialIslandState(spec: IslandSpec, nowMs: number): IslandS
     // demo seeds this true manually on forest-ne alongside aiCoreCrafted.
     // Production-trigger flip on first ascendant_core DEFERRED.
     ascendantCoreCrafted: false,
+    // §9.7 Tier Reset cooldown anchor. Null on a fresh island — the player
+    // hasn't ever paid for a reset yet, so the 24h block doesn't apply.
+    lastResetAt: null,
     lastTick: nowMs,
   };
 }

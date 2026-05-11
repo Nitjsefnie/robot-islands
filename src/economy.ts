@@ -26,7 +26,12 @@
 
 import { computeBuffStack } from './adjacency.js';
 import { IDENTITY_MODIFIER_MULTIPLIERS, type ModifierMultipliers } from './biomes.js';
-import { BUILDING_DEFS, type BuildingDef, type BuildingDefId } from './building-defs.js';
+import {
+  BUILDING_DEFS,
+  buildingUnlocked,
+  type BuildingDef,
+  type BuildingDefId,
+} from './building-defs.js';
 import type { PlacedBuilding } from './buildings.js';
 import { nextPhaseBoundaryMs, solarMultiplier } from './daynight.js';
 import { resolveHeatAssignments, type HeatAssignments } from './heat.js';
@@ -135,6 +140,20 @@ export interface IslandState {
    *  second half of the gate (chicken-and-egg per §14.1) — see
    *  `buildingUnlocked`. */
   ascendantCoreCrafted: boolean;
+  /** Wall-clock timestamp (`performance.now()` domain, matching `lastTick`
+   *  and `declaredAt`) of the last §9.7 Tier Reset on this island, or null
+   *  if the island has never been reset. Drives the 24-hour cooldown gate
+   *  in `canTierReset`. Null on a fresh island; stamped by
+   *  `executeTierReset(state, nowMs)`.
+   *
+   *  TODO(persistence): `declaredAt` and now `lastResetAt` survive a save
+   *  / load verbatim — they're NOT perfShifted by `deserializeWorld`, so a
+   *  reload right after a reset puts `lastResetAt` in the previous session's
+   *  perf-domain. The cooldown math `nowMs - lastResetAt` is incorrect by
+   *  exactly the perfShift offset until the next reset. Same pre-existing
+   *  issue applies to `declaredAt`; leave both consistent until a future
+   *  pass perf-shifts both. */
+  lastResetAt: number | null;
   /** Wall-clock timestamp of the last advance, in milliseconds. */
   lastTick: number;
 }
@@ -348,6 +367,25 @@ export function computeRates(
   // Coal-source served counts drive a post-pass fuel-burn deduction folded
   // directly into `consumption.coal` / `net.coal`.
   const heat = resolveHeatAssignments(state.buildings);
+  // §9.7 Tier Reset runtime gate. A building whose tier exceeds the island's
+  // current tier band (e.g. a T2 building on a post-reset L1 island) is
+  // forced to baseRate = 0 in pass-1 and excluded from the pass-3 power
+  // balance — mirrors the requiresHeat gate. The gate composes the full
+  // `buildingUnlocked` predicate (level tier + AI-core / Ascendant-core /
+  // Spaceport flags) so T5 / T6 buildings keep their additional gates
+  // beyond plain tier. `hasSpaceport` is precomputed once because the
+  // pass-1 / pass-3 loops would otherwise scan `state.buildings` per
+  // building.
+  const hasSpaceport = state.buildings.some((b) => b.defId === 'spaceport');
+  function isBuildingActive(b: PlacedBuilding): boolean {
+    return buildingUnlocked(
+      state.level,
+      b.defId,
+      state.aiCoreCrafted,
+      state.ascendantCoreCrafted,
+      hasSpaceport,
+    );
+  }
   interface Tentative {
     readonly building: PlacedBuilding;
     readonly recipe: Recipe;
@@ -373,6 +411,13 @@ export function computeRates(
     // sees the same factor and producer/consumer supply ratios stay correct.
     // Returns 1.0 when the def has no `adjacencyBuffs` or no matches.
     const buffStack = computeBuffStack(b, state.buildings, defs);
+    // §9.7 Tier Reset runtime gate: a building above the island's current
+    // tier band is fully inactive — same shape as the heat / output stall,
+    // baseRate=0 + skipped in the pass-3 power balance.
+    if (!isBuildingActive(b)) {
+      tentative.push({ building: b, recipe, baseRate: 0, buffStack });
+      continue;
+    }
     // §5.2 heat gate: a `requiresHeat` building with no adjacent source
     // is fully stalled this tick — no production, no consumption, no power
     // draw. Recorded as a tentative entry with baseRate=0 so pass-3's
@@ -448,6 +493,12 @@ export function computeRates(
   let powerConsumed = 0;
   for (const b of state.buildings) {
     const def = defs[b.defId];
+    // §9.7 Tier Reset runtime gate: tier-gated buildings draw no power and
+    // produce no power on a below-tier island (mirrors heat-gate exclusion
+    // below). Without this, a post-reset T2 coal_gen would still push W
+    // into the balance and a T2 consumer that drew on its own input would
+    // still count as a load even though pass-1 zeroed its rate.
+    if (!isBuildingActive(b)) continue;
     // §5.2: heat-required consumer with no adjacent source is INACTIVE
     // (zero power draw). Checked before recipe lookup so the gate applies
     // even if the building's recipe is somehow undefined for the variant.

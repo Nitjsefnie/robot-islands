@@ -54,6 +54,7 @@ function makeIslandState(overrides: Partial<IslandState> & { id: string }): Isla
     declaredAt: overrides.declaredAt ?? null,
     aiCoreCrafted: overrides.aiCoreCrafted ?? false,
     ascendantCoreCrafted: overrides.ascendantCoreCrafted ?? false,
+    lastResetAt: overrides.lastResetAt ?? null,
     lastTick: overrides.lastTick ?? 0,
   };
 }

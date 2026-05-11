@@ -93,6 +93,7 @@ function makeState(over: Partial<IslandState> = {}): IslandState {
     declaredAt: null,
     aiCoreCrafted: false,
     ascendantCoreCrafted: false,
+    lastResetAt: null,
     lastTick: 0,
     ...over,
   };
@@ -929,6 +930,8 @@ describe('step-12 — T4 endgame production integration (§6.5)', () => {
       buildings: [PYROFORGE],
       inventory: { ...blankInventory(), steel: 100, helium_3: 20 },
       storageCaps: blankCaps(10000),
+      // Pyroforge is T4 — bypass the §9.7 tier-band runtime gate.
+      level: 30,
     });
     advanceIsland(state, 36_000_000, { defs: powerFreePyro });
     expect(state.inventory.exotic_alloy).toBeCloseTo(10, 6);
@@ -955,6 +958,11 @@ describe('step-12 — T4 endgame production integration (§6.5)', () => {
       buildings: [CRYO],
       inventory: { ...blankInventory(), steel: 100, quantum_chip: 20 },
       storageCaps: blankCaps(10000),
+      // T5 (cryogenic_compute_center) requires level ≥ 50 + aiCoreCrafted
+      // per §13.1 — satisfy both gates so the §9.7 tier-band runtime check
+      // doesn't zero the building.
+      level: 50,
+      aiCoreCrafted: true,
     });
     advanceIsland(state, 54_000_000, { defs: powerFreeCryo });
     expect(state.inventory.ai_core).toBeCloseTo(10, 6);
@@ -998,6 +1006,8 @@ describe('§5.2 — heat adjacency in computeRates/advanceIsland', () => {
         coal: 1000,
       },
       storageCaps: blankCaps(10_000),
+      // Blast Furnace is T2 — bypass the §9.7 tier-band runtime gate.
+      level: 5,
     });
     // 10 BF cycles = 4800s. Expected pig_iron = 10; iron_ingot/coke down by 10
     // each. Coal furnace burns (1 consumer × 1 coalPerCycle / 30s) × 4800s
@@ -1019,6 +1029,9 @@ describe('§5.2 — heat adjacency in computeRates/advanceIsland', () => {
         coke: 100,
       },
       storageCaps: blankCaps(10_000),
+      // Level 5 so the §9.7 tier-band runtime gate passes; the heat gate
+      // is the one that's expected to zero the BF here.
+      level: 5,
     });
     advanceIsland(state, 10_000_000, { defs: powerFreeBfCfCatalog() });
     // No pig_iron produced; inputs untouched.
@@ -1053,6 +1066,7 @@ describe('§5.2 — heat adjacency in computeRates/advanceIsland', () => {
         coal: 100, // intentionally low — verifies no coal is consumed
       },
       storageCaps: blankCaps(10_000),
+      level: 5, // T2 for Blast Furnace — bypass §9.7 tier-band runtime gate
     });
     advanceIsland(state, 4_800_000, { defs: cat });
     expect(state.inventory.pig_iron).toBeCloseTo(10, 6);
@@ -1072,6 +1086,7 @@ describe('§5.2 — heat adjacency in computeRates/advanceIsland', () => {
         coal: 1000,
       },
       storageCaps: blankCaps(10_000),
+      level: 5, // T2 for Blast Furnace — bypass §9.7 tier-band runtime gate
     });
     // 4800s integration. Each BF runs 10 cycles → 20 pig_iron total, 20
     // iron_ingot + 20 coke consumed. Coal furnace burns 2 × 1 / 30 × 4800
@@ -1081,6 +1096,118 @@ describe('§5.2 — heat adjacency in computeRates/advanceIsland', () => {
     expect(state.inventory.iron_ingot).toBeCloseTo(980, 6);
     expect(state.inventory.coke).toBeCloseTo(980, 6);
     expect(state.inventory.coal).toBeCloseTo(680, 6);
+  });
+});
+
+// -----------------------------------------------------------------------
+// §9.7 Tier Reset — runtime tier-band gate integration
+// -----------------------------------------------------------------------
+
+describe('§9.7 — tier-band runtime gate', () => {
+  it('a T2 building on a post-reset L1 island has effectiveRate=0 and produces no power', () => {
+    // Place a T2 Blast Furnace + supporting Coal Furnace + Mine + plenty of
+    // inputs. Verify the T2 BF stalls (and the T1 Coal Furnace doesn't power
+    // the test result independently). Mine is T1 so it still runs.
+    const BF: PlacedBuilding = { id: 'bf', defId: 'blast_furnace', x: 0, y: 0 };
+    const CF: PlacedBuilding = { id: 'cf', defId: 'coal_furnace', x: 3, y: 1 };
+    const PWR_FREE_BF: DefCatalog = ((): DefCatalog => {
+      const base = { ...BUILDING_DEFS } as Record<BuildingDefId, BuildingDef>;
+      const { power: _p, ...rest } = base.blast_furnace;
+      base.blast_furnace = rest as BuildingDef;
+      return base;
+    })();
+    const state = makeState({
+      buildings: [BF, CF],
+      inventory: {
+        ...blankInventory(),
+        iron_ingot: 1000,
+        coke: 1000,
+        coal: 1000,
+      },
+      storageCaps: blankCaps(10_000),
+      level: 1, // L1 ⇒ post-reset slate; the BF is T2-gated and stalled.
+    });
+    // Sanity: at L5+ the BF runs (covered in the §5.2 tests above). At L1
+    // it must not.
+    const rates = computeRates(state, { defs: PWR_FREE_BF });
+    const bfRate = rates.byBuilding.find((r) => r.building.id === 'bf');
+    expect(bfRate).toBeDefined();
+    expect(bfRate?.effectiveRate).toBe(0);
+    // No pig_iron over a 100s tick; inventory untouched apart from the
+    // mine-coal flow (no mine here, so coal stays at 1000).
+    advanceIsland(state, 100_000, { defs: PWR_FREE_BF });
+    expect(state.inventory.pig_iron).toBe(0);
+    expect(state.inventory.iron_ingot).toBe(1000);
+    expect(state.inventory.coke).toBe(1000);
+  });
+
+  it('post-reset: a T2 BF that ran at L15 stops producing on the next tick', async () => {
+    // End-to-end: build a T3 island with a Blast Furnace + Coal Furnace,
+    // run a slice of ticks at L15 (BF produces), call executeTierReset,
+    // then run another slice. BF must now be tier-gated to baseRate=0
+    // and inventory.pig_iron must not advance.
+    const { executeTierReset, tierResetCost } = await import('./tier-reset.js');
+    const BF: PlacedBuilding = { id: 'bf', defId: 'blast_furnace', x: 0, y: 0 };
+    const CF: PlacedBuilding = { id: 'cf', defId: 'coal_furnace', x: 3, y: 1 };
+    const PWR_FREE_BF: DefCatalog = ((): DefCatalog => {
+      const base = { ...BUILDING_DEFS } as Record<BuildingDefId, BuildingDef>;
+      const { power: _p, ...rest } = base.blast_furnace;
+      base.blast_furnace = rest as BuildingDef;
+      return base;
+    })();
+    const cost = tierResetCost(15);
+    const state = makeState({
+      buildings: [BF, CF],
+      inventory: {
+        ...blankInventory(),
+        iron_ingot: 1000,
+        coke: 1000,
+        coal: 1000,
+        // Fund the reset alongside the recipe inputs.
+        steel: cost.steel,
+        gear: cost.gear,
+      },
+      storageCaps: blankCaps(10_000),
+      level: 15,
+    });
+    advanceIsland(state, 4_800_000, { defs: PWR_FREE_BF });
+    // BF ran 10 cycles → 10 pig_iron produced pre-reset.
+    expect(state.inventory.pig_iron).toBeCloseTo(10, 6);
+    const pigIronBefore = state.inventory.pig_iron;
+    executeTierReset(state, state.lastTick);
+    expect(state.level).toBe(1); // T1 now
+    // Run another 4_800_000 ms — BF is T2-gated post-reset, must not produce.
+    advanceIsland(state, state.lastTick + 4_800_000, { defs: PWR_FREE_BF });
+    expect(state.inventory.pig_iron).toBeCloseTo(pigIronBefore, 6);
+  });
+
+  it('inventory is preserved across an executeTierReset call (cost-only deduction)', async () => {
+    const { executeTierReset, tierResetCost } = await import('./tier-reset.js');
+    const cost = tierResetCost(15);
+    const state = makeState({
+      level: 15,
+      inventory: {
+        ...blankInventory(),
+        // Fund the reset, plus extra of every interesting resource.
+        steel: cost.steel + 200,
+        gear: cost.gear + 100,
+        iron_ore: 500,
+        coal: 400,
+        bolt: 300,
+      },
+      storageCaps: blankCaps(10_000),
+      xp: 5_000,
+    });
+    executeTierReset(state, 1_000);
+    // Level/XP cleared.
+    expect(state.level).toBe(1);
+    expect(state.xp).toBe(0);
+    // Cost deducted; other resources preserved.
+    expect(state.inventory.steel).toBe(200);
+    expect(state.inventory.gear).toBe(100);
+    expect(state.inventory.iron_ore).toBe(500);
+    expect(state.inventory.coal).toBe(400);
+    expect(state.inventory.bolt).toBe(300);
   });
 });
 

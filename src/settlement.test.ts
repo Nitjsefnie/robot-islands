@@ -55,6 +55,7 @@ function makeIslandState(over: Partial<IslandState> = {}): IslandState {
     declaredAt: null,
     aiCoreCrafted: false,
     ascendantCoreCrafted: false,
+    lastResetAt: null,
     lastTick: 0,
     ...over,
   };

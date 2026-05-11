@@ -76,6 +76,7 @@ function makeIslandState(over: Partial<IslandState> = {}): IslandState {
     declaredAt: null,
     aiCoreCrafted: false,
     ascendantCoreCrafted: false,
+    lastResetAt: null,
     lastTick: 1000,
     ...over,
   };
@@ -631,6 +632,55 @@ describe('§11.7 tier-matched fuelResource persistence', () => {
     const { world: restored } = deserializeWorld(json, 0, 0);
     expect(restored.vehicles).toHaveLength(1);
     expect(restored.vehicles[0]!.fuelResource).toBe('biofuel');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// §9.7 Tier Reset — lastResetAt round-trip + legacy backfill
+// ---------------------------------------------------------------------------
+
+describe('§9.7 Tier Reset lastResetAt persistence', () => {
+  it('preserves a numeric lastResetAt through a round-trip', () => {
+    const world = makeInitialWorld(0);
+    const states = new Map<string, IslandState>([
+      [
+        'home',
+        makeIslandState({ id: 'home', lastResetAt: 12_345_678 }),
+      ],
+    ]);
+    const snap = serializeWorld(world, states, 0, 0);
+    const json = JSON.parse(JSON.stringify(snap)) as SaveSnapshot;
+    const { islandStates: restored } = deserializeWorld(json, 0, 0);
+    expect(restored.get('home')!.lastResetAt).toBe(12_345_678);
+  });
+
+  it('preserves null lastResetAt through a round-trip (fresh island)', () => {
+    const world = makeInitialWorld(0);
+    const states = new Map<string, IslandState>([
+      ['home', makeIslandState({ id: 'home', lastResetAt: null })],
+    ]);
+    const snap = serializeWorld(world, states, 0, 0);
+    const json = JSON.parse(JSON.stringify(snap)) as SaveSnapshot;
+    const { islandStates: restored } = deserializeWorld(json, 0, 0);
+    expect(restored.get('home')!.lastResetAt).toBe(null);
+  });
+
+  it('backfills lastResetAt to null on a legacy save without the field', () => {
+    // Hand-crafted legacy snapshot: build a normal one, then strip
+    // `lastResetAt` from each island-state entry before round-tripping.
+    const world = makeInitialWorld(0);
+    const states = new Map<string, IslandState>([
+      ['home', makeIslandState({ id: 'home', lastResetAt: 99_999 })],
+    ]);
+    const snap = serializeWorld(world, states, 0, 0);
+    // Strip lastResetAt from every island-state to simulate the pre-§9.7
+    // save shape.
+    const legacy = JSON.parse(JSON.stringify(snap)) as SaveSnapshot;
+    for (const entry of legacy.islandStates) {
+      delete (entry.state as { lastResetAt?: unknown }).lastResetAt;
+    }
+    const { islandStates: restored } = deserializeWorld(legacy, 0, 0);
+    expect(restored.get('home')!.lastResetAt).toBe(null);
   });
 });
 

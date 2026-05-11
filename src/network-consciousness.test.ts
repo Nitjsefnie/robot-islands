@@ -44,6 +44,7 @@ function makeState(id: string, level: number): IslandState {
     declaredAt: null,
     aiCoreCrafted: false,
     ascendantCoreCrafted: false,
+    lastResetAt: null,
   };
 }
 
