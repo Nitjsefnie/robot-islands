@@ -43,12 +43,29 @@ export type ResourceId =
   // ("2 Scrap = 1 Pig iron's worth of steel input") is DEFERRED — for step
   // 2.5 the resource exists only as the credit returned on demolition.
   | 'scrap'
+  // Step-18 T0 raws (§6.1 / §6.2). Added so every §7 recipe input has at
+  // least one producer in the catalog. Per-tile gating on extraction
+  // (Quarry → stone tile, Well → water tile, etc.) is DEFERRED — the
+  // step-18 producers run anywhere. See building-defs.ts for the matching
+  // §8.1 tile-requirement comment per def.
+  | 'stone'
+  | 'sand'
+  | 'fresh_water'
+  | 'saltwater'
+  | 'salt'
+  | 'crude_oil'
+  | 'natural_gas'
+  | 'quartz'
+  | 'hydrogen'
   // T1 refined
   | 'biofuel'
   | 'iron_ingot'
   | 'coke'
   | 'pig_iron'
   | 'bolt'
+  // Step-18 T1 refined (§6.2 / §7.3 / §7.4).
+  | 'lumber'
+  | 'glass'
   // T2 alloy / component
   | 'steel'
   | 'gear'
@@ -56,6 +73,18 @@ export type ResourceId =
   // Refined per-tier variants deferred. The kit is a single inventory item;
   // its decomposition into raw constituents on arrival (§12.4) is deferred.
   | 'foundation_kit'
+  // Step-18 T2 refined / petrochemical (§7.3).
+  | 'naphtha'
+  | 'chlorine'
+  | 'lubricant'
+  | 'diesel'
+  | 'wire'
+  // Step-18 T3 chemistry/electronics (§7.4 / §7.5).
+  | 'silicon'
+  | 'nitrogen'
+  | 'cryo_coolant'
+  | 'aviation_kerosene'
+  | 'microchip'
   // T4 endgame (§6.5)
   | 'helium_3'
   | 'cryogenic_hydrogen'
@@ -68,7 +97,17 @@ export type ResourceId =
   | 'reality_anchor'
   | 'plasma_charge'
   | 'eldritch_processor'
-  | 'phase_converter';
+  | 'phase_converter'
+  // Step-18 T5 raws (§6.6 / §8.10). Only the four raws CONSUMED by the
+  // step-18 T5 refining recipes are added: aetheric_current and
+  // tachyon_stream feed phase_converter; dark_matter and strange_matter
+  // feed eldritch_processor. The remaining §6.6 raws (spacetime_fragment,
+  // higgs_flux, quantum_foam, neutronium, zero-point_flux) are DEFERRED
+  // until they have an explicit consumer.
+  | 'aetheric_current'
+  | 'tachyon_stream'
+  | 'dark_matter'
+  | 'strange_matter';
 
 /** All known resources, useful for iterating to initialise inventories. */
 export const ALL_RESOURCES: ReadonlyArray<ResourceId> = [
@@ -77,14 +116,39 @@ export const ALL_RESOURCES: ReadonlyArray<ResourceId> = [
   'coal',
   // §6.7 — Scrap credited on building demolition.
   'scrap',
+  // Step-18 T0 raws.
+  'stone',
+  'sand',
+  'fresh_water',
+  'saltwater',
+  'salt',
+  'crude_oil',
+  'natural_gas',
+  'quartz',
+  'hydrogen',
   'biofuel',
   'iron_ingot',
   'coke',
   'pig_iron',
   'bolt',
+  // Step-18 T1 refined.
+  'lumber',
+  'glass',
   'steel',
   'gear',
   'foundation_kit',
+  // Step-18 T2 petrochemical / refined.
+  'naphtha',
+  'chlorine',
+  'lubricant',
+  'diesel',
+  'wire',
+  // Step-18 T3 chemistry / electronics.
+  'silicon',
+  'nitrogen',
+  'cryo_coolant',
+  'aviation_kerosene',
+  'microchip',
   'helium_3',
   'cryogenic_hydrogen',
   'quantum_chip',
@@ -96,6 +160,11 @@ export const ALL_RESOURCES: ReadonlyArray<ResourceId> = [
   'plasma_charge',
   'eldritch_processor',
   'phase_converter',
+  // Step-18 T5 raws (only those consumed by step-18 recipes).
+  'aetheric_current',
+  'tachyon_stream',
+  'dark_matter',
+  'strange_matter',
 ];
 
 /**
@@ -116,11 +185,24 @@ export const XP_WEIGHT: Readonly<Record<ResourceId, number>> = {
   coal: 1,
   // §6.7 — Scrap is a T1 dry-good per spec; weight 3 to match other T1 raws.
   scrap: 3,
+  // Step-18 T0 raws (§9.1 tier-1 weight).
+  stone: 1,
+  sand: 1,
+  fresh_water: 1,
+  saltwater: 1,
+  salt: 1,
+  crude_oil: 1,
+  natural_gas: 1,
+  quartz: 1,
+  hydrogen: 1,
   // T1 refined
   biofuel: 3,
   iron_ingot: 3,
   coke: 3,
   pig_iron: 3,
+  // Step-18 T1 refined.
+  lumber: 3,
+  glass: 3,
   // T2 alloy / component
   bolt: 10,
   steel: 10,
@@ -128,6 +210,18 @@ export const XP_WEIGHT: Readonly<Record<ResourceId, number>> = {
   // T1 composite (§12.3). xp_weight 10 — task brief assigns the kit the same
   // weight as T2 components since one kit represents a non-trivial assembly.
   foundation_kit: 10,
+  // Step-18 T2 petrochemical / refined.
+  naphtha: 10,
+  chlorine: 10,
+  lubricant: 10,
+  diesel: 10,
+  wire: 10,
+  // Step-18 T3 chemistry / electronics (§9.1 tier-3 weight = 30).
+  silicon: 30,
+  nitrogen: 30,
+  cryo_coolant: 30,
+  aviation_kerosene: 30,
+  microchip: 30,
   // T4 endgame (§6.5)
   helium_3: 100,
   cryogenic_hydrogen: 100,
@@ -140,6 +234,11 @@ export const XP_WEIGHT: Readonly<Record<ResourceId, number>> = {
   plasma_charge: 300,
   eldritch_processor: 300,
   phase_converter: 300,
+  // Step-18 T5 raws.
+  aetheric_current: 300,
+  tachyon_stream: 300,
+  dark_matter: 300,
+  strange_matter: 300,
 };
 
 /**
@@ -436,6 +535,279 @@ export const RECIPES: Partial<Record<RecipeId, Recipe>> = {
     cycleSec: 600,
     inputs: { exotic_alloy: 2, ai_core: 1, casimir_energy: 1 },
     outputs: { reality_anchor: 1 },
+    category: 'manufacturing',
+  },
+
+  // ---------------------------------------------------------------------------
+  // Step-18 recipe graph closure (§7.1-§7.12)
+  // ---------------------------------------------------------------------------
+  // The next block of recipes closes the resource graph: every resource
+  // referenced as a recipe INPUT must have at least one producer. Cycle
+  // times are placeholders chosen for "demonstrably tickable, not
+  // balanced" — a later pass will rebalance. Per-tile placement gates
+  // (Quarry → stone, Well → water, Pump Jack → oil_well) are DEFERRED
+  // per the step-18 brief: producers run anywhere inside an island.
+
+  // T1 extraction (§7.1 / §8.1 raws). All have empty `inputs` and a
+  // single-resource output — same shape as the existing Mine/Logger.
+  quarry: {
+    cycleSec: 6,
+    inputs: {},
+    outputs: { stone: 1 },
+    category: 'extraction',
+  },
+  sand_pit: {
+    cycleSec: 8,
+    inputs: {},
+    outputs: { sand: 1 },
+    category: 'extraction',
+  },
+  well: {
+    cycleSec: 3,
+    inputs: {},
+    outputs: { fresh_water: 1 },
+    category: 'extraction',
+  },
+  coastal_pump: {
+    cycleSec: 4,
+    inputs: {},
+    outputs: { saltwater: 1 },
+    category: 'extraction',
+  },
+  quartz_mine: {
+    cycleSec: 12,
+    inputs: {},
+    outputs: { quartz: 1 },
+    category: 'extraction',
+  },
+
+  // T1 manufacturing / chemistry — T0 raws → T1 refined.
+  lumber_mill: {
+    cycleSec: 8,
+    inputs: { wood: 1 },
+    outputs: { lumber: 1 },
+    category: 'manufacturing',
+  },
+  glassworks: {
+    cycleSec: 12,
+    inputs: { sand: 1 },
+    outputs: { glass: 1 },
+    category: 'manufacturing',
+    // §5.2 heat-source adjacency deferred — Glassworks runs without an
+    // adjacent Coal Furnace / Geothermal Vent.
+  },
+  evaporator: {
+    cycleSec: 15,
+    inputs: { saltwater: 1 },
+    outputs: { salt: 1 },
+    category: 'manufacturing',
+    // Orphan output: `salt` currently has no consumer in the catalog
+    // (§7.3 chlor-alkali variants deferred). Producer ships for chain
+    // completeness; consumer recipes deferred.
+  },
+  electrolyzer: {
+    cycleSec: 10,
+    inputs: { fresh_water: 1 },
+    outputs: { hydrogen: 1 },
+    category: 'chemistry',
+    // §6.2 byproduct `oxygen` deferred — Electrolyzer outputs hydrogen
+    // only until an oxygen consumer lands.
+  },
+  biofuel_plant: {
+    cycleSec: 15,
+    inputs: { wood: 2 },
+    outputs: { biofuel: 1 },
+    category: 'chemistry',
+    // §11.7 drone-fuel chain closure: biofuel was previously seeded but
+    // had no producer. Biofuel Plant is the canonical T1 producer.
+  },
+
+  // T2 extraction — petrochemical raws.
+  pump_jack: {
+    cycleSec: 12,
+    inputs: {},
+    outputs: { crude_oil: 1 },
+    category: 'extraction',
+    // §8.1 catalog: requires `oil_well` terrain tile. Tile gating
+    // DEFERRED — runs on any in-island tile.
+  },
+  gas_extractor: {
+    cycleSec: 12,
+    inputs: {},
+    outputs: { natural_gas: 1 },
+    category: 'extraction',
+    // Orphan output: no current consumer (§7.3 ammonia/syngas variants
+    // deferred). Producer ships so the resource isn't a permanent
+    // sink-without-source if a consumer recipe lands later.
+  },
+
+  // T2 petrochemical / refining — each split into its own building since
+  // the engine's 1:1 recipe-per-defId model doesn't support multi-recipe
+  // selection without infrastructure expansion. Per the step-18 brief:
+  // "the recipe-per-defId model is rigid. Simpler: add three refining
+  // buildings, each with one recipe — clean."
+  naphtha_cracker: {
+    cycleSec: 15,
+    inputs: { crude_oil: 1 },
+    outputs: { naphtha: 1 },
+    category: 'chemistry',
+  },
+  chlor_alkali_plant: {
+    cycleSec: 20,
+    inputs: { saltwater: 2 },
+    outputs: { chlorine: 1 },
+    category: 'chemistry',
+    // §7.3 chlor-alkali co-output: `sodium_hydroxide`. NaOH consumer
+    // recipes (soap, paper, etc.) DEFERRED → omitted from outputs to
+    // keep the resource list lean.
+  },
+  lubricant_refinery: {
+    cycleSec: 25,
+    inputs: { crude_oil: 1, chlorine: 1 },
+    outputs: { lubricant: 1 },
+    category: 'chemistry',
+    // §7.X TODO: lubricant feeds T4 maintenance per §4.7. T4
+    // maintenance system is DEFERRED — lubricant is a stockpile-only
+    // resource until §4.7 lands.
+  },
+  diesel_refinery: {
+    cycleSec: 30,
+    inputs: { crude_oil: 2, naphtha: 1 },
+    outputs: { diesel: 1 },
+    category: 'chemistry',
+    // §11.7 drone tier: diesel = T2 drone fuel. The drone fuel-tier
+    // selection isn't wired into drones.ts yet — diesel is a
+    // stockpile-only fuel until §11.7 lands.
+  },
+  metal_rolling_mill: {
+    cycleSec: 10,
+    inputs: { steel: 1 },
+    outputs: { wire: 1 },
+    category: 'manufacturing',
+    // §7.1 spec lists multiple Steel Mill outputs (wire, sheet_metal,
+    // pipe, beam). Step-18 ships wire only — wire is the input to the
+    // step-18 Lithography Lab → microchip recipe. sheet_metal, pipe,
+    // and beam DEFERRED until they have an explicit consumer.
+  },
+
+  // T3 chemistry / electronics.
+  silicon_crusher: {
+    cycleSec: 30,
+    inputs: { quartz: 1 },
+    outputs: { silicon: 1 },
+    category: 'smelting',
+    // §7.4: spec uses `silicon_wafer` as the lithography input, refined
+    // from `silicon`. Step-18 simplification: silicon feeds Lithography
+    // Lab directly; the wafer intermediate is DEFERRED.
+  },
+  air_separator: {
+    cycleSec: 30,
+    inputs: {},
+    outputs: { nitrogen: 1 },
+    category: 'chemistry',
+    // §7.5 byproducts (oxygen, argon) DEFERRED — Air Separator outputs
+    // nitrogen only until oxygen/argon consumers land.
+  },
+  cryo_lab: {
+    cycleSec: 60,
+    inputs: { hydrogen: 1, nitrogen: 1 },
+    outputs: { cryo_coolant: 1 },
+    category: 'chemistry',
+  },
+  cryo_compressor: {
+    cycleSec: 90,
+    inputs: { hydrogen: 1, cryo_coolant: 1 },
+    outputs: { cryogenic_hydrogen: 1 },
+    category: 'chemistry',
+    // T4 fuel chain closure: `cryogenic_hydrogen` was previously in the
+    // catalog with no producer. Cryo Compressor closes the producer side
+    // even though the T4 consumer (Fusion Core II / launch fuel)
+    // remains DEFERRED.
+  },
+  kerosene_refinery: {
+    cycleSec: 60,
+    inputs: { crude_oil: 3, hydrogen: 1 },
+    outputs: { aviation_kerosene: 1 },
+    category: 'chemistry',
+    // §11.7: aviation_kerosene = T3 drone fuel. Drone fuel-tier
+    // selection DEFERRED.
+  },
+  lithography_lab: {
+    cycleSec: 120,
+    inputs: { silicon: 1, wire: 1 },
+    outputs: { microchip: 1 },
+    category: 'electronics',
+    // §7.X TODO: microchip should feed circuit_board → processor →
+    // computing_module. Those intermediates DEFERRED — microchip is a
+    // stockpile-only output for step 18.
+  },
+  drilling_rig: {
+    cycleSec: 120,
+    inputs: {},
+    outputs: { helium_3: 1 },
+    category: 'extraction',
+    // §8.1: Drilling Rig spec calls for `helium_vent` / deep terrain
+    // tile. Tile gating DEFERRED — runs anywhere on T3+ islands.
+    // Closes the helium_3 producer gap: previously seeded as 50 on
+    // forest-ne but with no replenishment.
+  },
+
+  // ---------------------------------------------------------------------------
+  // T5 raw extractors (§8.10 / step-18 closure)
+  // ---------------------------------------------------------------------------
+  // §8.10 spec describes deterministic per-cycle output rotation across
+  // multiple raws ("deterministic given world seed + cycle index"). The
+  // step-18 simplification: each extractor outputs a single raw per
+  // cycle, with §8.10 rotation logic DEFERRED. Cycle times are at the
+  // §8.10 lower bound (600-720s); spec range is 30 min to a few hours.
+  // Power consumption per §8.10 is in the 60-100 kW range (very large).
+  aetheric_conduit: {
+    cycleSec: 600,
+    inputs: {},
+    outputs: { aetheric_current: 1 },
+    category: 'extraction',
+    // §8.10 rotation (aetheric_current OR quantum_foam) DEFERRED —
+    // quantum_foam has no consumer in step 18 anyway.
+  },
+  spacetime_resonator: {
+    cycleSec: 720,
+    inputs: {},
+    outputs: { tachyon_stream: 1 },
+    category: 'extraction',
+    // §8.10 rotation (tachyon_stream OR spacetime_fragment) DEFERRED —
+    // spacetime_fragment has no consumer in step 18.
+  },
+  eldritch_sieve: {
+    cycleSec: 720,
+    // Multi-output recipe: dark_matter + strange_matter per cycle.
+    // §8.10 rotation across {dark, strange, higgs_flux} DEFERRED;
+    // producing both in one cycle keeps the downstream Eldritch
+    // Refiner (1 dark + 1 strange → 1 eldritch_processor) tickable
+    // without needing the rotation engine.
+    inputs: {},
+    outputs: { dark_matter: 1, strange_matter: 1 },
+    category: 'extraction',
+  },
+
+  // T5 refining (§7.12 step-18 closure).
+  plasma_forge: {
+    cycleSec: 600,
+    inputs: { exotic_alloy: 1, casimir_energy: 1 },
+    outputs: { plasma_charge: 1 },
+    category: 'manufacturing',
+    // §11.7: plasma_charge = T5 propellant (drone fuel tier 5). Drone
+    // fuel-tier selection DEFERRED.
+  },
+  eldritch_refiner: {
+    cycleSec: 1200,
+    inputs: { dark_matter: 1, strange_matter: 1 },
+    outputs: { eldritch_processor: 1 },
+    category: 'manufacturing',
+  },
+  phase_refiner: {
+    cycleSec: 1200,
+    inputs: { aetheric_current: 1, tachyon_stream: 1 },
+    outputs: { phase_converter: 1 },
     category: 'manufacturing',
   },
 };

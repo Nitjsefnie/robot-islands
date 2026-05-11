@@ -106,7 +106,40 @@ export type BuildingDefId =
   | 'time_lock'
   | 'genesis_chamber'
   | 'universe_editor'
-  | 'lattice_node';
+  | 'lattice_node'
+  // Step-18 recipe-graph closure (§7.1-§7.12). One defId per recipe
+  // since the engine's 1:1 recipe-per-defId model doesn't support
+  // multi-recipe-per-building selection without infra changes.
+  | 'quarry'
+  | 'sand_pit'
+  | 'well'
+  | 'coastal_pump'
+  | 'quartz_mine'
+  | 'lumber_mill'
+  | 'glassworks'
+  | 'evaporator'
+  | 'electrolyzer'
+  | 'biofuel_plant'
+  | 'pump_jack'
+  | 'gas_extractor'
+  | 'naphtha_cracker'
+  | 'chlor_alkali_plant'
+  | 'lubricant_refinery'
+  | 'diesel_refinery'
+  | 'metal_rolling_mill'
+  | 'silicon_crusher'
+  | 'air_separator'
+  | 'cryo_lab'
+  | 'cryo_compressor'
+  | 'kerosene_refinery'
+  | 'lithography_lab'
+  | 'drilling_rig'
+  | 'aetheric_conduit'
+  | 'spacetime_resonator'
+  | 'eldritch_sieve'
+  | 'plasma_forge'
+  | 'eldritch_refiner'
+  | 'phase_refiner';
 
 /**
  * Per-kind static definition. Step 9 fills the fields needed by the
@@ -636,6 +669,375 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0x80f0c0, // mint-cyan
     stroke: 0x205040,
     power: { consumes: 800 },
+  },
+  // -------------------------------------------------------------------------
+  // Step-18 recipe-graph closure (§7.1-§7.12)
+  // -------------------------------------------------------------------------
+  // One defId per recipe. Step-18 prioritises COVERAGE (every recipe input
+  // has a producer) over balance — cycle times, power draws, and footprints
+  // are placeholders pending the rebalance pass. Tile gates from §8.1
+  // (Quarry → stone tile, Well → water tile, Pump Jack → oil_well, etc.)
+  // are DEFERRED — these buildings run on any in-island tile.
+
+  // T1 extraction (§8.1 raws).
+  quarry: {
+    id: 'quarry',
+    displayName: 'Quarry',
+    category: 'extraction',
+    tier: 1,
+    width: 2,
+    height: 2,
+    fill: 0xa8a094, // pale stone-grey
+    stroke: 0x403828,
+    power: { consumes: 30 },
+    // §8.1: requires `stone` tile. Tile gating DEFERRED.
+  },
+  sand_pit: {
+    id: 'sand_pit',
+    displayName: 'Sand Pit',
+    category: 'extraction',
+    tier: 1,
+    width: 2,
+    height: 2,
+    fill: 0xe0c878, // dune-tan
+    stroke: 0x6a5028,
+    power: { consumes: 20 },
+    // §8.1: requires `sand` tile. Tile gating DEFERRED.
+  },
+  well: {
+    id: 'well',
+    displayName: 'Well',
+    category: 'extraction',
+    tier: 1,
+    width: 1,
+    height: 1,
+    fill: 0x4a8ac0, // freshwater blue
+    stroke: 0x1a3a60,
+    power: { consumes: 10 },
+    // §8.1: requires `water` tile (freshwater). Tile gating DEFERRED.
+  },
+  coastal_pump: {
+    id: 'coastal_pump',
+    displayName: 'Coastal Pump',
+    category: 'extraction',
+    tier: 1,
+    width: 1,
+    height: 1,
+    fill: 0x2a7090, // brine-teal
+    stroke: 0x0a2030,
+    power: { consumes: 15 },
+    // §8.1 / §3.2: spec restricts to Coast biome / `water` tile.
+    // Biome+tile gating DEFERRED.
+  },
+  quartz_mine: {
+    id: 'quartz_mine',
+    displayName: 'Quartz Mine',
+    category: 'extraction',
+    tier: 1,
+    width: 2,
+    height: 2,
+    fill: 0xb0b8d0, // pale silica-grey
+    stroke: 0x484858,
+    power: { consumes: 30 },
+    // §8.1: spec calls for a `quartz` outcrop tile. Tile gating DEFERRED.
+  },
+
+  // T1 manufacturing / chemistry.
+  lumber_mill: {
+    id: 'lumber_mill',
+    displayName: 'Lumber Mill',
+    category: 'manufacturing',
+    tier: 1,
+    width: 2,
+    height: 2,
+    fill: 0x8a5a30, // sawn-wood ochre
+    stroke: 0x3a2010,
+    power: { consumes: 40 },
+  },
+  glassworks: {
+    id: 'glassworks',
+    displayName: 'Glassworks',
+    category: 'manufacturing',
+    tier: 1,
+    width: 2,
+    height: 2,
+    fill: 0xa8d0e0, // pane-cyan
+    stroke: 0x305060,
+    power: { consumes: 80 },
+    // §5.2: spec requires an adjacent heat source. Heat-adjacency system
+    // DEFERRED — Glassworks runs unconditionally given inputs + power.
+  },
+  evaporator: {
+    id: 'evaporator',
+    displayName: 'Evaporator',
+    category: 'manufacturing',
+    tier: 1,
+    width: 1,
+    height: 1,
+    fill: 0xf0e0a0, // salt-pan tan
+    stroke: 0x605030,
+    power: { consumes: 25 },
+  },
+  electrolyzer: {
+    id: 'electrolyzer',
+    displayName: 'Electrolyzer',
+    category: 'chemistry',
+    tier: 1,
+    width: 1,
+    height: 1,
+    fill: 0xa0c0e8, // electrolyte blue
+    stroke: 0x303a60,
+    power: { consumes: 100 },
+  },
+  biofuel_plant: {
+    id: 'biofuel_plant',
+    displayName: 'Biofuel Plant',
+    category: 'chemistry',
+    tier: 1,
+    width: 2,
+    height: 2,
+    fill: 0x408a30, // bioreactor green
+    stroke: 0x1a3a10,
+    power: { consumes: 60 },
+  },
+
+  // T2 extraction.
+  pump_jack: {
+    id: 'pump_jack',
+    displayName: 'Pump Jack',
+    category: 'extraction',
+    tier: 2,
+    width: 2,
+    height: 2,
+    fill: 0x2a1a14, // crude-oil black-brown
+    stroke: 0x080404,
+    power: { consumes: 80 },
+    // §8.1: requires `oil_well` terrain tile. Tile gating DEFERRED.
+  },
+  gas_extractor: {
+    id: 'gas_extractor',
+    displayName: 'Gas Extractor',
+    category: 'extraction',
+    tier: 2,
+    width: 2,
+    height: 2,
+    fill: 0x707a40, // sulfur-yellow-grey
+    stroke: 0x2a2810,
+    power: { consumes: 70 },
+    // §8.1: requires `gas_seep` terrain tile. Tile gating DEFERRED.
+  },
+
+  // T2 petrochemical / refining.
+  naphtha_cracker: {
+    id: 'naphtha_cracker',
+    displayName: 'Naphtha Cracker',
+    category: 'chemistry',
+    tier: 2,
+    width: 3,
+    height: 3,
+    fill: 0x6a4a20, // refinery brown
+    stroke: 0x2a1a08,
+    power: { consumes: 200 },
+  },
+  chlor_alkali_plant: {
+    id: 'chlor_alkali_plant',
+    displayName: 'Chlor-Alkali Plant',
+    category: 'chemistry',
+    tier: 2,
+    width: 2,
+    height: 2,
+    fill: 0x80d050, // chlorine-green
+    stroke: 0x305018,
+    power: { consumes: 150 },
+  },
+  lubricant_refinery: {
+    id: 'lubricant_refinery',
+    displayName: 'Lubricant Refinery',
+    category: 'chemistry',
+    tier: 2,
+    width: 2,
+    height: 2,
+    fill: 0x4a3018, // viscous-oil brown
+    stroke: 0x1a1008,
+    power: { consumes: 120 },
+  },
+  diesel_refinery: {
+    id: 'diesel_refinery',
+    displayName: 'Diesel Refinery',
+    category: 'chemistry',
+    tier: 2,
+    width: 2,
+    height: 2,
+    fill: 0x504030, // diesel-tan brown
+    stroke: 0x201810,
+    power: { consumes: 180 },
+  },
+  metal_rolling_mill: {
+    id: 'metal_rolling_mill',
+    displayName: 'Metal Rolling Mill',
+    category: 'manufacturing',
+    tier: 2,
+    width: 2,
+    height: 2,
+    fill: 0x8090a0, // steel-roll grey
+    stroke: 0x2a3848,
+    power: { consumes: 200 },
+  },
+
+  // T3 chemistry / electronics / extraction.
+  silicon_crusher: {
+    id: 'silicon_crusher',
+    displayName: 'Silicon Crusher',
+    category: 'smelting',
+    tier: 3,
+    width: 2,
+    height: 2,
+    fill: 0x686878, // metallic-silicon grey
+    stroke: 0x202028,
+    power: { consumes: 250 },
+  },
+  air_separator: {
+    id: 'air_separator',
+    displayName: 'Air Separator',
+    category: 'chemistry',
+    tier: 3,
+    width: 3,
+    height: 3,
+    fill: 0xc8e8f0, // pale-cyan condenser
+    stroke: 0x405058,
+    power: { consumes: 300 },
+  },
+  cryo_lab: {
+    id: 'cryo_lab',
+    displayName: 'Cryo Lab',
+    category: 'chemistry',
+    tier: 3,
+    width: 3,
+    height: 3,
+    fill: 0x80c0e8, // cryo-pale-blue
+    stroke: 0x204060,
+    power: { consumes: 400 },
+  },
+  cryo_compressor: {
+    id: 'cryo_compressor',
+    displayName: 'Cryo Compressor',
+    category: 'chemistry',
+    tier: 3,
+    width: 3,
+    height: 3,
+    fill: 0x6080b0, // compressed-fluid blue
+    stroke: 0x182840,
+    power: { consumes: 500 },
+  },
+  kerosene_refinery: {
+    id: 'kerosene_refinery',
+    displayName: 'Kerosene Refinery',
+    category: 'chemistry',
+    tier: 3,
+    width: 3,
+    height: 3,
+    fill: 0x9080a0, // aviation-fuel purple-grey
+    stroke: 0x302840,
+    power: { consumes: 350 },
+  },
+  lithography_lab: {
+    id: 'lithography_lab',
+    displayName: 'Lithography Lab',
+    category: 'electronics',
+    tier: 3,
+    width: 4,
+    height: 4,
+    fill: 0x40a0c0, // wafer-fab cyan
+    stroke: 0x103040,
+    power: { consumes: 600 },
+  },
+  drilling_rig: {
+    id: 'drilling_rig',
+    displayName: 'Drilling Rig',
+    category: 'extraction',
+    tier: 3,
+    width: 3,
+    height: 3,
+    fill: 0xa07050, // rig-rust brown
+    stroke: 0x401810,
+    power: { consumes: 400 },
+    // §8.1 catalog: spec calls for `helium_vent` / deep-extraction tile.
+    // Tile gating DEFERRED — the rig closes the helium_3 producer gap
+    // without a terrain prerequisite.
+  },
+
+  // T5 raw extractors (§8.10). Power draws are placeholder "60-100 kW"
+  // figures per §8.10 — these are the biggest power loads in the catalog
+  // and will brownout most networks until fed Casimir Taps / Singularity
+  // Batteries. Multi-output rotation across §6.6 raws DEFERRED.
+  aetheric_conduit: {
+    id: 'aetheric_conduit',
+    displayName: 'Aetheric Conduit',
+    category: 'special',
+    tier: 5,
+    width: 3,
+    height: 3,
+    fill: 0x80a0e0, // aetheric pale-blue
+    stroke: 0x203060,
+    power: { consumes: 60000 },
+  },
+  spacetime_resonator: {
+    id: 'spacetime_resonator',
+    displayName: 'Spacetime Resonator',
+    category: 'special',
+    tier: 5,
+    width: 3,
+    height: 3,
+    fill: 0xa080e0, // tachyon violet
+    stroke: 0x301040,
+    power: { consumes: 100000 },
+  },
+  eldritch_sieve: {
+    id: 'eldritch_sieve',
+    displayName: 'Eldritch Sieve',
+    category: 'special',
+    tier: 5,
+    width: 3,
+    height: 3,
+    fill: 0x402040, // dark-matter near-black
+    stroke: 0x100008,
+    power: { consumes: 80000 },
+  },
+
+  // T5 refining (§7.12). One def per refining recipe — same rationale
+  // as the T2 split.
+  plasma_forge: {
+    id: 'plasma_forge',
+    displayName: 'Plasma Forge',
+    category: 'manufacturing',
+    tier: 5,
+    width: 3,
+    height: 3,
+    fill: 0xe06030, // plasma-orange
+    stroke: 0x401008,
+    power: { consumes: 4000 },
+  },
+  eldritch_refiner: {
+    id: 'eldritch_refiner',
+    displayName: 'Eldritch Refiner',
+    category: 'manufacturing',
+    tier: 5,
+    width: 3,
+    height: 3,
+    fill: 0x603060, // eldritch-violet
+    stroke: 0x201020,
+    power: { consumes: 5000 },
+  },
+  phase_refiner: {
+    id: 'phase_refiner',
+    displayName: 'Phase Refiner',
+    category: 'manufacturing',
+    tier: 5,
+    width: 3,
+    height: 3,
+    fill: 0x4060a0, // phase-blue
+    stroke: 0x10204a,
+    power: { consumes: 5000 },
   },
 };
 

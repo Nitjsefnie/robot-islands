@@ -32,26 +32,20 @@ function emptyFunnel(): Record<ResourceId, number> {
   return f;
 }
 
+/** Uniform per-resource cap; iterates ALL_RESOURCES so this stays
+ *  in lockstep with new ResourceIds (step-18 expanded the catalog). */
+function blankCaps(amount: number): Record<ResourceId, number> {
+  const caps = {} as Record<ResourceId, number>;
+  for (const r of ALL_RESOURCES) caps[r] = amount;
+  return caps;
+}
+
 function makeIslandState(over: Partial<IslandState> = {}): IslandState {
   return {
     id: 'home',
     buildings: [],
     inventory: emptyInv(),
-    storageCaps: {
-      wood: 100, iron_ore: 100, coal: 100, biofuel: 100,
-      iron_ingot: 100, coke: 100, pig_iron: 100,
-      bolt: 100, steel: 100, gear: 100,
-      // Step-12 §12 settlement composite resource
-      foundation_kit: 100,
-      // Step-12 T4 resources
-      helium_3: 100, cryogenic_hydrogen: 100, quantum_chip: 100,
-      exotic_alloy: 100, ai_core: 100,
-      // Step-13 T5 resources (partial catalog per §6.6)
-      casimir_energy: 100, reality_anchor: 100, plasma_charge: 100,
-      eldritch_processor: 100, phase_converter: 100,
-      // §6.7 demolition byproduct (step 2.5 building interaction)
-      scrap: 100,
-    },
+    storageCaps: blankCaps(100),
     xp: 0,
     level: 1,
     unspentSkillPoints: 0,
