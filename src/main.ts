@@ -74,6 +74,7 @@ import {
 } from './world.js';
 import { mountDronesUi } from './drones-ui.js';
 import { tickDrones } from './drones.js';
+import { findNextMerge, performMerge } from './island-merge.js';
 import { makeIslandScreenPosResolver, mountRoutesUi } from './routes-ui.js';
 import { tickRoutes } from './routes.js';
 import { mountSettlementUi } from './settlement-ui.js';
@@ -149,6 +150,9 @@ async function main(): Promise<void> {
         minorRadius: s.minorRadius,
         discovered: s.discovered,
         populated: s.populated,
+        // §3.6: forward each constituent so merged islands' vision halo
+        // covers the union, not just the primary footprint.
+        extraEllipses: s.extraEllipses,
       })),
       halfSize,
     );
@@ -1103,6 +1107,29 @@ async function main(): Promise<void> {
         ncBuff: ncBuffFor(s),
         terrainAt: spec?.terrainAt,
       });
+    }
+    // §3.6 Island Joining: AFTER economy advances, walk pairs of populated
+    // islands for ellipse overlaps. At most ONE merge runs per tick — the
+    // pair with the largest combined tile count wins; remaining overlaps
+    // re-evaluate on the next tick once the merged identity has new geometry.
+    // Triggered most often by Land Reclamation Hub expanding an island into
+    // a neighbor; cheap when no overlaps exist (O(N²) per tick, N is small).
+    const merge = findNextMerge(worldState, islandStates);
+    if (merge) {
+      // Snapshot the active-island id BEFORE merge: if the active island is
+      // being absorbed, the UI needs to redirect to the absorber so the HUD
+      // doesn't read a deleted state on this very frame.
+      const absorbedId = merge.absorbed.id;
+      performMerge(worldState, islandStates, merge.absorber, merge.absorbed);
+      // Update the lookup tables: absorbed spec is gone, absorber's modifiers
+      // are unchanged (per §3.6, absorbed's modifiers are voided). Drop the
+      // absorbed entries.
+      islandSpecsById.delete(absorbedId);
+      modifierMulsById.delete(absorbedId);
+      if (activeIslandId === absorbedId) {
+        activeIslandId = merge.absorber.id;
+      }
+      rebuildWorldLayers();
     }
     // Drones tick AFTER economy so any biofuel changes from this frame
     // are visible to the dispatch UI on the same frame; drone returns

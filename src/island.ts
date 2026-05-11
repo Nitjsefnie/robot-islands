@@ -77,16 +77,60 @@ export function tileInscribedInEllipse(
   return true;
 }
 
+/** §3.6 extra-ellipse view consumed by `computeIslandTiles`. Each extra is
+ *  an axis-aligned ellipse offset from the island's primary centre — its
+ *  centre in island-local coords is `(offsetX, offsetY)`. */
+export interface ExtraEllipseDef {
+  readonly major: number;
+  readonly minor: number;
+  readonly offsetX: number;
+  readonly offsetY: number;
+}
+
+/** Like `tileInscribedInEllipse` but for an off-centre ellipse at
+ *  `(offsetX, offsetY)`. Internal helper for the §3.6 union test. */
+function tileInscribedInOffsetEllipse(
+  x: number,
+  y: number,
+  major: number,
+  minor: number,
+  offsetX: number,
+  offsetY: number,
+): boolean {
+  const a2 = major * major;
+  const b2 = minor * minor;
+  for (const [cx, cy] of [
+    [x, y],
+    [x + 1, y],
+    [x, y + 1],
+    [x + 1, y + 1],
+  ] as const) {
+    const dx = cx - offsetX;
+    const dy = cy - offsetY;
+    if ((dx * dx) / a2 + (dy * dy) / b2 >= 1) return false;
+  }
+  return true;
+}
+
 /**
  * Compute the set of tiles belonging to a circular/elliptical island centered
  * at the world origin. Result is in scan order (ascending y, then ascending x).
+ *
+ * §3.6: when `extras` is supplied, the result is the UNION of tiles inscribed
+ * in the primary ellipse (centred at 0,0) plus any tile inscribed in any
+ * extra (centred at its offset). Duplicates from constituents that share a
+ * tile are removed; the primary's terrain wins for shared tiles (the primary
+ * is scanned first). Single-ellipse callers pass `extras` undefined and see
+ * identical behaviour to the pre-§3.6 function.
  */
 export function computeIslandTiles(
   majorRadius: number,
   minorRadius: number,
   terrainAt: (x: number, y: number) => TerrainKind,
+  extras?: ReadonlyArray<ExtraEllipseDef>,
 ): Tile[] {
   const tiles: Tile[] = [];
+  const seen = new Set<string>();
   // Bounding box: a tile fully inside the ellipse must satisfy |x|, |x+1| < major
   // and |y|, |y+1| < minor. So x ∈ [-major, major-1] is a safe over-approximation.
   const xMin = -Math.ceil(majorRadius);
@@ -97,6 +141,25 @@ export function computeIslandTiles(
     for (let x = xMin; x <= xMax; x++) {
       if (tileInscribedInEllipse(x, y, majorRadius, minorRadius)) {
         tiles.push({ x, y, terrain: terrainAt(x, y) });
+        seen.add(`${x},${y}`);
+      }
+    }
+  }
+  if (extras && extras.length > 0) {
+    for (const e of extras) {
+      const exMin = Math.floor(e.offsetX - e.major);
+      const exMax = Math.ceil(e.offsetX + e.major);
+      const eyMin = Math.floor(e.offsetY - e.minor);
+      const eyMax = Math.ceil(e.offsetY + e.minor);
+      for (let y = eyMin; y <= eyMax; y++) {
+        for (let x = exMin; x <= exMax; x++) {
+          const key = `${x},${y}`;
+          if (seen.has(key)) continue;
+          if (tileInscribedInOffsetEllipse(x, y, e.major, e.minor, e.offsetX, e.offsetY)) {
+            tiles.push({ x, y, terrain: terrainAt(x, y) });
+            seen.add(key);
+          }
+        }
       }
     }
   }

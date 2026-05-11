@@ -144,6 +144,46 @@ export interface IslandSpec {
    *  biome-locked uniques per §9.5). For step 11 the flag is metadata only —
    *  no current consumer; reserved for step 12. Undefined ≡ false (natural). */
   readonly artificial?: boolean;
+  /** §3.6 island-joining: appended constituents accumulated when this island
+   *  has absorbed others. Each entry is a secondary ellipse rendered/queried
+   *  in addition to `majorRadius`/`minorRadius` (the primary at offset 0,0).
+   *  Single-ellipse islands have `undefined` or `[]` — every existing code
+   *  path treats those identically. Per §3.6 a tile is part of the island
+   *  iff it is inscribed inside ANY constituent (primary or extra). Merges
+   *  are permanent; the array only grows. `rotation` is carried for forward-
+   *  compat with §3.4 rotation (not yet wired) — always 0 for now. */
+  extraEllipses?: Array<{
+    readonly major: number;
+    readonly minor: number;
+    readonly rotation: number;
+    readonly offsetX: number;
+    readonly offsetY: number;
+  }>;
+}
+
+/** §3.6 constituent ellipse view — the primary ellipse re-expressed as the
+ *  same shape as an `extraEllipses` entry. Centralises the "primary at
+ *  (0,0), extras at their offsets" pattern that overlap / tile / hit-test
+ *  / vision code all share. */
+export interface ConstituentEllipse {
+  readonly major: number;
+  readonly minor: number;
+  readonly rotation: number;
+  readonly offsetX: number;
+  readonly offsetY: number;
+}
+
+/** Walk every constituent of `spec`: the primary at offset (0, 0), then any
+ *  `extraEllipses`. Returns a fresh array on each call (cheap — at most 1 +
+ *  extras.length entries). Pure. */
+export function islandConstituents(spec: IslandSpec): ConstituentEllipse[] {
+  const out: ConstituentEllipse[] = [
+    { major: spec.majorRadius, minor: spec.minorRadius, rotation: 0, offsetX: 0, offsetY: 0 },
+  ];
+  if (spec.extraEllipses) {
+    for (const e of spec.extraEllipses) out.push(e);
+  }
+  return out;
 }
 
 /** Convenience: world-tile coords → world-pixel coords. */
@@ -197,17 +237,36 @@ export function renameIsland(spec: IslandSpec, name: string): RenameIslandResult
 }
 
 /**
+ * Point-in-island hit-test. A point lies inside an island iff it lies inside
+ * ANY of the island's constituent ellipses (§3.6 union semantics). Pure.
+ *
+ * Each constituent is centred at `(spec.cx + offsetX, spec.cy + offsetY)`
+ * with semi-axes `(major, minor)`. The primary constituent has offset (0, 0).
+ */
+export function pointInIsland(spec: IslandSpec, wx: number, wy: number): boolean {
+  for (const c of islandConstituents(spec)) {
+    const dx = wx - (spec.cx + c.offsetX);
+    const dy = wy - (spec.cy + c.offsetY);
+    if ((dx * dx) / (c.major * c.major) + (dy * dy) / (c.minor * c.minor) <= 1) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
  * Point-in-ellipse hit-test for active-island selection. Returns the first
- * populated island whose ellipse covers `(wx, wy)` (in world-tile coords),
- * or null if the point lies outside every populated island. Fractional
- * coordinates accepted — the click pivots from screenToWorldTile, which
- * doesn't snap to integer tiles.
+ * populated island whose union-footprint covers `(wx, wy)` (in world-tile
+ * coords), or null if the point lies outside every populated island.
+ * Fractional coordinates accepted — the click pivots from screenToWorldTile,
+ * which doesn't snap to integer tiles.
  *
  * Iterates only `populated` islands (active-island switching is the player
  * picking which colony to focus on; discovered-only islands have no state
  * and can't be active). First match wins, so overlapping populated islands
  * would pick the one earlier in the spec array — but per §3 islands are
- * spaced so this case doesn't arise.
+ * spaced so this case doesn't arise in practice (and after §3.6 merges,
+ * the surviving identity carries all overlapping constituents).
  */
 export function findPopulatedIslandAt(
   wx: number,
@@ -216,27 +275,114 @@ export function findPopulatedIslandAt(
 ): IslandSpec | null {
   for (const s of islands) {
     if (!s.populated) continue;
-    const dx = wx - s.cx;
-    const dy = wy - s.cy;
-    const a = s.majorRadius;
-    const b = s.minorRadius;
-    if ((dx * dx) / (a * a) + (dy * dy) / (b * b) <= 1) return s;
+    if (pointInIsland(s, wx, wy)) return s;
   }
   return null;
 }
 
 /**
+ * §3.6 ellipse-overlap test. Two islands overlap iff ANY pair of their
+ * constituent ellipses overlap. For each pair `(cA, cB)` we use the
+ * "sum of semi-axes" axis-aligned ellipse test:
+ *
+ *   `(dx²/(aA+aB)²) + (dy²/(bA+bB)²) ≤ 1`
+ *
+ * where `(dx, dy)` is the offset between the two constituent world centres.
+ * This is exact for axis-aligned ellipses (it tests whether the centre of
+ * one lies inside the Minkowski-sum ellipse of the two) and a conservative
+ * over-approximation for rotated ellipses — but island rotation is not yet
+ * wired (§3.4 placeholder), so axis-aligned is the realistic shape.
+ *
+ * Pure. Returns `true` on tangent contact (≤, not <).
+ */
+export function islandsOverlap(a: IslandSpec, b: IslandSpec): boolean {
+  const ac = islandConstituents(a);
+  const bc = islandConstituents(b);
+  for (const ca of ac) {
+    const ax = a.cx + ca.offsetX;
+    const ay = a.cy + ca.offsetY;
+    for (const cb of bc) {
+      const bx = b.cx + cb.offsetX;
+      const by = b.cy + cb.offsetY;
+      const dx = ax - bx;
+      const dy = ay - by;
+      const sumA = ca.major + cb.major;
+      const sumB = ca.minor + cb.minor;
+      if ((dx * dx) / (sumA * sumA) + (dy * dy) / (sumB * sumB) <= 1) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+/**
+ * §3.6 total tile count across all constituents, deduplicated for tiles
+ * shared by overlapping constituents (a tile counts once regardless of how
+ * many constituents inscribe it). Pure.
+ *
+ * Used by `chooseMergeAbsorber` to decide which island is "larger" at the
+ * moment of merge, and by `findNextMerge` to order multi-pair merges by
+ * combined tile count.
+ */
+export function islandTileCount(spec: IslandSpec): number {
+  const seen = new Set<string>();
+  for (const c of islandConstituents(spec)) {
+    // Bounding box for this constituent in island-local coords.
+    const xMin = Math.floor(c.offsetX - c.major);
+    const xMax = Math.ceil(c.offsetX + c.major);
+    const yMin = Math.floor(c.offsetY - c.minor);
+    const yMax = Math.ceil(c.offsetY + c.minor);
+    const a2 = c.major * c.major;
+    const b2 = c.minor * c.minor;
+    for (let y = yMin; y <= yMax; y++) {
+      for (let x = xMin; x <= xMax; x++) {
+        // Inscribed test: all four corners of the unit square strictly
+        // inside the constituent ellipse (centered at offsetX, offsetY).
+        let inside = true;
+        for (const [cx, cy] of [
+          [x, y],
+          [x + 1, y],
+          [x, y + 1],
+          [x + 1, y + 1],
+        ] as const) {
+          const dx = cx - c.offsetX;
+          const dy = cy - c.offsetY;
+          if ((dx * dx) / a2 + (dy * dy) / b2 >= 1) {
+            inside = false;
+            break;
+          }
+        }
+        if (inside) seen.add(`${x},${y}`);
+      }
+    }
+  }
+  return seen.size;
+}
+
+/**
  * World-axis-aligned vision ellipse for a populated source island. Centered
- * at `(p.cx, p.cy)` with semi-axes
- * `(p.majorRadius + VISION_PADDING_TILES, p.minorRadius + VISION_PADDING_TILES)`.
- * A test point `(px, py)` is in vision iff
- * `((px-p.cx)²)/a² + ((py-p.cy)²)/b² ≤ 1`.
+ * at each constituent's world centre with semi-axes
+ * `(constituent.major + VISION_PADDING_TILES, constituent.minor + VISION_PADDING_TILES)`.
+ *
+ * For a single-ellipse island this collapses to a single padded ellipse
+ * around `(p.cx, p.cy)` — identical to the pre-§3.6 behaviour. For a merged
+ * island, vision is the UNION of one padded ellipse per constituent (§3.6:
+ * "the union of all constituent ellipses"). A point is in vision iff it
+ * lies inside ANY padded constituent.
  *
  * Boundary is inclusive to match the test convention from the legacy fixed-
  * radius vision function.
+ *
+ * Accepts a `Pick` shape rather than the full `IslandSpec` so test callers
+ * can pass plain ellipse fixtures; if `extraEllipses` is present (the field
+ * lives on `IslandSpec` but isn't part of the minimal `Pick`), each extra
+ * contributes its own padded ellipse to the union.
  */
 export function pointInVisionEllipse(
-  p: Pick<IslandSpec, 'cx' | 'cy' | 'majorRadius' | 'minorRadius'>,
+  p: Pick<IslandSpec, 'cx' | 'cy' | 'majorRadius' | 'minorRadius'> & {
+    readonly extraEllipses?: IslandSpec['extraEllipses'];
+  },
   px: number,
   py: number,
 ): boolean {
@@ -244,7 +390,17 @@ export function pointInVisionEllipse(
   const b = p.minorRadius + VISION_PADDING_TILES;
   const dx = px - p.cx;
   const dy = py - p.cy;
-  return (dx * dx) / (a * a) + (dy * dy) / (b * b) <= 1;
+  if ((dx * dx) / (a * a) + (dy * dy) / (b * b) <= 1) return true;
+  if (p.extraEllipses) {
+    for (const e of p.extraEllipses) {
+      const ea = e.major + VISION_PADDING_TILES;
+      const eb = e.minor + VISION_PADDING_TILES;
+      const edx = px - (p.cx + e.offsetX);
+      const edy = py - (p.cy + e.offsetY);
+      if ((edx * edx) / (ea * ea) + (edy * edy) / (eb * eb) <= 1) return true;
+    }
+  }
+  return false;
 }
 
 /**
@@ -265,7 +421,11 @@ export function pointInVisionEllipse(
  */
 export function islandRenderState(
   spec: IslandSpec,
-  populated: ReadonlyArray<Pick<IslandSpec, 'cx' | 'cy' | 'majorRadius' | 'minorRadius'>>,
+  populated: ReadonlyArray<
+    Pick<IslandSpec, 'cx' | 'cy' | 'majorRadius' | 'minorRadius'> & {
+      readonly extraEllipses?: IslandSpec['extraEllipses'];
+    }
+  >,
 ): IslandRenderState {
   if (spec.populated) return 'visible';
   if (!spec.discovered) return 'unknown';
@@ -298,10 +458,13 @@ export function renderIsland(spec: IslandSpec, state: IslandRenderState = 'visib
   if (state === 'unknown') return null;
   const c = new Container();
   c.label = `island:${spec.id}:${state}`;
+  // §3.6: merged islands span multiple constituents — pass `extraEllipses` so
+  // the renderer covers the union, not just the primary ellipse.
   const tiles: Tile[] = computeIslandTiles(
     spec.majorRadius,
     spec.minorRadius,
     spec.terrainAt ?? (() => 'grass'),
+    spec.extraEllipses,
   );
   c.addChild(renderIslandTiles(tiles));
   if (spec.buildings.length > 0) c.addChild(renderBuildings(spec.buildings));

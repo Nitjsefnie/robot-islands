@@ -51,6 +51,16 @@ export interface OceanIsland {
   readonly discovered: boolean;
   /** Whether the island is populated (origin of vision). */
   readonly populated: boolean;
+  /** §3.6: extra constituent ellipses accumulated from prior merges. The
+   *  renderer emits one vision sprite per constituent (primary + each extra)
+   *  so merged islands' vision halo covers the union footprint. Undefined
+   *  on single-ellipse islands — pre-merge behaviour is unchanged. */
+  readonly extraEllipses?: ReadonlyArray<{
+    readonly major: number;
+    readonly minor: number;
+    readonly offsetX: number;
+    readonly offsetY: number;
+  }>;
 }
 
 /** Width of the soft fade band at the rim, in pixels. The inner
@@ -203,13 +213,16 @@ export function renderOcean(
     );
   }
 
-  // Tier A — vision sprites. One per populated island. Each is shaped as an
-  // axis-aligned ellipse with semi-axes
-  // `(majorRadius + VISION_PADDING_TILES, minorRadius + VISION_PADDING_TILES)`
+  // Tier A — vision sprites. One per populated island AND one per
+  // §3.6 extra constituent. Each is shaped as an axis-aligned ellipse with
+  // semi-axes `(major + VISION_PADDING_TILES, minor + VISION_PADDING_TILES)`
   // so the halo hugs the island's own footprint instead of always being a
   // fixed-radius circle. Circular biomes (e.g. Plains 14×14 → 64×64) stay
   // visually circular; oval Coast (14×7 → 64×57) renders as a clearly
-  // oval halo.
+  // oval halo. Merged islands stack one sprite per constituent — overpaint
+  // in overlapping regions is harmless (sprites composite via the soft
+  // edge fade) and yields the union vision area without computing the
+  // union silhouette explicitly.
   for (const isl of islands) {
     if (!isl.populated) continue;
     const vMajorTiles = isl.majorRadius + VISION_PADDING_TILES;
@@ -223,6 +236,19 @@ export function renderOcean(
         VISION_BLUE,
       ),
     );
+    if (isl.extraEllipses) {
+      for (const e of isl.extraEllipses) {
+        layer.addChild(
+          makeEllipseGradientSprite(
+            isl.cx + e.offsetX,
+            isl.cy + e.offsetY,
+            e.major + VISION_PADDING_TILES,
+            e.minor + VISION_PADDING_TILES,
+            VISION_BLUE,
+          ),
+        );
+      }
+    }
   }
 
   return layer;

@@ -289,6 +289,41 @@ describe('serialize → JSON → deserialize round-trip', () => {
     const rState = restoredStates.get('home')!;
     expect(rState.buildings).toBe(rSpec.buildings);
   });
+
+  it('round-trips §3.6 merged-island extraEllipses geometry', () => {
+    // A merged island carries one or more `extraEllipses` entries beyond
+    // its primary. Serializing → JSON → deserializing should preserve every
+    // entry verbatim so a reloaded session sees the same union footprint.
+    const world = makeInitialWorld(0);
+    const home = world.islands.find((s) => s.id === 'home')!;
+    home.extraEllipses = [
+      { major: 5, minor: 5, rotation: 0, offsetX: 20, offsetY: -3 },
+      { major: 7, minor: 4, rotation: 0, offsetX: -15, offsetY: 12 },
+    ];
+    const snap = serializeWorld(world, new Map(), 0);
+    const json = JSON.parse(JSON.stringify(snap)) as SaveSnapshot;
+    const { world: restored } = deserializeWorld(json, 0, 0);
+    const rHome = restored.islands.find((s) => s.id === 'home')!;
+    expect(rHome.extraEllipses).toEqual([
+      { major: 5, minor: 5, rotation: 0, offsetX: 20, offsetY: -3 },
+      { major: 7, minor: 4, rotation: 0, offsetX: -15, offsetY: 12 },
+    ]);
+  });
+
+  it('preserves single-ellipse islands (no extras) — extraEllipses stays undefined', () => {
+    // Round-trip an unmodified demo world. Specs that never had an
+    // extraEllipses field should remain field-free (no spurious []).
+    const world = makeInitialWorld(0);
+    const snap = serializeWorld(world, new Map(), 0);
+    const json = JSON.parse(JSON.stringify(snap)) as SaveSnapshot;
+    const { world: restored } = deserializeWorld(json, 0, 0);
+    for (const s of restored.islands) {
+      // Either undefined OR an empty array is fine — both behave identically
+      // via `islandConstituents`. The contract is "no surprise data".
+      const e = s.extraEllipses;
+      expect(e === undefined || (Array.isArray(e) && e.length === 0)).toBe(true);
+    }
+  });
 });
 
 // ---------------------------------------------------------------------------
