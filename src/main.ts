@@ -541,20 +541,23 @@ async function main(): Promise<void> {
     : new Map<string, IslandState>();
   const homeSpec = worldState.islands.find((s) => s.id === 'home');
   if (!homeSpec) throw new Error('main: home island missing from worldState');
-  // Fresh-game path: build per-island state from each populated spec, then
-  // apply the forest-ne T5 demo seed. Restored saves skip this entirely —
-  // whatever the player had at last save is the source of truth, and the
-  // demo seed must NOT re-fire on every load (would erase progress).
+  // Fresh-game path: build per-island state from each populated spec. The
+  // forest-ne T5 demo seed below is now a no-op in production (forest-ne
+  // is no longer auto-populated per §3.7) but kept guarded by
+  // `if (forestNe)` so it can still apply if a test or dev path manually
+  // populates forest-ne via DEMO_ISLANDS_TEST_FIXTURE. Restored saves
+  // skip this entirely — whatever the player had at last save is the
+  // source of truth, and the demo seed must NOT re-fire on every load
+  // (would erase progress).
   if (!restored) {
     const homeState = makeInitialIslandState(homeSpec, performance.now());
     islandStates.set('home', homeState);
-    // Step-12 demo seed: foundation_kit + biofuel for settlement-vehicle
-    // dispatch. startingInventory now seeds biofuel:100 and foundation_kit:3
-    // (rebalanced step #19), so these overrides are kept for clarity but are
-    // now redundant with the base seed. New colonies arriving via settlement
-    // vehicles START EMPTY (no kit/biofuel seed).
-    homeState.inventory.foundation_kit = 3;
-    homeState.inventory.biofuel = 100;
+    // §3.7 starter contract: home starts with EMPTY inventory. The pre-
+    // §3.7-cleanup path overrode `foundation_kit = 3` / `biofuel = 100`
+    // here on every fresh game — that's now removed so the production
+    // start matches §3.7 ("no starter resources, no Foundation Kit").
+    // New colonies arriving via settlement vehicles likewise START EMPTY
+    // (no kit/biofuel seed).
     for (const spec of worldState.islands) {
       if (spec.id === 'home') continue;
       if (!spec.populated) continue;

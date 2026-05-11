@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 import { BIOME_DEFS } from './biomes.js';
 import { generateWorld } from './world-gen.js';
-import { DEMO_ISLANDS, makeInitialWorld, type Biome } from './world.js';
+import { DEMO_ISLANDS_TEST_FIXTURE, makeInitialWorld, type Biome } from './world.js';
 
 const ALL_BIOMES: ReadonlyArray<Biome> = [
   'plains',
@@ -193,49 +193,66 @@ describe('generateWorld', () => {
 });
 
 describe('makeInitialWorld + procedural integration', () => {
-  it('keeps all hand-placed demo islands present', () => {
+  it('keeps the home island present and at world origin', () => {
+    // §3.7 cleanup: pre-cleanup this test asserted every hand-placed demo
+    // island (forest-ne, desert-far, hidden-w/s, coast-unknown) was
+    // present. The production new-game world now seeds only home —
+    // demo neighbours are retained for tests as
+    // DEMO_ISLANDS_TEST_FIXTURE but are NOT auto-seeded into
+    // makeInitialWorld. We assert only on home here.
     const w = makeInitialWorld(0);
-    for (const demo of DEMO_ISLANDS) {
-      const found = w.islands.find((s) => s.id === demo.id);
-      expect(found, `demo ${demo.id} missing from initial world`).toBeDefined();
-      // Position is preserved exactly.
-      expect(found!.cx).toBe(demo.cx);
-      expect(found!.cy).toBe(demo.cy);
-    }
+    const home = w.islands.find((s) => s.id === 'home');
+    expect(home, 'home island missing from initial world').toBeDefined();
+    expect(home!.cx).toBe(0);
+    expect(home!.cy).toBe(0);
   });
 
-  it('appends procedural islands beyond the demo set', () => {
+  it('appends procedural islands beyond the single home seed', () => {
     const w = makeInitialWorld(0);
-    expect(w.islands.length).toBeGreaterThan(DEMO_ISLANDS.length);
+    expect(w.islands.length).toBeGreaterThan(1);
   });
 
-  it('no procedural island overlaps a hand-placed demo island', () => {
+  it('no procedural island overlaps the home island', () => {
     const w = makeInitialWorld(0);
-    const demos = w.islands.filter((s) => DEMO_ISLANDS.some((d) => d.id === s.id));
-    const generated = w.islands.filter((s) => !DEMO_ISLANDS.some((d) => d.id === s.id));
+    const home = w.islands.find((s) => s.id === 'home')!;
+    const generated = w.islands.filter((s) => s.id !== 'home');
     for (const g of generated) {
-      for (const d of demos) {
-        const dx = g.cx - d.cx;
-        const dy = g.cy - d.cy;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        const minGap =
-          Math.max(g.majorRadius, g.minorRadius) +
-          Math.max(d.majorRadius, d.minorRadius);
-        expect(
-          dist,
-          `procedural ${g.id} overlaps demo ${d.id} (dist ${dist.toFixed(1)} vs min ${minGap})`,
-        ).toBeGreaterThanOrEqual(minGap);
-      }
+      const dx = g.cx - home.cx;
+      const dy = g.cy - home.cy;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const minGap =
+        Math.max(g.majorRadius, g.minorRadius) +
+        Math.max(home.majorRadius, home.minorRadius);
+      expect(
+        dist,
+        `procedural ${g.id} overlaps home (dist ${dist.toFixed(1)} vs min ${minGap})`,
+      ).toBeGreaterThanOrEqual(minGap);
     }
   });
 
   it('procedural islands all start unpopulated and undiscovered', () => {
     const w = makeInitialWorld(0);
-    const generated = w.islands.filter((s) => !DEMO_ISLANDS.some((d) => d.id === s.id));
+    const generated = w.islands.filter((s) => s.id !== 'home');
     expect(generated.length).toBeGreaterThan(0);
     for (const g of generated) {
       expect(g.populated).toBe(false);
       expect(g.discovered).toBe(false);
     }
+  });
+
+  it('exposes the DEMO_ISLANDS_TEST_FIXTURE for tests that need a known multi-island layout', () => {
+    // Smoke test — the fixture must still carry the six canonical demos
+    // (home, forest-ne, desert-far, coast-unknown, hidden-w, hidden-s)
+    // so the world.test.ts "matches the demo layout" case and any other
+    // fixture consumer keeps working. NOT used by makeInitialWorld.
+    const ids = DEMO_ISLANDS_TEST_FIXTURE.map((s) => s.id);
+    expect(ids).toEqual([
+      'home',
+      'forest-ne',
+      'desert-far',
+      'coast-unknown',
+      'hidden-w',
+      'hidden-s',
+    ]);
   });
 });

@@ -26,7 +26,7 @@ import type { ModifierId } from './biomes.js';
 import { terrainAtForBiome } from './biomes.js';
 import { BUILDING_DEFS } from './building-defs.js';
 import type { PlacedBuilding } from './buildings.js';
-import { HOME_ISLAND_BUILDINGS, renderBuildings } from './buildings.js';
+import { renderBuildings } from './buildings.js';
 import { islandCells } from './discovery.js';
 import type { IslandState } from './economy.js';
 import type { Tile, TerrainKind } from './island.js';
@@ -467,9 +467,56 @@ export function renderIsland(spec: IslandSpec, state: IslandRenderState = 'visib
 }
 
 /**
- * Hand-placed demo islands, laid out so the default view shows all three
- * render states AND has a reachable undiscovered island for the step-6 drone
- * demo:
+ * §3.7 — Fresh new-game home spec factory. Returns a populated home island
+ * with EMPTY buildings and the canonical Plains/r=14/Stable starting layout:
+ *
+ *   - biome: 'plains'
+ *   - majorRadius/minorRadius: 14
+ *   - populated: true, discovered: true
+ *   - buildings: [] (no pre-placed buildings per §3.7)
+ *   - modifiers: ['stable'] (no other modifiers per §3.7)
+ *
+ * Factory rather than const so each call mints a fresh mutable `buildings`
+ * array — `makeInitialWorld` and tests that need a home spec both go
+ * through this one path so the §3.7 contract has a single source of truth.
+ */
+function makeHomeIslandSpec(): IslandSpec {
+  return {
+    id: 'home',
+    name: 'home',
+    biome: 'plains',
+    cx: 0,
+    cy: 0,
+    majorRadius: 14,
+    minorRadius: 14,
+    populated: true,
+    discovered: true,
+    // §3.7 starter placeholder: empty buildings — the player must place
+    // their first Solar Panel, Mine, etc. via the placement UI. The
+    // previous demo seeded a dozen buildings (Solar/Workshop/Mines/
+    // Dronepad/Smelter/Silo/Antenna/etc.) as a bootstrap shortcut; that
+    // bypassed the §3.7 "no pre-placed buildings" contract.
+    buildings: [],
+    // Home preserves its hand-placed terrain map exactly — terrainAtForBiome
+    // delegates to defaultTerrainAtHome for islandId === 'home' (so the
+    // ore/coal/water tiles the player will Mine on still exist).
+    terrainAt: (x, y) => terrainAtForBiome('plains', 'home', x, y),
+    // §3.7: Stable trait by default, no other modifiers.
+    modifiers: ['stable'],
+  };
+}
+
+/**
+ * Hand-placed demo islands — RETAINED FOR TESTS ONLY. Pre-§3.7-cleanup,
+ * this array was the production seed for `makeInitialWorld` and shipped
+ * a heavily pre-built home plus five hand-placed neighbours (forest-ne,
+ * desert-far, coast-unknown, hidden-w, hidden-s). That bypassed §3.7's
+ * "one populated home island, empty buildings, empty inventory" contract.
+ *
+ * It now serves exclusively as a test fixture for code that needs a
+ * known multi-island world layout (e.g. `world.test.ts` "matches the
+ * demo layout", `world-gen.test.ts` overlap-avoidance checks). The
+ * production `makeInitialWorld` no longer reads it.
  *
  *   - home plains (0, 0) populated                            → 'visible'  (state a)
  *   - forest-ne (40, -10) discovered, dist≈41 < 80 (vision)   → 'visible'  (state a, via vision)
@@ -477,20 +524,8 @@ export function renderIsland(spec: IslandSpec, state: IslandRenderState = 'visib
  *   - coast-unknown (180, 0) !discovered                      → 'unknown'  (out of step-6 drone range)
  *   - hidden-w (-50, 12) !discovered                          → 'unknown'  (within reach: 50 tiles SW)
  *   - hidden-s (35, 70) !discovered                           → 'unknown'  (within reach: ~78 tiles south)
- *
- * The two `hidden-*` islands sit outside vision (>80 tiles from home in at
- * least one), inside drone reach (max outbound 100 tiles at fuelLoaded=50,
- * efficiency 4 — see `drones.ts`). They give the player something concrete
- * to discover.
  */
-// Step-8 modifier assignments are hardcoded on each demo island. The
-// random `rollModifiers` generator is exported from `biomes.ts` for future-
-// step use (artificial islands, persisted seed worlds) but not invoked here.
-//
-// Per §3.7: home Plains starts with `Stable` and no other modifiers.
-// Other demo islands carry one wired modifier each so the visual + UI
-// integration is exercisable from step 8 onward.
-export const DEMO_ISLANDS: ReadonlyArray<IslandSpec> = [
+export const DEMO_ISLANDS_TEST_FIXTURE: ReadonlyArray<IslandSpec> = [
   {
     id: 'home',
     name: 'home',
@@ -501,21 +536,10 @@ export const DEMO_ISLANDS: ReadonlyArray<IslandSpec> = [
     minorRadius: 14,
     populated: true,
     discovered: true,
-    buildings: HOME_ISLAND_BUILDINGS,
-    // Home preserves its hand-placed terrain map exactly — terrainAtForBiome
-    // delegates to defaultTerrainAtHome for islandId === 'home'.
+    buildings: [],
     terrainAt: (x, y) => terrainAtForBiome('plains', 'home', x, y),
-    // §3.7: Stable trait by default, no other modifiers.
     modifiers: ['stable'],
   },
-  // forest-ne is hardcoded as populated for step 7 — it acts as the
-  // demo destination for inter-island routes. Settlement vehicles (§12)
-  // are deferred to a later step; until then we just flip `populated: true`
-  // on this island so it has an IslandState, a building set, and can
-  // receive funneled cargo. The buildings are a minimal demo: one Cargo
-  // Dock (route endpoint convention) and one Workshop (consumes iron_ore +
-  // coal so funneling has something to consume). Both sit inside the
-  // 10-tile-radius ellipse: (0,0) is the island centre.
   {
     id: 'forest-ne',
     name: 'forest-ne',
@@ -526,14 +550,6 @@ export const DEMO_ISLANDS: ReadonlyArray<IslandSpec> = [
     minorRadius: 10,
     populated: true,
     discovered: true,
-    // Step-9: also adds a Logger so forest-ne has a local wood producer to
-    // pair with the demo Biomass Plant chain. 1×1 footprint inside the
-    // radius-10 ellipse.
-    // Step-11: adds a Platform Constructor (4×4 at (-4,-4)..(-1,-1)) so
-    // forest-ne can demonstrate the §2.5 artificial-island construction
-    // path. Outermost corner at (-4, -4) sits at distance √32 ≈ 5.66 from
-    // the centre — well inside the radius-10 ellipse; no overlap with
-    // dock(0,0), workshop(-3,0), or logger(3,3).
     buildings: [
       { id: 'forestne-dock-1',                defId: 'dock',                 x: 0,  y: 0 },
       { id: 'forestne-workshop-1',            defId: 'workshop',             x: -3, y: 0 },
@@ -661,45 +677,33 @@ export const DEFAULT_GEN_OPTS: {
 };
 
 /**
- * Build the working world from `DEMO_ISLANDS` PLUS a procedural batch
- * appended after them. The hand-placed demos (home, forest-ne, etc.)
- * preserve every existing demo flow; procedural islands sit in cells the
- * hand-placed ones don't occupy. Generation runs once on first start; the
- * resolved island list is persisted, so reloads don't regenerate.
+ * Build the working world per §3.7: one populated home island, empty
+ * buildings, plus a procedural batch of undiscovered neighbours. Generation
+ * runs once on first start; the resolved island list is persisted, so
+ * reloads don't regenerate.
  *
- * The seed array stays a `ReadonlyArray<IslandSpec>` so it's still safe to
- * import as immutable data; we shallow-spread each spec into a fresh
- * mutable copy here so later `discovered = true` writes don't trip
- * strict-mode "assignment to readonly" errors. References to `buildings`
- * and `terrainAt` stay shared (those are effectively immutable).
+ * Pre-§3.7-cleanup this seeded six hand-placed demo islands (forest-ne,
+ * desert-far, etc.) as a bootstrap shortcut. Those islands are now
+ * retained only as a test fixture (`DEMO_ISLANDS_TEST_FIXTURE`) — the
+ * production new-game world is the home + procedural layout.
  */
 export function makeInitialWorld(_nowMs: number): WorldState {
-  // Spread each demo spec into a fresh mutable copy AND clone its
-  // `buildings` array, so step-2.5 placement onto the live world doesn't
-  // mutate the immutable seed in `DEMO_ISLANDS` (multiple sessions in a
-  // test runner would otherwise see leaked placements).
-  const islands: IslandSpec[] = DEMO_ISLANDS.map((s) => ({
-    ...s,
-    buildings: [...s.buildings],
-  }));
+  // §3.7 fresh-game seed: a single populated home island. Procedural
+  // generation appends undiscovered neighbours below.
+  const islands: IslandSpec[] = [makeHomeIslandSpec()];
   // Procedural generation runs here, ONCE per fresh game. The resolved
-  // list is persisted via the v2 snapshot path; reloads bypass this code.
-  // Overlap detection takes the hand-placed demos as `existingIslands` so
-  // generated islands never land on top of forest-ne / desert-far / etc.
-  // The dynamic import would let us defer the dependency, but a static
-  // import keeps the dependency arrow (`world.ts → world-gen.ts`)
-  // explicit; `world-gen.ts` imports `world.ts` for `IslandSpec` only as
-  // a type-only edge, so the cycle is type-side and TS handles it.
+  // list is persisted via the v3 snapshot path; reloads bypass this code.
+  // Overlap detection takes home as `existingIslands` so the first
+  // generated island never lands on top of (0, 0).
+  // `world-gen.ts` imports `world.ts` for `IslandSpec` only as a type-only
+  // edge, so the dependency cycle is type-side and TS handles it.
   const generated = generateWorld({ ...DEFAULT_GEN_OPTS, existingIslands: islands });
   for (const g of generated) islands.push(g);
   // §11 telemetry: seed revealedCells with every cell touched by a
-  // populated OR already-discovered island's footprint. Populated islands
-  // (home, forest-ne) need their own cells revealed so the player doesn't
-  // load into pitch-dark home. Discovered-but-unpopulated demo islands
-  // (e.g. desert-far in DEMO_ISLANDS) must ALSO get their cells seeded —
-  // otherwise the fog overlay paints UNKNOWN_BLUE on top of them and they
-  // disappear from view, violating the "discovered ⇔ any cell revealed"
-  // invariant. `islandCells` walks every constituent (primary +
+  // populated OR already-discovered island's footprint. With only home
+  // populated at start, this seeds just home's cells — every procedural
+  // island is undiscovered and stays under the fog overlay until a drone
+  // scouts it. `islandCells` walks every constituent (primary +
   // extraEllipses) so merged islands are seeded correctly.
   const revealedCells = new Set<string>();
   for (const spec of islands) {
@@ -724,25 +728,27 @@ export function makeInitialWorld(_nowMs: number): WorldState {
 // `makeInitialIslandState` will be applied to each newly-populated spec.
 
 /**
- * Starting inventory.
- * - Coal seeded at 50 (step 3 pattern): Workshop chain runs immediately;
- *   once coal hits zero the Workshop stalls, demonstrating `inputAvail = 0`
- *   back-propagation. No coal producer in current build — stall is
- *   intentional demo behaviour.
- * - Biofuel seeded at 50 (step 6 pattern, mirrors coal): there is no
- *   biofuel producer yet, but the Drone Pad needs fuel. Player gets enough
- *   for ~5 maximum-fuel drone launches before the chain stalls on biofuel,
- *   at which point a future step's biofuel refinery becomes the unlock.
+ * Starting inventory — §3.7 starter placeholder.
+ *
+ * Per SPEC §3.7: a fresh new game begins with "Empty inventory: no
+ * starter resources, no Foundation Kit." All resources zeroed.
+ *
+ * Pre-cleanup this seeded 200 coal + 100 biofuel + 3 foundation_kit as a
+ * bootstrap shortcut alongside the heavily pre-built home island. With
+ * the home now empty per §3.7 the player needs to bootstrap the loop
+ * themselves: place a Solar Panel (no input cost), then a Mine on an ore
+ * tile (no input cost — `mine_on_ore` recipe consumes nothing, produces
+ * `iron_ore`) and a Mine on a coal tile (`mine_on_coal` → `coal`), then
+ * a Workshop consuming both. Placement itself is free pre-§14, so the
+ * empty inventory doesn't block construction — only recipe inputs.
+ *
+ * Tune in playtest: §3.7 starter placeholder.
  */
 function startingInventory(): Record<ResourceId, number> {
   const inv = {} as Record<ResourceId, number>;
   for (const r of ALL_RESOURCES) inv[r] = 0;
-  // Rebalanced for idle-game scale, step #19: bumped seeds proportionally
-  // to the new BASELINE_STORAGE_CAP (2000) so the demo has meaningful
-  // initial stock without trivially filling the larger caps.
-  inv.coal = 200; // rebalanced for idle-game scale, step #19 (was 50)
-  inv.biofuel = 100; // rebalanced for idle-game scale, step #19 (was 50)
-  inv.foundation_kit = 3; // rebalanced for idle-game scale, step #19 (was 0 in startingInventory)
+  // §3.7 starter placeholder: every resource starts at 0. Adjust here if
+  // playtest reveals the bootstrap loop is impossibly slow.
   return inv;
 }
 

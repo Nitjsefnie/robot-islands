@@ -150,10 +150,24 @@ describe('serializeWorld', () => {
 describe('serialize → JSON → deserialize round-trip', () => {
   it('preserves island count, biome, and discovered flag', () => {
     const world = makeInitialWorld(0);
-    // Flip discovered on one of the unknown demo islands so the round-trip
-    // exercises a non-default value.
-    const coast = world.islands.find((s) => s.id === 'coast-unknown')!;
-    coast.discovered = true;
+    // §3.7 cleanup: the hand-placed `coast-unknown` demo island is no
+    // longer auto-seeded. Push a coast spec onto the world manually so
+    // the round-trip still exercises a flipped `discovered` flag on a
+    // known biome.
+    const coast: IslandSpec = {
+      id: 'coast-unknown',
+      name: 'coast-unknown',
+      biome: 'coast',
+      cx: 200,
+      cy: 0,
+      majorRadius: 14,
+      minorRadius: 7,
+      populated: false,
+      discovered: true,
+      buildings: [],
+      modifiers: [],
+    };
+    world.islands.push(coast);
     const snap = serializeWorld(world, new Map(), 0);
     const json = JSON.parse(JSON.stringify(snap)) as SaveSnapshot;
     const { world: restored } = deserializeWorld(json, /* nowWallMs */ 0, /* nowPerfMs */ 0);

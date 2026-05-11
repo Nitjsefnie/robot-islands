@@ -63,65 +63,13 @@ export interface PlacedBuilding {
   readonly eternalServitor?: true;
 }
 
-// Step-9 home-island layout. Tile coords are island-local; the home island's
-// ellipse has radius 14. Footprints are verified non-overlapping; the Smelter
-// at (-4, 6) sits inside the radius-14 ellipse and below the workshop.
-//
-// Typed as `PlacedBuilding[]` (mutable) rather than ReadonlyArray since
-// step-2.5 placement pushes onto the spec's `buildings` field, which is the
-// same array reference. We don't actually mutate this seed at module scope;
-// `makeInitialWorld` spreads each spec into a fresh copy with its own array
-// (see world.ts `makeInitialWorld`).
-export const HOME_ISLAND_BUILDINGS: PlacedBuilding[] = [
-  // T1 staples preserved from step 1-8 (same positions, defId redirects).
-  { id: 'home-solar-1',    defId: 'solar',    x: 2,  y: -1 },
-  { id: 'home-workshop-1', defId: 'workshop', x: -1, y: 1 },
-  // §8.1 Mine output branches on tile — this one sits on the ore cluster at
-  // (-7,2)..(-6,3) (all 4 footprint tiles are 'ore' per defaultTerrainAt) so
-  // it produces iron_ore via the resolveRecipe → mine_on_ore branch.
-  { id: 'home-mine-1',     defId: 'mine',     x: -7, y: 2 },
-  // §8.1 second Mine on the coal cluster at (8,5)..(9,6). All 4 footprint
-  // tiles are 'coal' per defaultTerrainAt — resolveRecipe → mine_on_coal
-  // → produces 1 coal / 5s. Without this, the home economy has no coal
-  // source beyond the seeded 50 starter units (which the iron-chain
-  // exhausts in ~120s), and the iron→steel pipeline stalls. The coal Mine
-  // restores the iron-chain loop end-to-end.
-  { id: 'home-mine-coal-1', defId: 'mine',    x: 8,  y: 5 },
-  { id: 'home-dock-1',     defId: 'dock',     x: 7,  y: 1 },
-  { id: 'home-coalgen-1',  defId: 'coal_gen', x: 3,  y: 4 },
-  { id: 'home-dronepad-1', defId: 'dronepad', x: 5,  y: -3 },
-  // New for step 9 — Smelter at (-4, 6). 2×2 footprint: (-4,6),(-3,6),(-4,7),
-  // (-3,7). All inside the radius-14 ellipse; no overlap with other tiles.
-  // Demo intent: with Mine seeding iron_ore + coal already on the home island,
-  // Smelter immediately starts producing iron_ingot, showing the new T1
-  // refining link.
-  { id: 'home-smelter-1',  defId: 'smelter',  x: -4, y: 6 },
-  // Silo for storage-aggregation demo — single 2×2 at (-7, -3). All four
-  // tiles (-7,-3),(-6,-3),(-7,-2),(-6,-2) inside radius 14. Per §4.6
-  // categorized storage, Silo bumps only dry_goods resources (coal, wood,
-  // iron_ore, stone, sand, salt, quartz, scrap, iron_ingot, coke, pig_iron,
-  // lumber, glass, foundation_kit). Liquid_gas resources (biofuel, water,
-  // etc.) and components stay at the baseline 2000.
-  { id: 'home-silo-1',     defId: 'silo',     x: -7, y: -3 },
-  // Step-12: Kit Assembler at (-1, -5). 2×2 footprint inside the radius-14
-  // ellipse, no overlap with neighbours (dronepad at 5,-3; workshop at
-  // -1,1). Lets the player craft `foundation_kit` on demand once the
-  // initial seed of 3 kits runs out.
-  { id: 'home-kit-assembler-1', defId: 'kit_assembler', x: -1, y: -5 },
-  // Step-12: Shipyard at (4, 6). 3×3 footprint inside the radius-14
-  // ellipse (corners (4,6)..(6,8) all within √(36+64) = 10.0 < 14).
-  // No overlap with workshop(-1,1)..(0,2), coal_gen(3,4)..(4,5),
-  // smelter(-4,6)..(-3,7), or dock(7,1)..(8,2). Coastal-tile gating
-  // deferred — see §12.2 / building-defs.ts comment on `shipyard`.
-  { id: 'home-shipyard-1',     defId: 'shipyard',      x: 4, y: 6 },
-  // §11 telemetry: home gets a T1 Antenna so the drone demo doesn't go
-  // dark. 80-tile signal radius matches the pre-§11-redesign vision intent
-  // (a drone trip out to ~80 tiles can transmit data on its full flight).
-  // 1×1 footprint at (5, -1) — inside the radius-14 ellipse, no overlap
-  // with dronepad(5,-3), workshop(-1,1)..(0,2), solar(2,-1)..(2,-1), or any
-  // other building.
-  { id: 'home-antenna-1',      defId: 'antenna_t1',    x: 5, y: -1 },
-];
+// §3.7 cleanup: the pre-built home layout (Solar/Workshop/Mines/Dronepad/
+// Smelter/Silo/Antenna/Shipyard/Kit Assembler) used to live here as a
+// `HOME_ISLAND_BUILDINGS` export, baked into the production new-game world
+// by `makeInitialWorld`. Per §3.7 the home now starts with EMPTY buildings;
+// the bootstrap shortcut has been removed. The constant is gone — every
+// production buildings array starts as `[]` and grows through the
+// placement UI.
 
 /**
  * Visual polish constants. The "weathered industrial schematic" direction

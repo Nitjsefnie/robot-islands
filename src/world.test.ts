@@ -5,15 +5,18 @@ import { describe, expect, it } from 'vitest';
 
 import { computeVisionSources, type VisionSource } from './lighthouse.js';
 import {
-  DEMO_ISLANDS,
+  DEMO_ISLANDS_TEST_FIXTURE,
   findPopulatedIslandAt,
   islandRenderState,
   ISLAND_NAME_MAX_LEN,
+  makeInitialIslandState,
+  makeInitialWorld,
   renameIsland,
   validateIslandName,
   VISION_PADDING_TILES,
   type IslandSpec,
 } from './world.js';
+import { ALL_RESOURCES } from './recipes.js';
 
 function makeSpec(over: Partial<IslandSpec>): IslandSpec {
   return {
@@ -170,9 +173,9 @@ describe('islandRenderState', () => {
   });
 
   it('matches the demo layout: home visible, forest-ne visible (populated), desert-far discovered, coast-unknown unknown', () => {
-    const populated = DEMO_ISLANDS.filter((s) => s.populated);
+    const populated = DEMO_ISLANDS_TEST_FIXTURE.filter((s) => s.populated);
     const visionSources = computeVisionSources(populated);
-    const byId = new Map(DEMO_ISLANDS.map((s) => [s.id, s] as const));
+    const byId = new Map(DEMO_ISLANDS_TEST_FIXTURE.map((s) => [s.id, s] as const));
     const get = (id: string): IslandSpec => {
       const s = byId.get(id);
       if (!s) throw new Error(`demo missing ${id}`);
@@ -219,6 +222,109 @@ describe('islandRenderState', () => {
       { ...homeWithLighthouse, buildings: [] },
     ]);
     expect(islandRenderState(target, sourcesBaselineOnly)).toBe('discovered');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// §3.7 fresh-game contract — the production new-game world is one populated
+// home island (plains, r=14, Stable, empty buildings) plus N procedural
+// undiscovered neighbours. The pre-cleanup heavy-seeded demo layout
+// (forest-ne, desert-far, hidden-w/s, coast-unknown, pre-built buildings)
+// is now retained only as DEMO_ISLANDS_TEST_FIXTURE for tests like the
+// "matches the demo layout" case above.
+// ---------------------------------------------------------------------------
+
+describe('makeInitialWorld — §3.7 fresh-game contract', () => {
+  it('produces exactly one populated island (home) at world origin', () => {
+    const w = makeInitialWorld(0);
+    const populated = w.islands.filter((s) => s.populated);
+    expect(populated).toHaveLength(1);
+    const home = populated[0]!;
+    expect(home.id).toBe('home');
+    expect(home.cx).toBe(0);
+    expect(home.cy).toBe(0);
+    expect(home.biome).toBe('plains');
+    expect(home.majorRadius).toBe(14);
+    expect(home.minorRadius).toBe(14);
+    expect(home.discovered).toBe(true);
+    expect(home.modifiers).toEqual(['stable']);
+  });
+
+  it('home island starts with EMPTY buildings (§3.7 "no pre-placed buildings")', () => {
+    const w = makeInitialWorld(0);
+    const home = w.islands.find((s) => s.id === 'home')!;
+    expect(home.buildings).toEqual([]);
+  });
+
+  it('appends procedural neighbours beyond the home island', () => {
+    const w = makeInitialWorld(0);
+    // Default gen options yield dozens of procedural islands at density 0.3;
+    // we just assert "more than 1" so this isn't fragile to gen-table changes.
+    expect(w.islands.length).toBeGreaterThan(1);
+  });
+
+  it('every non-home island starts unpopulated and undiscovered (dark world map)', () => {
+    const w = makeInitialWorld(0);
+    for (const spec of w.islands) {
+      if (spec.id === 'home') continue;
+      expect(spec.populated).toBe(false);
+      expect(spec.discovered).toBe(false);
+    }
+  });
+
+  it('seeds revealedCells only for home (no demo-neighbour cells)', () => {
+    const w = makeInitialWorld(0);
+    // home's cells should be present; every procedural island is
+    // undiscovered, so its cells must not be revealed.
+    expect(w.revealedCells.size).toBeGreaterThan(0);
+    // Sanity: a far-out cell that no procedural island could reasonably
+    // cover from home (the cell at +20, +20 in cell-coords ~ tile (320,320))
+    // must not be revealed at start. This is a coarse smoke test of the
+    // "only populated/discovered cells seed reveals" invariant.
+    expect(w.revealedCells.has('20,20')).toBe(false);
+  });
+
+  it('produces no in-flight drones, routes, or vehicles at start', () => {
+    const w = makeInitialWorld(0);
+    expect(w.drones).toEqual([]);
+    expect(w.routes).toEqual([]);
+    expect(w.vehicles).toEqual([]);
+  });
+
+  it("home's initial IslandState carries EMPTY inventory (§3.7 'no starter resources, no Foundation Kit')", () => {
+    // §3.7 contract — the inventory check is THE load-bearing assertion,
+    // not just buildings. Pre-cleanup `startingInventory()` seeded
+    // `coal: 200`, `biofuel: 100`, `foundation_kit: 3`; this test pins
+    // the cleanup so any future regression that re-introduces a starter
+    // resource fails loudly. Mirrors the main.ts fresh-game path:
+    // `makeInitialIslandState(home, perfNow)` — that's the exact value
+    // that lands in the running game.
+    const w = makeInitialWorld(0);
+    const home = w.islands.find((s) => s.id === 'home')!;
+    const state = makeInitialIslandState(home, 0);
+    for (const r of ALL_RESOURCES) {
+      expect(state.inventory[r], `inventory.${r} should be 0`).toBe(0);
+    }
+    // Spot-check the three resources the pre-§3.7 seed overrode — these
+    // are the canonical regression sentinels.
+    expect(state.inventory.coal).toBe(0);
+    expect(state.inventory.biofuel).toBe(0);
+    expect(state.inventory.foundation_kit).toBe(0);
+  });
+
+  it("home's initial IslandState starts at level 1, XP 0, no skill points, no specialization", () => {
+    // §3.7 "Level 1, 0 XP, 0 skill points." Companion to the empty-
+    // inventory test above — pins the rest of the per-island starting
+    // state.
+    const w = makeInitialWorld(0);
+    const home = w.islands.find((s) => s.id === 'home')!;
+    const state = makeInitialIslandState(home, 0);
+    expect(state.level).toBe(1);
+    expect(state.xp).toBe(0);
+    expect(state.unspentSkillPoints).toBe(0);
+    expect(state.specializationRole).toBeNull();
+    expect(state.aiCoreCrafted).toBe(false);
+    expect(state.ascendantCoreCrafted).toBe(false);
   });
 });
 
