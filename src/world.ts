@@ -461,16 +461,20 @@ export function makeInitialWorld(_nowMs: number): WorldState {
 function startingInventory(): Record<ResourceId, number> {
   const inv = {} as Record<ResourceId, number>;
   for (const r of ALL_RESOURCES) inv[r] = 0;
-  inv.coal = 50;
-  inv.biofuel = 50;
+  // Rebalanced for idle-game scale, step #19: bumped seeds proportionally
+  // to the new BASELINE_STORAGE_CAP (2000) so the demo has meaningful
+  // initial stock without trivially filling the larger caps.
+  inv.coal = 200; // rebalanced for idle-game scale, step #19 (was 50)
+  inv.biofuel = 100; // rebalanced for idle-game scale, step #19 (was 50)
+  inv.foundation_kit = 3; // rebalanced for idle-game scale, step #19 (was 0 in startingInventory)
   return inv;
 }
 
-/** Baseline cap before any storage building is placed. Per the step-3 demo
- *  every resource started at 100; we keep the same baseline so an island
- *  without any storage building still has minimal headroom for the tick
- *  loop to demonstrate cap-stall behaviour. Storage buildings add on top. */
-const BASELINE_STORAGE_CAP = 100;
+/** Baseline cap before any storage building is placed. Rebalanced for
+ *  idle-game scale, step #19: bumped from 100 → 2000 so a few minutes of
+ *  T1 production doesn't instantly fill storage. Storage buildings add on
+ *  top of this baseline. */
+const BASELINE_STORAGE_CAP = 2000; // rebalanced for idle-game scale, step #19 (was 100)
 
 /**
  * Aggregate placement-time storage caps from a building list. Per §8.4

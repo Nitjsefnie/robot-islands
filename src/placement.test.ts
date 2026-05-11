@@ -468,17 +468,18 @@ describe('demolishBuilding', () => {
     // §4.6: "If current inventory of any affected resource now exceeds the
     // reduced cap, the excess is lost — inventory clamps down to the new
     // cap." Place a Silo (+2000 cap), fill iron_ore above the post-demolish
-    // baseline cap (100), then demolish and confirm the excess is dropped.
+    // baseline cap (2000), then demolish and confirm the excess is dropped.
+    // (rebalanced step #19: baseline 2000, so Silo raises to 4000; after demolish back to 2000)
     const spec = makeSpec();
     const state = makeState(spec);
     placeBuilding(spec, state, 'silo', 0, 0, 0, () => 'p-silo');
-    // Caps are now 2100 across the board. Stuff iron_ore to 500.
-    state.inventory.iron_ore = 500;
+    // Caps are now 4000 across the board. Stuff iron_ore to 3000 (above post-demolish cap of 2000).
+    state.inventory.iron_ore = 3000;
     const r = demolishBuilding(spec, state, 'p-silo');
     expect(r.ok).toBe(true);
-    // Cap dropped from 2100 → 100; inventory clamps to 100.
-    expect(state.storageCaps.iron_ore).toBe(100);
-    expect(state.inventory.iron_ore).toBe(100);
+    // Cap dropped from 4000 → 2000; inventory clamps to 2000.
+    expect(state.storageCaps.iron_ore).toBe(2000);
+    expect(state.inventory.iron_ore).toBe(2000);
   });
 
   it('caps the credited scrap to the resource cap (no overfill)', () => {

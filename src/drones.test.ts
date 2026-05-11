@@ -140,8 +140,8 @@ describe('dispatchDrone', () => {
     expect(d.fuelLoaded).toBe(20);
     // Range = 20 * 4 = 80 tiles, outbound = 40 tiles.
     expect(d.outboundTiles).toBe(40);
-    // Travel time = 80 / 2 = 40s → return at 1000 + 40_000.
-    expect(d.expectedReturnTime).toBe(1000 + 40_000);
+    // Travel time = 80 / 0.5 = 160s → return at 1000 + 160_000. (rebalanced step #19)
+    expect(d.expectedReturnTime).toBe(1000 + 160_000);
     expect(d.scanRadius).toBe(DRONE_SCAN_RADIUS_TILES);
   });
 
@@ -236,9 +236,10 @@ describe('tickDrones', () => {
     const home = makeIslandState();
     home.inventory.biofuel = 50;
     dispatchDrone(w, home, 0, 0, 1, 0, 20, 0);
-    // 20 fuel → 80 tiles round-trip → 40s flight; outbound endpoint (40, 0).
+    // 20 fuel → 80 tiles round-trip at 0.5 t/s = 160s; outbound endpoint (40, 0).
     // Target at (30, 5) is 5 tiles off the segment, scan radius 8 → inside.
-    const r = tickDrones(w, 41_000);
+    // (rebalanced step #19: was 41_000 at 2 t/s)
+    const r = tickDrones(w, 161_000);
     expect(r.returned).toHaveLength(1);
     expect(w.drones).toHaveLength(0);
     expect(target.discovered).toBe(true);
@@ -252,7 +253,8 @@ describe('tickDrones', () => {
     const home = makeIslandState();
     home.inventory.biofuel = 50;
     dispatchDrone(w, home, 0, 0, 1, 0, 20, 0);
-    const r = tickDrones(w, 50_000);
+    // 80 tiles / 0.5 t/s = 160s (rebalanced step #19)
+    const r = tickDrones(w, 161_000);
     expect(r.newlyDiscoveredIslandIds).toEqual(['inside']);
     expect(inside.discovered).toBe(true);
     expect(outside.discovered).toBe(false);
@@ -264,7 +266,8 @@ describe('tickDrones', () => {
     const home = makeIslandState();
     home.inventory.biofuel = 50;
     dispatchDrone(w, home, 0, 0, 1, 0, 20, 0);
-    const r = tickDrones(w, 50_000);
+    // 80 tiles / 0.5 t/s = 160s (rebalanced step #19)
+    const r = tickDrones(w, 161_000);
     expect(r.returned).toHaveLength(1);
     expect(r.newlyDiscoveredIslandIds).toEqual([]);
     expect(known.discovered).toBe(true);
@@ -276,7 +279,8 @@ describe('tickDrones', () => {
     const home = makeIslandState();
     home.inventory.biofuel = 50;
     dispatchDrone(w, home, 0, 0, 1, 0, 20, 0);
-    tickDrones(w, 50_000);
+    // 80 tiles / 0.5 t/s = 160s (rebalanced step #19)
+    tickDrones(w, 161_000);
     expect(pop.populated).toBe(true);
     expect(pop.discovered).toBe(true);
   });
@@ -290,8 +294,8 @@ describe('tickDrones', () => {
     // Outbound 50 tiles east, so segment (0,0)-(50,0) — `a` at perpendicular
     // distance 5 (inside scan radius 8); `b` at distance 12 (outside).
     dispatchDrone(w, home, 0, 0, 1, 0, 25, 0);
-    // 25 fuel × 4 = 100 tiles round-trip / 2 t/s = 50s flight.
-    const r = tickDrones(w, 50_500);
+    // 25 fuel × 4 = 100 tiles round-trip / 0.5 t/s = 200s flight. (rebalanced step #19)
+    const r = tickDrones(w, 200_500);
     expect(r.newlyDiscoveredIslandIds).toEqual(['a']);
   });
 });
@@ -304,7 +308,7 @@ describe('tickDrones', () => {
 describe('drone constants', () => {
   it('matches the documented step-6 tuning', () => {
     expect(DRONE_TIER_EFFICIENCY).toBe(4);
-    expect(DRONE_SPEED_TILES_PER_SEC).toBe(2);
+    expect(DRONE_SPEED_TILES_PER_SEC).toBe(0.5); // rebalanced for idle-game scale, step #19 (was 2)
     expect(DRONE_SCAN_RADIUS_TILES).toBe(8);
   });
 });

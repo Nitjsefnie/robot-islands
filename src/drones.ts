@@ -48,10 +48,12 @@ export interface Drone {
 }
 
 /** T2-equivalent constants for step 6. Tile units; seconds for time.
- *  10 biofuel → 40 tiles round-trip → 20 tiles outbound, ~20s flight.
- *  50 biofuel → 200 tiles round-trip → 100 tiles outbound, ~100s flight. */
+ *  10 biofuel → 40 tiles round-trip → 20 tiles outbound, ~40s flight.
+ *  50 biofuel → 200 tiles round-trip → 100 tiles outbound, ~200s flight.
+ *  Rebalanced for idle-game scale, step #19: speed 2 → 0.5 t/s so a
+ *  50-tile drone trip takes 100s instead of 25s. */
 export const DRONE_TIER_EFFICIENCY = 4;
-export const DRONE_SPEED_TILES_PER_SEC = 2;
+export const DRONE_SPEED_TILES_PER_SEC = 0.5; // rebalanced for idle-game scale, step #19 (was 2)
 export const DRONE_SCAN_RADIUS_TILES = 8;
 
 /** Step-6 drone tier (single class). Drone Pad nominally T2, but the engine

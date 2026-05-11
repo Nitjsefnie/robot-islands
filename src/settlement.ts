@@ -68,12 +68,13 @@ export interface SettlementVehicle {
 // Step-12 tuning constants
 // ---------------------------------------------------------------------------
 
-/** T1 cargo-ship speed in tiles/sec. Slower than drones (2 t/s) so a
- *  settlement reads as a real commitment — a 50-tile dispatch takes 50s. */
-export const SHIP_SPEED_TILES_PER_SEC = 1;
+/** T1 cargo-ship speed in tiles/sec. Rebalanced for idle-game scale, step #19:
+ *  1 → 0.25 t/s so a 200-tile colonization run takes ~800s (~13 min). */
+export const SHIP_SPEED_TILES_PER_SEC = 0.25; // rebalanced for idle-game scale, step #19 (was 1)
 /** T2 helicopter speed in tiles/sec. Faster than ships per §12.6 vehicle
- *  tier table ("Light Helicopter — high speed"). */
-export const HELI_SPEED_TILES_PER_SEC = 3;
+ *  tier table ("Light Helicopter — high speed"). Rebalanced for idle-game
+ *  scale, step #19: 3 → 0.75 t/s. */
+export const HELI_SPEED_TILES_PER_SEC = 0.75; // rebalanced for idle-game scale, step #19 (was 3)
 
 /** Fuel efficiency in tiles per biofuel unit (one-way; vehicles are
  *  consumed on arrival). T1 ship is fuel-efficient over long distance;

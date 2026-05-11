@@ -335,14 +335,14 @@ export type RecipeId = BuildingDefId | 'mine_on_ore' | 'mine_on_coal';
  *                              (higher-throughput alternative to Steel Mill)
  */
 export const RECIPES: Partial<Record<RecipeId, Recipe>> = {
-  // T1 extraction
+  // T1 extraction — rebalanced for idle-game scale, step #19 (×10)
   // `mine` is the legacy / fallback Mine recipe (= mine_on_ore). Tile-aware
   // callers go through `resolveRecipe` and receive `mine_on_ore` or
   // `mine_on_coal` depending on the building's footprint terrain. The
   // bare-defId lookup is preserved for tests + saved games that never had
   // a tile-aware path.
   mine: {
-    cycleSec: 5,
+    cycleSec: 50, // rebalanced for idle-game scale, step #19 (×10: was 5s)
     inputs: {},
     outputs: { iron_ore: 1 },
     category: 'extraction',
@@ -352,42 +352,42 @@ export const RECIPES: Partial<Record<RecipeId, Recipe>> = {
   // footprint → coal. Inputs/cycleSec/category identical so a build-order
   // change in placement doesn't shift any other downstream rate.
   mine_on_ore: {
-    cycleSec: 5,
+    cycleSec: 50, // rebalanced for idle-game scale, step #19 (×10: was 5s)
     inputs: {},
     outputs: { iron_ore: 1 },
     category: 'extraction',
   },
   mine_on_coal: {
-    cycleSec: 5,
+    cycleSec: 50, // rebalanced for idle-game scale, step #19 (×10: was 5s)
     inputs: {},
     outputs: { coal: 1 },
     category: 'extraction',
   },
   logger: {
-    cycleSec: 4,
+    cycleSec: 40, // rebalanced for idle-game scale, step #19 (×10: was 4s)
     inputs: {},
     outputs: { wood: 1 },
     category: 'extraction',
   },
 
-  // T1 smelting
+  // T1 smelting — rebalanced for idle-game scale, step #19 (×10)
   smelter: {
-    cycleSec: 8,
+    cycleSec: 80, // rebalanced for idle-game scale, step #19 (×10: was 8s)
     inputs: { iron_ore: 1, coal: 1 },
     outputs: { iron_ingot: 1 },
     category: 'smelting',
   },
 
-  // T1 manufacturing
+  // T1 manufacturing — rebalanced for idle-game scale, step #19 (×10)
   workshop: {
-    cycleSec: 10,
+    cycleSec: 100, // rebalanced for idle-game scale, step #19 (×10: was 10s)
     inputs: { iron_ore: 1, coal: 1 },
     outputs: { bolt: 1 },
     category: 'manufacturing',
   },
 
-  // T1 power-burn (Coal Gen burns 1 coal/5s; W contribution lives on
-  // def.power.produces, not in `outputs`). Empty `outputs` is intentional.
+  // T1 power-burn: kept at short cycles so power keeps up with consumers
+  // (per rebalance spec step #19 — power buildings stay at original scale).
   coal_gen: {
     cycleSec: 5,
     inputs: { coal: 1 },
@@ -401,50 +401,49 @@ export const RECIPES: Partial<Record<RecipeId, Recipe>> = {
     category: 'power',
   },
 
-  // T2 smelting
+  // T2 smelting — rebalanced for idle-game scale, step #19 (×40)
   coke_oven: {
-    cycleSec: 10,
+    cycleSec: 400, // rebalanced for idle-game scale, step #19 (×40: was 10s)
     inputs: { coal: 1 },
     outputs: { coke: 1 },
     category: 'smelting',
   },
   blast_furnace: {
-    cycleSec: 12,
+    cycleSec: 480, // rebalanced for idle-game scale, step #19 (×40: was 12s)
     inputs: { iron_ingot: 1, coke: 1 },
     outputs: { pig_iron: 1 },
     category: 'smelting',
   },
   steel_mill: {
-    cycleSec: 15,
+    cycleSec: 600, // rebalanced for idle-game scale, step #19 (×40: was 15s)
     inputs: { pig_iron: 1 },
     outputs: { steel: 1 },
     category: 'smelting',
   },
 
-  // T2 manufacturing
+  // T2 manufacturing — rebalanced for idle-game scale, step #19 (×40)
   assembler: {
-    cycleSec: 8,
+    cycleSec: 320, // rebalanced for idle-game scale, step #19 (×40: was 8s)
     inputs: { iron_ingot: 1, bolt: 2 },
     outputs: { gear: 1 },
     category: 'manufacturing',
   },
 
-  // T1 manufacturing — Kit Assembler (§12.3). Composite recipe producing
-  // a single Foundation Kit per cycle. Spec's full Standard Foundation Kit
-  // is `50 Iron ingot + 20 Brick + 10 Lumber + 5 Glass + 5 Gear`; step-12
+  // T1 manufacturing — Kit Assembler (§12.3). rebalanced for idle-game scale, step #19 (×10)
+  // Composite recipe producing a single Foundation Kit per cycle. Spec's full Standard
+  // Foundation Kit is `50 Iron ingot + 20 Brick + 10 Lumber + 5 Glass + 5 Gear`; step-12
   // simplifies the bill to resources already in the catalog (iron_ingot,
-  // wood, bolt) since Brick/Glass aren't catalogued yet. The cycleSec (60s)
-  // makes one kit a meaningful commitment compared to a 10s bolt or 8s gear.
+  // wood, bolt) since Brick/Glass aren't catalogued yet.
   kit_assembler: {
-    cycleSec: 60,
+    cycleSec: 600, // rebalanced for idle-game scale, step #19 (×10: was 60s)
     inputs: { iron_ingot: 5, wood: 10, bolt: 5 },
     outputs: { foundation_kit: 1 },
     category: 'manufacturing',
   },
 
-  // T3 smelting (higher-throughput steel alternative)
+  // T3 smelting (higher-throughput steel alternative) — rebalanced for idle-game scale, step #19 (×20)
   electric_arc_furnace: {
-    cycleSec: 6,
+    cycleSec: 120, // rebalanced for idle-game scale, step #19 (×20: was 6s)
     inputs: { pig_iron: 1 },
     outputs: { steel: 1 },
     category: 'smelting',
@@ -464,8 +463,9 @@ export const RECIPES: Partial<Record<RecipeId, Recipe>> = {
 
   // T4 power — Fusion Core burns helium_3 as fuel; W contribution lives on
   // def.power.produces (5000W), not in `outputs`. Empty outputs intentional.
+  // Rebalanced for idle-game scale, step #19 (×60: was 30s).
   fusion_core: {
-    cycleSec: 30,
+    cycleSec: 1800, // rebalanced for idle-game scale, step #19 (×60: was 30s)
     inputs: { helium_3: 1 },
     outputs: {},
     category: 'power',
@@ -475,7 +475,7 @@ export const RECIPES: Partial<Record<RecipeId, Recipe>> = {
   // from Steel + Helium-3 fuel. Per §9.5, only producer of Exotic Alloy in
   // the world. §5.2 heat-source adjacency deferred.
   pyroforge: {
-    cycleSec: 60,
+    cycleSec: 3600, // rebalanced for idle-game scale, step #19 (×60: was 60s)
     inputs: { steel: 5, helium_3: 1 },
     outputs: { exotic_alloy: 1 },
     category: 'smelting',
@@ -486,7 +486,7 @@ export const RECIPES: Partial<Record<RecipeId, Recipe>> = {
   // AI Cores in the world. Arctic ambient cold halves compute-recipe power
   // draw (deferred — modelled at static 1200W in step 12).
   cryogenic_compute_center: {
-    cycleSec: 90,
+    cycleSec: 5400, // rebalanced for idle-game scale, step #19 (×60: was 90s)
     inputs: { steel: 3, quantum_chip: 1 },
     outputs: { ai_core: 1 },
     category: 'electronics',
@@ -499,7 +499,7 @@ export const RECIPES: Partial<Record<RecipeId, Recipe>> = {
   // intermediate; the building's name is metallurgy-coded but its output
   // is an electronics component.
   particle_accelerator: {
-    cycleSec: 45,
+    cycleSec: 2700, // rebalanced for idle-game scale, step #19 (×60: was 45s)
     inputs: { steel: 4, pig_iron: 4 },
     outputs: { quantum_chip: 1 },
     category: 'electronics',
@@ -518,21 +518,18 @@ export const RECIPES: Partial<Record<RecipeId, Recipe>> = {
   // to step 14 alongside the missing T4 raws.
 
   // T5 raw extraction — placeholder for the §8.10 Casimir Tap. Spec cycle
-  // 30 min to 4 h; we use the 30 min lower bound. No inputs (free vacuum
-  // energy per §8.5 / §8.10). The bulk-power contribution is on
-  // def.power.produces (8000W); this recipe is the discrete-unit emission.
+  // 30 min to 4 h; already at 1800s (30 min lower bound) — skip rebalance
+  // per step-19 spec (casimir_tap already at correct scale).
   casimir_tap: {
-    cycleSec: 1800,
+    cycleSec: 1800, // already at idle-game scale (30 min) — not multiplied in step #19
     inputs: {},
     outputs: { casimir_energy: 1 },
     category: 'power',
   },
 
-  // T5 manufacturing — Reality Forge condenses T4 endgame components +
-  // T5 raw into a T5 component. Cycle 600s (10 min) placeholder; full
-  // §7.12 24h cycle deferred until antimatter_capsule + time_crystal land.
+  // T5 manufacturing — Reality Forge. Rebalanced for idle-game scale, step #19 (×8: was 600s).
   reality_forge: {
-    cycleSec: 600,
+    cycleSec: 4800, // rebalanced for idle-game scale, step #19 (×8: was 600s)
     inputs: { exotic_alloy: 2, ai_core: 1, casimir_energy: 1 },
     outputs: { reality_anchor: 1 },
     category: 'manufacturing',
@@ -548,48 +545,48 @@ export const RECIPES: Partial<Record<RecipeId, Recipe>> = {
   // (Quarry → stone, Well → water, Pump Jack → oil_well) are DEFERRED
   // per the step-18 brief: producers run anywhere inside an island.
 
-  // T1 extraction (§7.1 / §8.1 raws). All have empty `inputs` and a
-  // single-resource output — same shape as the existing Mine/Logger.
+  // T1 extraction (§7.1 / §8.1 raws) — rebalanced for idle-game scale, step #19 (×10).
+  // All have empty `inputs` and a single-resource output — same shape as the existing Mine/Logger.
   quarry: {
-    cycleSec: 6,
+    cycleSec: 60, // rebalanced for idle-game scale, step #19 (×10: was 6s)
     inputs: {},
     outputs: { stone: 1 },
     category: 'extraction',
   },
   sand_pit: {
-    cycleSec: 8,
+    cycleSec: 80, // rebalanced for idle-game scale, step #19 (×10: was 8s)
     inputs: {},
     outputs: { sand: 1 },
     category: 'extraction',
   },
   well: {
-    cycleSec: 3,
+    cycleSec: 30, // rebalanced for idle-game scale, step #19 (×10: was 3s)
     inputs: {},
     outputs: { fresh_water: 1 },
     category: 'extraction',
   },
   coastal_pump: {
-    cycleSec: 4,
+    cycleSec: 40, // rebalanced for idle-game scale, step #19 (×10: was 4s)
     inputs: {},
     outputs: { saltwater: 1 },
     category: 'extraction',
   },
   quartz_mine: {
-    cycleSec: 12,
+    cycleSec: 120, // rebalanced for idle-game scale, step #19 (×10: was 12s)
     inputs: {},
     outputs: { quartz: 1 },
     category: 'extraction',
   },
 
-  // T1 manufacturing / chemistry — T0 raws → T1 refined.
+  // T1 manufacturing / chemistry — T0 raws → T1 refined. Rebalanced for idle-game scale, step #19 (×10).
   lumber_mill: {
-    cycleSec: 8,
+    cycleSec: 80, // rebalanced for idle-game scale, step #19 (×10: was 8s)
     inputs: { wood: 1 },
     outputs: { lumber: 1 },
     category: 'manufacturing',
   },
   glassworks: {
-    cycleSec: 12,
+    cycleSec: 120, // rebalanced for idle-game scale, step #19 (×10: was 12s)
     inputs: { sand: 1 },
     outputs: { glass: 1 },
     category: 'manufacturing',
@@ -597,7 +594,7 @@ export const RECIPES: Partial<Record<RecipeId, Recipe>> = {
     // adjacent Coal Furnace / Geothermal Vent.
   },
   evaporator: {
-    cycleSec: 15,
+    cycleSec: 150, // rebalanced for idle-game scale, step #19 (×10: was 15s)
     inputs: { saltwater: 1 },
     outputs: { salt: 1 },
     category: 'manufacturing',
@@ -606,7 +603,7 @@ export const RECIPES: Partial<Record<RecipeId, Recipe>> = {
     // completeness; consumer recipes deferred.
   },
   electrolyzer: {
-    cycleSec: 10,
+    cycleSec: 100, // rebalanced for idle-game scale, step #19 (×10: was 10s)
     inputs: { fresh_water: 1 },
     outputs: { hydrogen: 1 },
     category: 'chemistry',
@@ -614,7 +611,7 @@ export const RECIPES: Partial<Record<RecipeId, Recipe>> = {
     // only until an oxygen consumer lands.
   },
   biofuel_plant: {
-    cycleSec: 15,
+    cycleSec: 150, // rebalanced for idle-game scale, step #19 (×10: was 15s)
     inputs: { wood: 2 },
     outputs: { biofuel: 1 },
     category: 'chemistry',
@@ -622,9 +619,9 @@ export const RECIPES: Partial<Record<RecipeId, Recipe>> = {
     // had no producer. Biofuel Plant is the canonical T1 producer.
   },
 
-  // T2 extraction — petrochemical raws.
+  // T2 extraction — petrochemical raws. Rebalanced for idle-game scale, step #19 (×40).
   pump_jack: {
-    cycleSec: 12,
+    cycleSec: 480, // rebalanced for idle-game scale, step #19 (×40: was 12s)
     inputs: {},
     outputs: { crude_oil: 1 },
     category: 'extraction',
@@ -632,7 +629,7 @@ export const RECIPES: Partial<Record<RecipeId, Recipe>> = {
     // DEFERRED — runs on any in-island tile.
   },
   gas_extractor: {
-    cycleSec: 12,
+    cycleSec: 480, // rebalanced for idle-game scale, step #19 (×40: was 12s)
     inputs: {},
     outputs: { natural_gas: 1 },
     category: 'extraction',
@@ -641,19 +638,17 @@ export const RECIPES: Partial<Record<RecipeId, Recipe>> = {
     // sink-without-source if a consumer recipe lands later.
   },
 
-  // T2 petrochemical / refining — each split into its own building since
-  // the engine's 1:1 recipe-per-defId model doesn't support multi-recipe
-  // selection without infrastructure expansion. Per the step-18 brief:
-  // "the recipe-per-defId model is rigid. Simpler: add three refining
-  // buildings, each with one recipe — clean."
+  // T2 petrochemical / refining — rebalanced for idle-game scale, step #19 (×40).
+  // Each split into its own building since the engine's 1:1 recipe-per-defId
+  // model doesn't support multi-recipe selection without infrastructure expansion.
   naphtha_cracker: {
-    cycleSec: 15,
+    cycleSec: 600, // rebalanced for idle-game scale, step #19 (×40: was 15s)
     inputs: { crude_oil: 1 },
     outputs: { naphtha: 1 },
     category: 'chemistry',
   },
   chlor_alkali_plant: {
-    cycleSec: 20,
+    cycleSec: 800, // rebalanced for idle-game scale, step #19 (×40: was 20s)
     inputs: { saltwater: 2 },
     outputs: { chlorine: 1 },
     category: 'chemistry',
@@ -662,7 +657,7 @@ export const RECIPES: Partial<Record<RecipeId, Recipe>> = {
     // keep the resource list lean.
   },
   lubricant_refinery: {
-    cycleSec: 25,
+    cycleSec: 1000, // rebalanced for idle-game scale, step #19 (×40: was 25s)
     inputs: { crude_oil: 1, chlorine: 1 },
     outputs: { lubricant: 1 },
     category: 'chemistry',
@@ -671,7 +666,7 @@ export const RECIPES: Partial<Record<RecipeId, Recipe>> = {
     // resource until §4.7 lands.
   },
   diesel_refinery: {
-    cycleSec: 30,
+    cycleSec: 1200, // rebalanced for idle-game scale, step #19 (×40: was 30s)
     inputs: { crude_oil: 2, naphtha: 1 },
     outputs: { diesel: 1 },
     category: 'chemistry',
@@ -680,7 +675,7 @@ export const RECIPES: Partial<Record<RecipeId, Recipe>> = {
     // stockpile-only fuel until §11.7 lands.
   },
   metal_rolling_mill: {
-    cycleSec: 10,
+    cycleSec: 400, // rebalanced for idle-game scale, step #19 (×40: was 10s)
     inputs: { steel: 1 },
     outputs: { wire: 1 },
     category: 'manufacturing',
@@ -690,9 +685,9 @@ export const RECIPES: Partial<Record<RecipeId, Recipe>> = {
     // and beam DEFERRED until they have an explicit consumer.
   },
 
-  // T3 chemistry / electronics.
+  // T3 chemistry / electronics — rebalanced for idle-game scale, step #19 (×20).
   silicon_crusher: {
-    cycleSec: 30,
+    cycleSec: 600, // rebalanced for idle-game scale, step #19 (×20: was 30s)
     inputs: { quartz: 1 },
     outputs: { silicon: 1 },
     category: 'smelting',
@@ -701,7 +696,7 @@ export const RECIPES: Partial<Record<RecipeId, Recipe>> = {
     // Lab directly; the wafer intermediate is DEFERRED.
   },
   air_separator: {
-    cycleSec: 30,
+    cycleSec: 600, // rebalanced for idle-game scale, step #19 (×20: was 30s)
     inputs: {},
     outputs: { nitrogen: 1 },
     category: 'chemistry',
@@ -709,13 +704,13 @@ export const RECIPES: Partial<Record<RecipeId, Recipe>> = {
     // nitrogen only until oxygen/argon consumers land.
   },
   cryo_lab: {
-    cycleSec: 60,
+    cycleSec: 1200, // rebalanced for idle-game scale, step #19 (×20: was 60s)
     inputs: { hydrogen: 1, nitrogen: 1 },
     outputs: { cryo_coolant: 1 },
     category: 'chemistry',
   },
   cryo_compressor: {
-    cycleSec: 90,
+    cycleSec: 1800, // rebalanced for idle-game scale, step #19 (×20: was 90s)
     inputs: { hydrogen: 1, cryo_coolant: 1 },
     outputs: { cryogenic_hydrogen: 1 },
     category: 'chemistry',
@@ -725,7 +720,7 @@ export const RECIPES: Partial<Record<RecipeId, Recipe>> = {
     // remains DEFERRED.
   },
   kerosene_refinery: {
-    cycleSec: 60,
+    cycleSec: 1200, // rebalanced for idle-game scale, step #19 (×20: was 60s)
     inputs: { crude_oil: 3, hydrogen: 1 },
     outputs: { aviation_kerosene: 1 },
     category: 'chemistry',
@@ -733,7 +728,7 @@ export const RECIPES: Partial<Record<RecipeId, Recipe>> = {
     // selection DEFERRED.
   },
   lithography_lab: {
-    cycleSec: 120,
+    cycleSec: 2400, // rebalanced for idle-game scale, step #19 (×20: was 120s)
     inputs: { silicon: 1, wire: 1 },
     outputs: { microchip: 1 },
     category: 'electronics',
@@ -742,7 +737,7 @@ export const RECIPES: Partial<Record<RecipeId, Recipe>> = {
     // stockpile-only output for step 18.
   },
   drilling_rig: {
-    cycleSec: 120,
+    cycleSec: 2400, // rebalanced for idle-game scale, step #19 (×20: was 120s)
     inputs: {},
     outputs: { helium_3: 1 },
     category: 'extraction',
@@ -753,16 +748,16 @@ export const RECIPES: Partial<Record<RecipeId, Recipe>> = {
   },
 
   // ---------------------------------------------------------------------------
-  // T5 raw extractors (§8.10 / step-18 closure)
+  // T5 raw extractors (§8.10 / step-18 closure) — rebalanced for idle-game scale, step #19 (×8)
   // ---------------------------------------------------------------------------
   // §8.10 spec describes deterministic per-cycle output rotation across
   // multiple raws ("deterministic given world seed + cycle index"). The
   // step-18 simplification: each extractor outputs a single raw per
-  // cycle, with §8.10 rotation logic DEFERRED. Cycle times are at the
-  // §8.10 lower bound (600-720s); spec range is 30 min to a few hours.
+  // cycle, with §8.10 rotation logic DEFERRED. Cycle times were at the
+  // §8.10 lower bound (600-720s); multiplied ×8 for idle-game scale.
   // Power consumption per §8.10 is in the 60-100 kW range (very large).
   aetheric_conduit: {
-    cycleSec: 600,
+    cycleSec: 4800, // rebalanced for idle-game scale, step #19 (×8: was 600s)
     inputs: {},
     outputs: { aetheric_current: 1 },
     category: 'extraction',
@@ -770,7 +765,7 @@ export const RECIPES: Partial<Record<RecipeId, Recipe>> = {
     // quantum_foam has no consumer in step 18 anyway.
   },
   spacetime_resonator: {
-    cycleSec: 720,
+    cycleSec: 5760, // rebalanced for idle-game scale, step #19 (×8: was 720s)
     inputs: {},
     outputs: { tachyon_stream: 1 },
     category: 'extraction',
@@ -778,7 +773,7 @@ export const RECIPES: Partial<Record<RecipeId, Recipe>> = {
     // spacetime_fragment has no consumer in step 18.
   },
   eldritch_sieve: {
-    cycleSec: 720,
+    cycleSec: 5760, // rebalanced for idle-game scale, step #19 (×8: was 720s)
     // Multi-output recipe: dark_matter + strange_matter per cycle.
     // §8.10 rotation across {dark, strange, higgs_flux} DEFERRED;
     // producing both in one cycle keeps the downstream Eldritch
@@ -789,9 +784,9 @@ export const RECIPES: Partial<Record<RecipeId, Recipe>> = {
     category: 'extraction',
   },
 
-  // T5 refining (§7.12 step-18 closure).
+  // T5 refining (§7.12 step-18 closure) — rebalanced for idle-game scale, step #19 (×8).
   plasma_forge: {
-    cycleSec: 600,
+    cycleSec: 4800, // rebalanced for idle-game scale, step #19 (×8: was 600s)
     inputs: { exotic_alloy: 1, casimir_energy: 1 },
     outputs: { plasma_charge: 1 },
     category: 'manufacturing',
@@ -799,13 +794,13 @@ export const RECIPES: Partial<Record<RecipeId, Recipe>> = {
     // fuel-tier selection DEFERRED.
   },
   eldritch_refiner: {
-    cycleSec: 1200,
+    cycleSec: 9600, // rebalanced for idle-game scale, step #19 (×8: was 1200s)
     inputs: { dark_matter: 1, strange_matter: 1 },
     outputs: { eldritch_processor: 1 },
     category: 'manufacturing',
   },
   phase_refiner: {
-    cycleSec: 1200,
+    cycleSec: 9600, // rebalanced for idle-game scale, step #19 (×8: was 1200s)
     inputs: { aetheric_current: 1, tachyon_stream: 1 },
     outputs: { phase_converter: 1 },
     category: 'manufacturing',

@@ -173,7 +173,7 @@ describe('dispatchVehicle', () => {
   it('happy path: deducts fuel + kit, appends vehicle, computes arrival', () => {
     const { world, home, homeState, target } = setup();
     // Distance = 30 tiles; fuel 5 × ship efficiency 12 = 60 tile range (covers
-    // 30). Travel time = 30 / 1 t/s = 30s → arrival at 1000 + 30_000.
+    // 30). Travel time = 30 / 0.25 t/s = 120s → arrival at 1000 + 120_000. (rebalanced step #19)
     const r = dispatchVehicle(world, home, homeState, target, 'ship', 5, 1, 1000);
     expect(r.ok).toBe(true);
     if (!r.ok) return;
@@ -185,7 +185,7 @@ describe('dispatchVehicle', () => {
     expect(r.vehicle.target).toBe('target');
     expect(r.vehicle.fuelLoaded).toBe(5);
     expect(r.vehicle.foundationKitCount).toBe(1);
-    expect(r.vehicle.expectedArrivalTime).toBe(1000 + 30_000);
+    expect(r.vehicle.expectedArrivalTime).toBe(1000 + 120_000); // rebalanced step #19 (was 30_000)
   });
 
   it('rejects a non-discovered target', () => {
@@ -361,7 +361,7 @@ describe('tickVehicles', () => {
   it('leaves a vehicle in flight when nowMs < expectedArrivalTime', () => {
     const { world, home, homeState, target, islandStates } = setup();
     dispatchVehicle(world, home, homeState, target, 'ship', 5, 1, 1000);
-    // Travel 30s → arrives at 31_000.
+    // Travel 120s → arrives at 121_000. (rebalanced step #19: 30/0.25=120s)
     const r = tickVehicles(world, islandStates, 5_000);
     expect(r.arrivals).toHaveLength(0);
     expect(world.vehicles).toHaveLength(1);
@@ -371,7 +371,8 @@ describe('tickVehicles', () => {
   it('populates target on arrival, places auto Cargo Dock, creates IslandState', () => {
     const { world, home, homeState, target, islandStates } = setup();
     dispatchVehicle(world, home, homeState, target, 'ship', 5, 1, 0);
-    const r = tickVehicles(world, islandStates, 31_000);
+    // Travel 120s → arrives at 120_000. (rebalanced step #19: 30/0.25=120s)
+    const r = tickVehicles(world, islandStates, 121_000);
     expect(r.arrivals).toHaveLength(1);
     expect(r.arrivals[0]!.targetIslandId).toBe('target');
     expect(r.arrivals[0]!.fromIslandId).toBe('home');
@@ -392,10 +393,10 @@ describe('tickVehicles', () => {
   it('places an auto Helipad for a helicopter arrival', () => {
     const { world, home, homeState, target, islandStates } = setup();
     home.buildings.push({ id: 'hp', defId: 'helipad', x: 1, y: 1 });
-    // Helicopter: speed 3 t/s, eff 4 tiles/fuel. 30 tile trip = 10s. Need
-    // 30/4 = 7.5 → 8 fuel min. Use 10 fuel.
+    // Helicopter: speed 0.75 t/s, eff 4 tiles/fuel. 30 tile trip = 40s. Need
+    // 30/4 = 7.5 → 8 fuel min. Use 10 fuel. (rebalanced step #19: was speed 3 → 10s)
     dispatchVehicle(world, home, homeState, target, 'helicopter', 10, 1, 0);
-    tickVehicles(world, islandStates, 11_000);
+    tickVehicles(world, islandStates, 41_000);
     expect(target.populated).toBe(true);
     const heliBuilding = target.buildings.find((b) => b.defId === 'helipad');
     expect(heliBuilding).toBeDefined();
@@ -407,7 +408,8 @@ describe('tickVehicles', () => {
     dispatchVehicle(world, home, homeState, target, 'ship', 5, 1, 0);
     // External path populates the target before the tick fires.
     target.populated = true;
-    const r = tickVehicles(world, islandStates, 31_000);
+    // 30 tiles / 0.25 t/s = 120s. (rebalanced step #19)
+    const r = tickVehicles(world, islandStates, 121_000);
     expect(r.arrivals).toHaveLength(1);
     // Target stays populated; vehicle consumed (lost cargo) but no new
     // IslandState was created since one might already exist.
@@ -421,7 +423,8 @@ describe('tickVehicles', () => {
     dispatchVehicle(world, home, homeState, target, 'ship', 5, 1, 0);
     // Already consumed at dispatch.
     expect(homeState.inventory.foundation_kit).toBe(2);
-    tickVehicles(world, islandStates, 31_000);
+    // 30 tiles / 0.25 t/s = 120s. (rebalanced step #19)
+    tickVehicles(world, islandStates, 121_000);
     // Not consumed again at arrival.
     expect(homeState.inventory.foundation_kit).toBe(2);
   });
@@ -439,8 +442,8 @@ describe('tickVehicles', () => {
     dispatchVehicle(world, home, homeState, target, 'ship', 5, 1, 0);
     dispatchVehicle(world, home, homeState, target2, 'ship', 5, 1, 0);
     expect(world.vehicles).toHaveLength(2);
-    // Tick at 25s — target2 (20 tile trip → 20s) has arrived; target (30s) hasn't.
-    const r = tickVehicles(world, islandStates, 25_000);
+    // Tick at 85s — target2 (20 tile / 0.25 t/s = 80s) has arrived; target (30 tile / 0.25 t/s = 120s) hasn't. (rebalanced step #19)
+    const r = tickVehicles(world, islandStates, 85_000);
     expect(r.arrivals).toHaveLength(1);
     expect(r.arrivals[0]!.targetIslandId).toBe('target2');
     expect(world.vehicles).toHaveLength(1);

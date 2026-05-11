@@ -580,8 +580,11 @@ const FUNNELING_BONUS_PERCENT_FOR_DRAIN = 0.5;
  */
 export function xpForLevel(n: number): number {
   if (n <= 1) return 0;
-  if (n <= 50) return 100 * Math.pow(n, 2.2);
-  const at50 = 100 * Math.pow(50, 2.2);
+  // Rebalanced for idle-game scale, step #19: coefficient ÷4 (100 → 25) so
+  // L1→L5 ≈ 1760 XP (~25 min at 1.2 XP/sec). Both segments use 25 to keep
+  // the polynomial/exponential boundary continuous at n=50.
+  if (n <= 50) return 25 * Math.pow(n, 2.2);
+  const at50 = 25 * Math.pow(50, 2.2);
   return at50 * Math.pow(1.2, n - 50);
 }
 

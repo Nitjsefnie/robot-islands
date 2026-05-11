@@ -523,13 +523,10 @@ async function main(): Promise<void> {
     const homeState = makeInitialIslandState(homeSpec, performance.now());
     islandStates.set('home', homeState);
     // Step-12 demo seed: foundation_kit + biofuel for settlement-vehicle
-    // dispatch. The default biofuel:50 seed in `startingInventory` is
-    // enough for a few drone launches; we top it up to 100 so the player
-    // can drone-discover AND immediately commission a settlement run.
-    // 3 kits = 3 potential settlements, matches the §12.6 "loadout"
-    // language without committing the player to the full assemble loop
-    // before they see the mechanic in action. New colonies arriving
-    // via settlement vehicles START EMPTY (no kit/biofuel seed).
+    // dispatch. startingInventory now seeds biofuel:100 and foundation_kit:3
+    // (rebalanced step #19), so these overrides are kept for clarity but are
+    // now redundant with the base seed. New colonies arriving via settlement
+    // vehicles START EMPTY (no kit/biofuel seed).
     homeState.inventory.foundation_kit = 3;
     homeState.inventory.biofuel = 100;
     for (const spec of worldState.islands) {
@@ -557,14 +554,18 @@ async function main(): Promise<void> {
     if (forestNe) {
       forestNe.level = 50;
       forestNe.aiCoreCrafted = true; // §13.1 T5 access — manual demo seed
-      forestNe.inventory.steel = 300;
-      forestNe.inventory.iron_ingot = 200;
-      forestNe.inventory.wood = 600;
-      forestNe.inventory.helium_3 = 50; // demo seed — Fusion Core fuel
+      // Rebalanced for idle-game scale, step #19: bumped proportionally to
+      // new BASELINE_STORAGE_CAP (2000) so the demo island has meaningful
+      // pre-seeded stock relative to the larger caps.
+      forestNe.inventory.steel = 1000; // rebalanced step #19 (was 300)
+      forestNe.inventory.iron_ingot = 600; // rebalanced step #19 (was 200)
+      forestNe.inventory.wood = 2000; // rebalanced step #19 (was 600)
+      forestNe.inventory.helium_3 = 100; // rebalanced step #19 (was 50)
       // T4 / T5 seeds so a hypothetical Reality Forge run could draw inputs.
-      forestNe.inventory.exotic_alloy = 20;
-      forestNe.inventory.ai_core = 10;
-      forestNe.inventory.casimir_energy = 10;
+      forestNe.inventory.exotic_alloy = 50; // rebalanced step #19 (was 20)
+      forestNe.inventory.ai_core = 30; // rebalanced step #19 (was 10)
+      forestNe.inventory.casimir_energy = 30; // rebalanced step #19 (was 10)
+      forestNe.inventory.quantum_chip = 30; // rebalanced step #19 (added)
     }
   }
   // Sanity gate: home state must exist after init. The `homeState`/`homeSpec`

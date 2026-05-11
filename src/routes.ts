@@ -66,15 +66,12 @@ export interface Route {
 // Step-7 tuning constants
 // ---------------------------------------------------------------------------
 
-/** T1 cargo travel speed in tiles per second. Slower than drones (which are
- *  2 tiles/sec) on the assumption that surface freight is slower than
- *  airborne scouts. */
-export const T1_CARGO_SPEED_TILES_PER_SEC = 4;
+/** T1 cargo travel speed in tiles per second. Rebalanced for idle-game scale,
+ *  step #19: 4 → 1 t/s so a 50-tile route takes 50s instead of 12s. */
+export const T1_CARGO_SPEED_TILES_PER_SEC = 1; // rebalanced for idle-game scale, step #19 (was 4)
 
-/** T1 cargo throughput in units per second. Placeholder; tuned so the step-7
- *  demo route between home (0,0) and forest-ne (40,-10) — ~41 tiles, ~10s
- *  transit — produces visible cargo flow without instantly saturating
- *  forest-ne's storage caps. */
+/** T1 cargo throughput in units per second. Unchanged from step-7 — capacity
+ *  is independent of speed; idle players accrue larger totals over time. */
 export const T1_CARGO_CAPACITY_UNITS_PER_SEC = 0.5;
 
 /** Funneling bonus per §10 / Appendix A placeholder (50%). */
