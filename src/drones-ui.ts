@@ -99,10 +99,11 @@ export interface DroneUiHandle {
 export interface DroneUiDeps {
   /** The world state — drones list and islands. */
   readonly world: WorldState;
-  /** The home island state (only origin we support in step 6). */
-  readonly home: IslandState;
-  /** The home island's spec (read for origin coordinates in tiles). */
-  readonly homeSpec: IslandSpec;
+  /** Active-island state getter. Drone-launch origin is the currently
+   *  active island; switching active retargets the panel without re-mount. */
+  getOrigin(): IslandState;
+  /** Active-island spec getter (origin coords + dronepad presence). */
+  getOriginSpec(): IslandSpec;
   /** Convert a screen-pixel point to a world-tile point (fed by main.ts
    *  using the camera). */
   screenToWorldTile(screenX: number, screenY: number): { x: number; y: number };
@@ -553,10 +554,11 @@ export function mountDronesUi(parentEl: HTMLElement, deps: DroneUiDeps): DroneUi
     if (!launchMode) return;
     reticleGfx.position.set(x, y);
     // Update colour: amber when the cursor's world-tile distance from the
-    // home origin exceeds the configured outbound range, cyan otherwise.
+    // active origin exceeds the configured outbound range, cyan otherwise.
+    const originSpec = deps.getOriginSpec();
     const wp = deps.screenToWorldTile(x, y);
-    const dx = wp.x - deps.homeSpec.cx;
-    const dy = wp.y - deps.homeSpec.cy;
+    const dx = wp.x - originSpec.cx;
+    const dy = wp.y - originSpec.cy;
     const dist = Math.sqrt(dx * dx + dy * dy);
     const outbound = (fuelLoaded * DRONE_TIER_EFFICIENCY) / 2;
     ensurePainted(dist > outbound ? RETICLE_WARN : RETICLE_OK);
@@ -707,7 +709,9 @@ export function mountDronesUi(parentEl: HTMLElement, deps: DroneUiDeps): DroneUi
   // -------------------------------------------------------------------------
   function refresh(nowMs: number): void {
     // Stat block always tracks the current slider.
-    const onhand = inv(deps.home, 'biofuel');
+    const origin = deps.getOrigin();
+    const originSpec = deps.getOriginSpec();
+    const onhand = inv(origin, 'biofuel');
     fuelStat.valueEl.textContent = `${onhand.toFixed(0)} u`;
     fuelStat.valueEl.style.color = onhand >= fuelLoaded ? FG : WARN;
     sliderHeadR.textContent = `${fuelLoaded} u`;
@@ -715,13 +719,27 @@ export function mountDronesUi(parentEl: HTMLElement, deps: DroneUiDeps): DroneUi
     const flightSec = (fuelLoaded * DRONE_TIER_EFFICIENCY) / DRONE_SPEED_TILES_PER_SEC;
     etaStat.valueEl.textContent = `${flightSec.toFixed(0)}s`;
 
-    // Disable the arm button if not enough fuel or already in flight.
-    const inFlight = deps.world.drones.some((d) => d.fromIslandId === deps.home.id);
-    const canLaunch = onhand >= fuelLoaded && !inFlight;
+    // Active island must carry a Drone Pad to launch — otherwise the arm
+    // button is gated. Same `defId` discipline the settlement panel uses
+    // for shipyard/helipad.
+    const hasDronePad = originSpec.buildings.some((b) => b.defId === 'dronepad');
+    const inFlight = deps.world.drones.some((d) => d.fromIslandId === origin.id);
+    const canLaunch = hasDronePad && onhand >= fuelLoaded && !inFlight;
     armBtn.disabled = !canLaunch;
     armBtn.style.opacity = canLaunch ? '1' : '0.5';
     armBtn.style.cursor = canLaunch ? 'pointer' : 'not-allowed';
+    // Auto-disarm BEFORE recomputing button text — `setLaunchMode(false)`
+    // writes its own "◇ ARM LAUNCH" string, and a no-drone-pad active
+    // island would otherwise flicker between "NO DRONE PAD" (this branch)
+    // and "ARM LAUNCH" (the disarm) on the same frame.
     if (!canLaunch && launchMode) setLaunchMode(false);
+    if (!hasDronePad) {
+      armBtn.textContent = '◇ NO DRONE PAD';
+      armBtn.title = 'Active island has no Drone Pad';
+    } else if (!launchMode) {
+      armBtn.textContent = '◇ ARM LAUNCH';
+      armBtn.title = '';
+    }
 
     repaintLedger(nowMs);
     repaintDroneLayer(nowMs);
@@ -750,11 +768,13 @@ export function mountDronesUi(parentEl: HTMLElement, deps: DroneUiDeps): DroneUi
     targetWorldTileY: number,
     nowMs: number,
   ): { ok: boolean; reason?: string } {
-    const ox = deps.homeSpec.cx;
-    const oy = deps.homeSpec.cy;
+    const originSpec = deps.getOriginSpec();
+    const origin = deps.getOrigin();
+    const ox = originSpec.cx;
+    const oy = originSpec.cy;
     const dx = targetWorldTileX - ox;
     const dy = targetWorldTileY - oy;
-    const r = dispatchDrone(deps.world, deps.home, ox, oy, dx, dy, fuelLoaded, nowMs);
+    const r = dispatchDrone(deps.world, origin, ox, oy, dx, dy, fuelLoaded, nowMs);
     if (r.ok) {
       setLaunchMode(false);
       refresh(nowMs);

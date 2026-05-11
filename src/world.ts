@@ -128,6 +128,35 @@ export function distSqTiles(ax: number, ay: number, bx: number, by: number): num
 }
 
 /**
+ * Point-in-ellipse hit-test for active-island selection. Returns the first
+ * populated island whose ellipse covers `(wx, wy)` (in world-tile coords),
+ * or null if the point lies outside every populated island. Fractional
+ * coordinates accepted — the click pivots from screenToWorldTile, which
+ * doesn't snap to integer tiles.
+ *
+ * Iterates only `populated` islands (active-island switching is the player
+ * picking which colony to focus on; discovered-only islands have no state
+ * and can't be active). First match wins, so overlapping populated islands
+ * would pick the one earlier in the spec array — but per §3 islands are
+ * spaced so this case doesn't arise.
+ */
+export function findPopulatedIslandAt(
+  wx: number,
+  wy: number,
+  islands: ReadonlyArray<IslandSpec>,
+): IslandSpec | null {
+  for (const s of islands) {
+    if (!s.populated) continue;
+    const dx = wx - s.cx;
+    const dy = wy - s.cy;
+    const a = s.majorRadius;
+    const b = s.minorRadius;
+    if ((dx * dx) / (a * a) + (dy * dy) / (b * b) <= 1) return s;
+  }
+  return null;
+}
+
+/**
  * Classify a single island into one of three render states.
  *
  * Logic (the population short-circuit means we don't have to set

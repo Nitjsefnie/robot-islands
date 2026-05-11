@@ -49,6 +49,10 @@ export interface ConstructionUiOptions {
    *  this each open. The reference is captured; mutations flow through. */
   readonly world: WorldState;
   readonly islandStates: Map<string, IslandState>;
+  /** Optional: current active-island id. The founder picker prefers this
+   *  when it appears in the eligible-founders list, so opening the panel
+   *  after clicking a T3+ island defaults to that island. */
+  getActiveIslandId?(): string;
   /** Called after a successful construct. The result is the new spec + state,
    *  the founder id (in case the caller wants to render an attribution), and
    *  the now-ms for any animation hooks. Callers are responsible for:
@@ -590,9 +594,18 @@ export function mountConstructionUi(
         opt.textContent = `${spec.id} (${spec.biome}, L${state.level})`;
         founderSelect.appendChild(opt);
       }
-      // Reselect previous if still valid; otherwise pick the first.
+      // Reselect previous if still valid; otherwise prefer the currently
+      // active island (if eligible); fall back to the first eligible.
       const stillValid = eligible.find((e) => e.spec.id === prevSelection);
-      const target = stillValid ? prevSelection : eligible[0]?.spec.id ?? null;
+      const activeId = options.getActiveIslandId?.();
+      const activeEligible = activeId
+        ? eligible.find((e) => e.spec.id === activeId)
+        : undefined;
+      const target =
+        stillValid?.spec.id ??
+        activeEligible?.spec.id ??
+        eligible[0]?.spec.id ??
+        null;
       selectedFounder = target;
       if (target) founderSelect.value = target;
     }

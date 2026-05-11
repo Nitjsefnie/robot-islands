@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   DEMO_ISLANDS,
+  findPopulatedIslandAt,
   islandRenderState,
   VISION_RADIUS_TILES,
   type IslandSpec,
@@ -84,5 +85,84 @@ describe('islandRenderState', () => {
     expect(islandRenderState(get('forest-ne'), populatedCentres, VISION_RADIUS_TILES)).toBe('visible');
     expect(islandRenderState(get('desert-far'), populatedCentres, VISION_RADIUS_TILES)).toBe('discovered');
     expect(islandRenderState(get('coast-unknown'), populatedCentres, VISION_RADIUS_TILES)).toBe('unknown');
+  });
+});
+
+describe('findPopulatedIslandAt', () => {
+  // Hand-built fixture mirroring a tiny slice of the demo layout: home at
+  // origin (r=14), forest-ne at (40, -10) (r=10), desert-far at (80, 60)
+  // (r=12, unpopulated/discovered). Active-island selection ignores
+  // discovered-but-not-populated islands; only populated count.
+  const fixture: IslandSpec[] = [
+    {
+      id: 'home',
+      biome: 'plains',
+      cx: 0,
+      cy: 0,
+      majorRadius: 14,
+      minorRadius: 14,
+      populated: true,
+      discovered: true,
+      buildings: [],
+      modifiers: [],
+    },
+    {
+      id: 'forest-ne',
+      biome: 'forest',
+      cx: 40,
+      cy: -10,
+      majorRadius: 10,
+      minorRadius: 10,
+      populated: true,
+      discovered: true,
+      buildings: [],
+      modifiers: [],
+    },
+    {
+      id: 'desert-far',
+      biome: 'desert',
+      cx: 80,
+      cy: 60,
+      majorRadius: 12,
+      minorRadius: 12,
+      populated: false,
+      discovered: true,
+      buildings: [],
+      modifiers: [],
+    },
+  ];
+
+  it('returns the populated island whose ellipse covers the click point', () => {
+    const r = findPopulatedIslandAt(0, 0, fixture);
+    expect(r?.id).toBe('home');
+  });
+
+  it('matches an off-centre but inscribed click', () => {
+    // (40, -10) is forest-ne's centre; (43, -8) is well inside its r=10 disk.
+    const r = findPopulatedIslandAt(43, -8, fixture);
+    expect(r?.id).toBe('forest-ne');
+  });
+
+  it('returns null on open ocean (no island covers the point)', () => {
+    const r = findPopulatedIslandAt(200, 200, fixture);
+    expect(r).toBeNull();
+  });
+
+  it('returns null when the click lands on an unpopulated (but discovered) island', () => {
+    // desert-far is discovered but not populated — should be ignored.
+    const r = findPopulatedIslandAt(80, 60, fixture);
+    expect(r).toBeNull();
+  });
+
+  it('rejects a click just outside the ellipse boundary', () => {
+    // home has r=14; (15, 0) is one tile outside.
+    const r = findPopulatedIslandAt(15, 0, fixture);
+    expect(r).toBeNull();
+  });
+
+  it('accepts a click on the ellipse boundary (<= 1)', () => {
+    // (14, 0) lies exactly on the r=14 ellipse — boundary is inclusive.
+    const r = findPopulatedIslandAt(14, 0, fixture);
+    expect(r?.id).toBe('home');
   });
 });

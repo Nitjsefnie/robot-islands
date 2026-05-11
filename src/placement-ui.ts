@@ -74,12 +74,12 @@ export interface PlacementUiHandle {
 }
 
 export interface PlacementUiDeps {
-  /** Active target island for placement. Step 2.5 defaults to home; the
-   *  per-island target picker is deferred per the task brief. */
-  readonly targetSpec: IslandSpec;
-  /** Live state for the same island. Pair stays consistent — the caller
-   *  picks both. */
-  readonly targetState: IslandState;
+  /** Active target island spec. Resolved per-call so a click-to-switch
+   *  on the map retargets placement without re-mounting the UI. */
+  getTargetSpec(): IslandSpec;
+  /** Active target island state. Paired with `getTargetSpec`; both must
+   *  resolve to the same island id at any one call site. */
+  getTargetState(): IslandState;
   /** Screen → world-tile conversion. Same helper as drones-ui uses. */
   screenToWorldTile(screenX: number, screenY: number): { x: number; y: number };
   /** Called after a successful place so main.ts can rebuild render layers. */
@@ -162,16 +162,18 @@ export function mountPlacementUi(deps: PlacementUiDeps): PlacementUiHandle {
     }
 
     const def = BUILDING_DEFS[activeDefId];
+    const targetSpec = deps.getTargetSpec();
+    const targetState = deps.getTargetState();
 
     // Cursor → world-tile → island-local. The anchor is the integer tile
     // the cursor lies in.
     const wt = deps.screenToWorldTile(cursorScreenX, cursorScreenY);
-    const localX = Math.floor(wt.x - deps.targetSpec.cx);
-    const localY = Math.floor(wt.y - deps.targetSpec.cy);
+    const localX = Math.floor(wt.x - targetSpec.cx);
+    const localY = Math.floor(wt.y - targetSpec.cy);
 
     const v = validatePlacement(
-      deps.targetSpec,
-      deps.targetState,
+      targetSpec,
+      targetState,
       activeDefId,
       localX,
       localY,
@@ -185,7 +187,7 @@ export function mountPlacementUi(deps: PlacementUiDeps): PlacementUiHandle {
     // takes it from world-px to screen-px).
     outlineGfx.clear();
     const tiles = footprintTiles(def.width, def.height, localX, localY, rotation);
-    const islandWorldPx = tileToWorldPx(deps.targetSpec.cx, deps.targetSpec.cy);
+    const islandWorldPx = tileToWorldPx(targetSpec.cx, targetSpec.cy);
     const half = TILE_PX / 2;
     for (const t of tiles) {
       // tile (tx, ty) in island-local → world tile (tx + cx, ty + cy) →
@@ -264,12 +266,14 @@ export function mountPlacementUi(deps: PlacementUiDeps): PlacementUiHandle {
   }
   function attemptCommit(): { ok: boolean; reason?: PlacementReason } {
     if (!active || activeDefId === null) return { ok: false };
+    const targetSpec = deps.getTargetSpec();
+    const targetState = deps.getTargetState();
     const wt = deps.screenToWorldTile(cursorScreenX, cursorScreenY);
-    const localX = Math.floor(wt.x - deps.targetSpec.cx);
-    const localY = Math.floor(wt.y - deps.targetSpec.cy);
+    const localX = Math.floor(wt.x - targetSpec.cx);
+    const localY = Math.floor(wt.y - targetSpec.cy);
     const v = validatePlacement(
-      deps.targetSpec,
-      deps.targetState,
+      targetSpec,
+      targetState,
       activeDefId,
       localX,
       localY,
@@ -277,8 +281,8 @@ export function mountPlacementUi(deps: PlacementUiDeps): PlacementUiHandle {
     );
     if (!v.ok) return { ok: false, reason: v.reason };
     placeBuilding(
-      deps.targetSpec,
-      deps.targetState,
+      targetSpec,
+      targetState,
       activeDefId,
       localX,
       localY,

@@ -47,6 +47,14 @@ export interface BuildingsUiOptions {
   readonly onPlaceRequested?: (defId: BuildingDefId) => void;
 }
 
+/** Active-island getters injected at mount. The catalog reads through these
+ *  every refresh so a click-to-switch on the map updates the unlocked /
+ *  biome-locked banding without a re-mount. */
+export interface BuildingsUiDeps {
+  getState(): IslandState;
+  getSpec(): IslandSpec;
+}
+
 // ---------------------------------------------------------------------------
 // Palette — shared vocabulary with skilltree-ui.ts
 // ---------------------------------------------------------------------------
@@ -165,10 +173,14 @@ interface TierBandRef {
 
 export function mountBuildingsUi(
   parentEl: HTMLElement,
-  state: IslandState,
-  spec: IslandSpec,
+  deps: BuildingsUiDeps,
   options: BuildingsUiOptions = {},
 ): BuildingsUi {
+  // Per-call freshness: every handler / paint reads the current active
+  // state+spec through `deps`. Don't capture `state`/`spec` into closures
+  // here — active-island can change mid-session.
+  const getState = (): IslandState => deps.getState();
+  const getSpec = (): IslandSpec => deps.getSpec();
   const rowRefs = new Map<BuildingDefId, RowRef>();
   const tierBandRefs: TierBandRef[] = [];
 
@@ -511,12 +523,15 @@ export function mountBuildingsUi(
     // already, and `validatePlacement` would reject placement there
     // anyway).
     row.addEventListener('click', () => {
-      if (!buildingUnlocked(state.level, defId, state.aiCoreCrafted)) return;
-      if (!canPlaceOnIsland(BUILDING_DEFS[defId], spec)) return;
+      const st = getState();
+      const sp = getSpec();
+      if (!buildingUnlocked(st.level, defId, st.aiCoreCrafted)) return;
+      if (!canPlaceOnIsland(BUILDING_DEFS[defId], sp)) return;
       options.onPlaceRequested?.(defId);
     });
     row.addEventListener('mouseenter', () => {
-      if (!buildingUnlocked(state.level, defId, state.aiCoreCrafted)) return;
+      const st = getState();
+      if (!buildingUnlocked(st.level, defId, st.aiCoreCrafted)) return;
       row.style.background = ROW_BG_HOVER;
       row.style.borderLeftColor = ACCENT;
       row.style.cursor = 'pointer';
@@ -534,6 +549,8 @@ export function mountBuildingsUi(
 
   function paintRow(defId: BuildingDefId, ref: RowRef): void {
     const def = BUILDING_DEFS[defId];
+    const state = getState();
+    const spec = getSpec();
     const unlocked = buildingUnlocked(state.level, defId, state.aiCoreCrafted);
     // §9.5: biome-locked uniques (those with `requiredBiomes`) are tier-
     // unlocked but cannot be placed on this island unless biome matches and
@@ -695,6 +712,7 @@ export function mountBuildingsUi(
   }
 
   function paintTierBand(ref: TierBandRef): void {
+    const state = getState();
     const playerTier = tierForLevel(state.level);
     // T5 has a two-axis gate (level 50 AND aiCoreCrafted per §13.1). When the
     // level is met but the AI Core requirement isn't, show "AI CORE REQ"
@@ -780,6 +798,7 @@ export function mountBuildingsUi(
 
   function refresh(): void {
     if (!visible) return;
+    const state = getState();
     islandLevelVal.textContent = String(state.level);
     const playerTier = tierForLevel(state.level);
     islandTierVal.textContent = `T${playerTier}`;

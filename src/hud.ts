@@ -414,7 +414,11 @@ export function mountHud(parentEl: HTMLElement): HudHandle {
     vehiclesEnRoute: number,
   ): void {
     const need = xpForLevel(state.level + 1);
-    titleNode.textContent = 'Home Island';
+    // §3: every populated island is first-class. Title reads "Starting
+    // Island" for the special-cased home id (the demo seed), otherwise
+    // surfaces the active-island id verbatim — short demo ids like
+    // `forest-ne` read fine without title-casing.
+    titleNode.textContent = state.id === 'home' ? 'Starting Island' : state.id;
     levelText.textContent = `Level ${state.level}   XP ${fmt(state.xp)} / ${fmt(need)}`;
     levelText.style.color = '#cdd6f4';
 

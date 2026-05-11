@@ -60,6 +60,13 @@ export interface SkillTreeUiOptions {
   readonly onDeclareRole?: (role: RoleId) => void;
 }
 
+/** Active-island getter injected at mount. The panel reads the active
+ *  island's state through this every refresh / click — switching active
+ *  retargets the panel without re-mount. */
+export interface SkillTreeUiDeps {
+  getState(): IslandState;
+}
+
 // Palette — derived from the world ocean palette + HUD foreground.
 const PANEL_BG = 'rgba(14, 18, 26, 0.92)';
 const PANEL_BORDER = '#3a4452';
@@ -120,9 +127,11 @@ interface NodeRowRef {
 
 export function mountSkillTreeUi(
   parentEl: HTMLElement,
-  state: IslandState,
+  deps: SkillTreeUiDeps,
   options: SkillTreeUiOptions = {},
 ): SkillTreeUi {
+  // Fresh reads on every closure entry — active island can swap mid-session.
+  const getState = (): IslandState => deps.getState();
   // Forward-declared so the closures inside `nodeRow` can capture them. They
   // are populated before any `refresh()` call (which is itself bound at the
   // end of this function via the returned object).
@@ -220,7 +229,7 @@ export function mountSkillTreeUi(
     ].join(';'),
   );
   const subtitle = document.createElement('span');
-  subtitle.textContent = '§9.3 / home island';
+  subtitle.textContent = '§9.3';
   styled(
     subtitle,
     [
@@ -377,6 +386,7 @@ export function mountSkillTreeUi(
 
     // Click → attempt purchase. If allowed, mutate state and refresh.
     row.addEventListener('click', () => {
+      const state = getState();
       const r = canSpend(state, node.id);
       if (!r.ok) return;
       spendPoint(state, node.id);
@@ -391,6 +401,7 @@ export function mountSkillTreeUi(
       );
     });
     row.addEventListener('mouseenter', () => {
+      const state = getState();
       const r = canSpend(state, node.id);
       if (r.ok) {
         row.style.background = 'rgba(125, 211, 232, 0.08)';
@@ -884,6 +895,7 @@ export function mountSkillTreeUi(
     footerBtn.addEventListener('click', () => {
       // Re-check state at click time — the button can be enabled by a level
       // up between paints.
+      const state = getState();
       const role = state.specializationRole;
       if (role !== null) return; // already declared
       if (tierForLevel(state.level) < def.tierRequirement) return; // tier-locked
@@ -902,6 +914,7 @@ export function mountSkillTreeUi(
     // Hover wash for declarable cards. Refresh() repaints the base state on
     // mouseleave so a level-up mid-hover still settles correctly.
     card.addEventListener('mouseenter', () => {
+      const state = getState();
       if (state.specializationRole !== null) return;
       if (tierForLevel(state.level) < def.tierRequirement) return;
       card.style.background = 'rgba(245, 167, 66, 0.06)';
@@ -958,6 +971,7 @@ export function mountSkillTreeUi(
   panel.style.display = 'none';
 
   function applyState(node: SkillNode, ref: NodeRowRef): void {
+    const state = getState();
     const owned = state.unlockedNodes.has(node.id);
     const r = canSpend(state, node.id);
     if (owned) {
@@ -1000,6 +1014,7 @@ export function mountSkillTreeUi(
   }
 
   function refreshSpecialization(): void {
+    const state = getState();
     const declared: RoleId | null = state.specializationRole;
     const tier = tierForLevel(state.level);
     const unlocked = tier >= 3;
@@ -1101,6 +1116,7 @@ export function mountSkillTreeUi(
   refresh = (): void => {
     // Skip work while hidden — the ticker calls this every frame.
     if (!visible) return;
+    const state = getState();
     const need = xpForLevel(state.level + 1);
     levelVal.textContent = String(state.level);
     xpVal.textContent = `${state.xp.toFixed(0)} / ${need.toFixed(0)}`;

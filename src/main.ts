@@ -55,10 +55,12 @@ import { mountPlacementUi } from './placement-ui.js';
 import { mountSkillTreeUi } from './skilltree-ui.js';
 import { mountUi } from './ui.js';
 import {
+  findPopulatedIslandAt,
   islandRenderState,
   makeInitialIslandState,
   makeInitialWorld,
   renderIsland,
+  tileToWorldPx,
   VISION_RADIUS_TILES,
   type IslandSpec,
   type WorldState,
@@ -207,7 +209,12 @@ async function main(): Promise<void> {
     zoomAt(cam, viewportCentre(), clampZoom(cam.zoom / KEY_ZOOM_STEP));
   });
   defineAction(reg, 'center-home', () => {
-    centerOn(cam, { x: 0, y: 0 }, viewportCentre());
+    // §3: re-centre on the active island. Pre-active-selection this
+    // always centred on world origin (where the home demo island sits);
+    // post-active-selection the action follows the player's focus.
+    const spec = activeSpec();
+    const wpx = tileToWorldPx(spec.cx, spec.cy);
+    centerOn(cam, { x: wpx.x, y: wpx.y }, viewportCentre());
   });
   defineAction(reg, 'toggle-grid', () => {
     gridLayer.visible = !gridLayer.visible;
@@ -219,7 +226,7 @@ async function main(): Promise<void> {
   defineAction(reg, 'toggle-buildings', () => undefined);
   defineAction(reg, 'dismiss-modal', () => undefined);
   // Same pattern for drone ops: stub registered here, real handler bound
-  // after the UI is mounted (which needs `homeState`).
+  // after the UI is mounted (which needs the active-island getters).
   defineAction(reg, 'toggle-drones', () => undefined);
   defineAction(reg, 'toggle-routes', () => undefined);
   defineAction(reg, 'toggle-settlement', () => undefined);
@@ -336,6 +343,27 @@ async function main(): Promise<void> {
       // so we just call attemptCommit — it'll read the current cursor
       // and validate before pushing.
       placementUi.attemptCommit();
+      return;
+    }
+    // §3 active-island fallback. Runs AFTER the drone-launch / settlement /
+    // placement branches above (each `return`s on commit) so it only fires
+    // on a plain canvas click. The hit-test ignores discovered-but-not-
+    // populated islands and open ocean (returns null → no switch).
+    if (accumDrag < CLICK_DRAG_PX_MAX) {
+      const rect = app.canvas.getBoundingClientRect();
+      const sx = e.clientX - rect.left;
+      const sy = e.clientY - rect.top;
+      if (sx < 0 || sx > rect.width || sy < 0 || sy > rect.height) return;
+      const wt = screenToWorldTile(sx, sy);
+      const hit = findPopulatedIslandAt(wt.x, wt.y, worldState.islands);
+      if (hit && hit.id !== activeIslandId) {
+        activeIslandId = hit.id;
+        // Centre the camera on the new active island so the player sees
+        // the context switch confirmed. Halo redraw + panel re-targets
+        // happen on the next ticker pass.
+        const wpx = tileToWorldPx(hit.cx, hit.cy);
+        centerOn(cam, { x: wpx.x, y: wpx.y }, viewportCentre());
+      }
     }
   });
   window.addEventListener('mousemove', (e) => {
@@ -400,7 +428,7 @@ async function main(): Promise<void> {
   // UI overlay
   mountUi(document.body, reg, [
     { label: 'Toggle Grid (G)', action: 'toggle-grid' },
-    { label: 'Center on Home (H)', action: 'center-home' },
+    { label: 'Center on Active (H)', action: 'center-home' },
     { label: 'Skill Tree (K)', action: 'toggle-skill-tree' },
     { label: 'Buildings (B)', action: 'toggle-buildings' },
     { label: 'Drones (J)', action: 'toggle-drones' },
@@ -413,7 +441,7 @@ async function main(): Promise<void> {
   // Economy state — multi-island
   // -----------------------------------------------------------------------
   //
-  // Step 7 promotes the single `homeState` to a Map keyed by island id, so
+  // Step 7 promoted the single home state to a Map keyed by island id, so
   // routes can dispatch between any two populated islands. The HUD still
   // tracks the home island only — multi-island HUD is a deferred step-14
   // polish concern. `forest-ne` is hardcoded populated for the step-7 demo
@@ -475,16 +503,38 @@ async function main(): Promise<void> {
       forestNe.inventory.casimir_energy = 10;
     }
   }
-  // After init, `homeState` is whichever state is in the map for 'home' —
-  // restored or fresh. The rest of the file binds against homeState by
-  // reference, so we resolve it once here and keep the existing wiring.
-  const homeState = islandStates.get('home');
-  if (!homeState) throw new Error('main: home island state missing after init');
+  // Sanity gate: home state must exist after init. The `homeState`/`homeSpec`
+  // locals served as the per-panel anchor before active-island selection
+  // landed; today every panel reads through the active getter pair below.
+  if (!islandStates.get('home')) {
+    throw new Error('main: home island state missing after init');
+  }
   // Spec lookup by id — also needed by routes UI later. Built once; spec
   // identity is stable across the session (drones flip discovered, but
   // spec objects themselves aren't replaced).
   const islandSpecsById = new Map<string, IslandSpec>();
   for (const s of worldState.islands) islandSpecsById.set(s.id, s);
+
+  // -----------------------------------------------------------------------
+  // Active island selection — §3 (no island privileged in code)
+  // -----------------------------------------------------------------------
+  //
+  // `activeIslandId` is the single source of truth for which populated
+  // colony every panel currently targets. Defaults to 'home' on fresh
+  // start AND restored loads (transient — not persisted, per the brief).
+  // The two getters resolve to the live spec/state on every call so
+  // panels see fresh values after a click-to-switch without re-mounting.
+  let activeIslandId: string = 'home';
+  function activeSpec(): IslandSpec {
+    const s = islandSpecsById.get(activeIslandId);
+    if (!s) throw new Error(`main: active spec missing for ${activeIslandId}`);
+    return s;
+  }
+  function activeState(): IslandState {
+    const s = islandStates.get(activeIslandId);
+    if (!s) throw new Error(`main: active state missing for ${activeIslandId}`);
+    return s;
+  }
   // Precomputed modifier multipliers keyed by island id. Modifier sets are
   // immutable in step 8 (no rerolls, no random events firing yet), so we
   // bake them once and reuse every frame instead of re-folding every tick.
@@ -503,37 +553,37 @@ async function main(): Promise<void> {
   const hud = mountHud(document.body);
 
   // Skill tree panel — modal-ish DOM overlay, dismissed via KeyK, Escape,
-  // or its close button. Hooks the previously-stubbed `toggle-skill-tree`
-  // action.
-  const skillTree = mountSkillTreeUi(document.body, homeState);
+  // or its close button. Reads the active island's state through the
+  // getter on every refresh, so click-to-switch retargets without remount.
+  const skillTree = mountSkillTreeUi(document.body, { getState: activeState });
   defineAction(reg, 'toggle-skill-tree', () => {
     skillTree.toggle();
   });
 
   // Buildings catalog — sister modal panel to the skill tree. KeyB toggles;
   // Escape routes to whichever modal is visible (`dismiss-modal` below).
-  // §9.5: passes homeSpec so the catalog can flag biome-locked uniques
-  // (Pyroforge / Cryogenic Compute Center) as placement-locked when the
-  // current island's biome doesn't match.
+  // §9.5: reads the active spec through the getter so biome-locked uniques
+  // (Pyroforge / Cryogenic Compute Center) re-evaluate against whichever
+  // island the player has selected.
   // §4 (step 2.5): the `onPlaceRequested` callback hides the modal and
-  // arms placement mode on the home island. Per-island target selection
-  // is deferred; placement always targets the home spec for now.
-  const buildingsUi = mountBuildingsUi(document.body, homeState, homeSpec, {
-    onPlaceRequested: (defId) => {
-      buildingsUi.hide();
-      // Mutual-exclusion: disarm drone launch + settlement launch before
-      // entering placement so a mouseup-commit reaches the placement branch
-      // instead of firing a drone OR a settlement vehicle. The reverse arrows
-      // (entering drone/settlement mode → placementUi.cancel()) are wired in
-      // their respective onLaunchModeChanged callbacks. `disarmSettlement-
-      // Launch` is the same forward-declared shim that dronesUi uses to
-      // reach the settlement panel from a callback that may run before the
-      // settlement panel is fully constructed.
-      dronesUi.setLaunchMode(false);
-      disarmSettlementLaunch();
-      placementUi.begin(defId);
+  // arms placement mode on the active island.
+  const buildingsUi = mountBuildingsUi(
+    document.body,
+    { getState: activeState, getSpec: activeSpec },
+    {
+      onPlaceRequested: (defId) => {
+        buildingsUi.hide();
+        // Mutual-exclusion: disarm drone launch + settlement launch before
+        // entering placement so a mouseup-commit reaches the placement branch
+        // instead of firing a drone OR a settlement vehicle. The reverse arrows
+        // (entering drone/settlement mode → placementUi.cancel()) are wired in
+        // their respective onLaunchModeChanged callbacks.
+        dronesUi.setLaunchMode(false);
+        disarmSettlementLaunch();
+        placementUi.begin(defId);
+      },
     },
-  });
+  );
   defineAction(reg, 'toggle-buildings', () => {
     buildingsUi.toggle();
   });
@@ -542,11 +592,10 @@ async function main(): Promise<void> {
   // preview). Two layers: `previewLayer` lives in world space so the
   // footprint outline scales with zoom and overlays the target tiles;
   // `statusLayer` lives in screen space so the small label stays a fixed
-  // pixel size. Target island defaults to `homeSpec`/`homeState` — the
-  // per-island target picker is deferred per the task brief.
+  // pixel size. Target follows the active island via the getters.
   const placementUi = mountPlacementUi({
-    targetSpec: homeSpec,
-    targetState: homeState,
+    getTargetSpec: activeSpec,
+    getTargetState: activeState,
     screenToWorldTile,
     onPlaced: () => {
       rebuildWorldLayers();
@@ -567,6 +616,7 @@ async function main(): Promise<void> {
   const constructionUi = mountConstructionUi(document.body, {
     world: worldState,
     islandStates,
+    getActiveIslandId: () => activeIslandId,
     onConstruct: ({ newSpec, newState }) => {
       worldState.islands.push(newSpec);
       islandStates.set(newSpec.id, newState);
@@ -602,11 +652,13 @@ async function main(): Promise<void> {
   // populates once the panel exists. No-op until that runs.
   let disarmSettlementLaunch: () => void = () => undefined;
 
-  // Drone-ops side dock + canvas reticle + drone-dot layer.
+  // Drone-ops side dock + canvas reticle + drone-dot layer. Origin =
+  // active island. The arm-launch button greys out when the active
+  // island lacks a Drone Pad (gating handled inside drones-ui refresh).
   const dronesUi = mountDronesUi(document.body, {
     world: worldState,
-    home: homeState,
-    homeSpec,
+    getOrigin: activeState,
+    getOriginSpec: activeSpec,
     screenToWorldTile,
     onDiscoveryChanged: rebuildWorldLayers,
     // Mutual-exclusion: when launch mode arms, cancel any in-progress
@@ -657,6 +709,7 @@ async function main(): Promise<void> {
     world: worldState,
     islandStates,
     islandSpecs: islandSpecsById,
+    getActiveIslandId: () => activeIslandId,
     screenToWorldTile,
     onLaunchModeChanged: (armed) => {
       if (armed) {
@@ -787,19 +840,23 @@ async function main(): Promise<void> {
     // Recompute rates AFTER the tick so the HUD shows the current
     // post-advance state (e.g., a freshly-stalled building reads as
     // 0 rate, not the rate it was running at one event ago).
-    const { net, power } = computeRates(homeState, {
-      modifierMul: modifierMulFor(homeState.id),
-      specMul: specMulFor(homeState),
-      ncBuff: ncBuffFor(homeState),
-      terrainAt: homeSpec.terrainAt,
+    // Read through the active getters so a click-to-switch updates the
+    // HUD on the next frame.
+    const activeS = activeState();
+    const activeP = activeSpec();
+    const { net, power } = computeRates(activeS, {
+      modifierMul: modifierMulFor(activeS.id),
+      specMul: specMulFor(activeS),
+      ncBuff: ncBuffFor(activeS),
+      terrainAt: activeP.terrainAt,
     });
     const saveAgeSec =
       lastSaveAt === null ? null : Math.max(0, Math.floor((now - lastSaveAt) / 1000));
     hud.update(
-      homeState,
+      activeS,
       net,
       power,
-      homeSpec,
+      activeP,
       ncState,
       saveAgeSec,
       worldState.vehicles.length,
@@ -834,7 +891,11 @@ async function main(): Promise<void> {
   if (import.meta.env.DEV) {
     (window as unknown as { __cam: Camera }).__cam = cam;
     (window as unknown as { __reg: typeof reg }).__reg = reg;
-    (window as unknown as { __home: typeof homeState }).__home = homeState;
+    // Active-island getters replace the old `__home` binding — `homeState`
+    // is no longer the privileged anchor, so a console binding tied to it
+    // would lie once the player clicks another island.
+    (window as unknown as { __active: () => IslandState }).__active = activeState;
+    (window as unknown as { __activeId: () => string }).__activeId = () => activeIslandId;
     void bind; // referenced for rebind-from-console workflows
     void TILE_PX;
   }

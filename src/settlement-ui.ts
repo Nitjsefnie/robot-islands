@@ -93,6 +93,10 @@ export interface SettlementUiDeps {
   readonly world: WorldState;
   readonly islandStates: Map<string, IslandState>;
   readonly islandSpecs: ReadonlyMap<string, IslandSpec>;
+  /** Optional: current active-island id. The FROM selector prefers this
+   *  when it appears in the populated list, so the panel opens with the
+   *  active island as the dispatch origin by default. */
+  getActiveIslandId?(): string;
   screenToWorldTile(screenX: number, screenY: number): { x: number; y: number };
   /** Called when launch mode toggles. main.ts uses this for mutual-exclusion
    *  with drone-launch + placement modes.
@@ -710,8 +714,13 @@ export function mountSettlementUi(parentEl: HTMLElement, deps: SettlementUiDeps)
       o.textContent = isl.id;
       fromSel.appendChild(o);
     }
+    const activeId = deps.getActiveIslandId?.();
+    const activeIsPopulated =
+      activeId !== undefined && populated.some((s) => s.id === activeId);
     if (prevFrom && populated.some((s) => s.id === prevFrom)) {
       fromSel.value = prevFrom;
+    } else if (activeIsPopulated && activeId !== undefined) {
+      fromSel.value = activeId;
     } else if (populated.length > 0) {
       fromSel.value = populated[0]!.id;
     }
