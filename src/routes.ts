@@ -89,10 +89,11 @@ export const FUNNELING_TIER_CAP = 3;
 // Route id generation
 // ---------------------------------------------------------------------------
 
-// FIXME(save-state): module-level counter resets on reload, which can collide
-// with persisted route ids when persistence lands. Move onto WorldState as
-// `nextRouteId: number`, or derive from `max(world.routes[*].id) + 1` at
-// allocation. Same class of issue as the drone id counter in drones.ts.
+// The module-level counter resets on reload. After persistence (step 14)
+// landed, the loader in `persistence.ts` calls `_seedRouteIdCounter` with
+// the maximum numeric suffix found in the restored `world.routes`, so the
+// next allocation is `max + 1` and never collides with a saved id. Same
+// pattern as `_seedDroneIdCounter` in `drones.ts`.
 let routeIdCounter = 0;
 export function nextRouteId(): string {
   routeIdCounter += 1;
@@ -102,6 +103,14 @@ export function nextRouteId(): string {
 /** Test-only — reset the route-id counter so each test gets stable ids. */
 export function _resetRouteIdCounter(): void {
   routeIdCounter = 0;
+}
+
+/** Seed the route-id counter so the next id is `route-${value + 1}`. Called
+ *  by the persistence loader after restoring `world.routes` so a freshly-
+ *  loaded session doesn't allocate route ids that collide with saved ones.
+ *  Idempotent: only raises the counter, never lowers it. */
+export function _seedRouteIdCounter(value: number): void {
+  if (value > routeIdCounter) routeIdCounter = value;
 }
 
 // ---------------------------------------------------------------------------

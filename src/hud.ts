@@ -36,12 +36,18 @@ import type { IslandSpec } from './world.js';
  */
 export interface HudHandle {
   readonly el: HTMLDivElement;
+  /** Per-frame refresh. `saveAgeSec` is the integer seconds since the last
+   *  successful save (`null` if no save has happened yet this session — the
+   *  "Saved" indicator falls back to a placeholder). The wider HUD update
+   *  surface comprises every field below; lastSaveAt threading is the only
+   *  step-14 polish addition. */
   update(
     state: IslandState,
     net: Record<ResourceId, number>,
     power: PowerBalance,
     spec: IslandSpec,
     ncState: NetworkConsciousnessState,
+    saveAgeSec: number | null,
   ): void;
 }
 
@@ -298,6 +304,31 @@ export function mountHud(parentEl: HTMLElement): HudHandle {
   networkLine.appendChild(networkValue);
   panel.appendChild(networkLine);
 
+  // Save indicator (§15.6 persistence). One-line "Saved · Ns ago" status,
+  // in FG_DIM grey so it sits under the other engineering readouts without
+  // competing for attention. The string is rebuilt once per frame from the
+  // integer seconds-since-last-save the ticker threads in. "just now" for
+  // anything below 2s.
+  const savedLine = document.createElement('div');
+  savedLine.style.cssText = [
+    'display: flex',
+    'justify-content: space-between',
+    'align-items: baseline',
+    'gap: 8px',
+    'padding-top: 1px',
+    'color: #6c7791', // FG_DIM
+    'font-size: 10.5px',
+    'letter-spacing: 0.04em',
+    'text-transform: uppercase',
+  ].join(';');
+  const savedLabel = document.createElement('span');
+  savedLabel.textContent = 'Saved';
+  const savedValue = document.createElement('span');
+  savedValue.style.cssText = ['font-variant-numeric: tabular-nums'].join(';');
+  savedLine.appendChild(savedLabel);
+  savedLine.appendChild(savedValue);
+  panel.appendChild(savedLine);
+
   const postNode = document.createTextNode('');
   panel.appendChild(postNode);
 
@@ -374,6 +405,7 @@ export function mountHud(parentEl: HTMLElement): HudHandle {
     power: PowerBalance,
     spec: IslandSpec,
     ncState: NetworkConsciousnessState,
+    saveAgeSec: number | null,
   ): void {
     const need = xpForLevel(state.level + 1);
     titleNode.textContent = 'Home Island';
@@ -431,6 +463,18 @@ export function mountHud(parentEl: HTMLElement): HudHandle {
       networkValue.textContent =
         `${ncState.tier3PlusCount} at T3+ · NC tier ${ncState.milestone} · +${buffPct}%`;
       networkValue.style.color = '#7dd3e8';
+    }
+
+    // Save-age indicator. Null when no save has happened yet this session
+    // (cold restart with no prior data, the tab is still booting). Below
+    // 2s shows "just now" so the just-saved moment doesn't flicker between
+    // "0s ago" and "1s ago".
+    if (saveAgeSec === null) {
+      savedValue.textContent = '—';
+    } else if (saveAgeSec < 2) {
+      savedValue.textContent = 'just now';
+    } else {
+      savedValue.textContent = `${saveAgeSec}s ago`;
     }
 
     const tailLines: string[] = [];

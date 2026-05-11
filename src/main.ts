@@ -48,6 +48,7 @@ import {
 } from './input.js';
 import { TILE_PX } from './island.js';
 import { renderOcean } from './ocean.js';
+import { loadWorld, saveWorld } from './persistence.js';
 import { mountBuildingsUi } from './buildings-ui.js';
 import { mountConstructionUi } from './construction-ui.js';
 import { mountPlacementUi } from './placement-ui.js';
@@ -100,7 +101,15 @@ async function main(): Promise<void> {
   // World state — mutable wrapper around the seed island data + the in-flight
   // drone fleet. `discovered` flags flip when drones return; `drones` mutates
   // on dispatch and tick. Renderer reads from here.
-  const worldState: WorldState = makeInitialWorld(performance.now());
+  //
+  // Step 14 (§15.6 persistence): try loadWorld() first. If a saved snapshot
+  // exists and is the current schema version, restore both worldState and
+  // islandStates from it; otherwise fall back to the existing demo-seed
+  // path (makeInitialWorld + per-spec makeInitialIslandState + the
+  // forest-ne T5/level-50 demo bumps). Either way, both bindings end up
+  // populated before the renderer hooks up.
+  const restored = await loadWorld();
+  const worldState: WorldState = restored ? restored.world : makeInitialWorld(performance.now());
 
   // Ocean + island layers are baked from the current world state. They get
   // rebuilt when discovery changes (drone return reveals new islands → new
@@ -387,46 +396,58 @@ async function main(): Promise<void> {
   // tracks the home island only — multi-island HUD is a deferred step-14
   // polish concern. `forest-ne` is hardcoded populated for the step-7 demo
   // (see `world.ts`); settlement vehicles per §12 are deferred.
-  const islandStates = new Map<string, IslandState>();
+  const islandStates: Map<string, IslandState> = restored
+    ? restored.islandStates
+    : new Map<string, IslandState>();
   const homeSpec = worldState.islands.find((s) => s.id === 'home');
   if (!homeSpec) throw new Error('main: home island missing from worldState');
-  const homeState = makeInitialIslandState(homeSpec, performance.now());
-  islandStates.set('home', homeState);
-  for (const spec of worldState.islands) {
-    if (spec.id === 'home') continue;
-    if (!spec.populated) continue;
-    islandStates.set(spec.id, makeInitialIslandState(spec, performance.now()));
+  // Fresh-game path: build per-island state from each populated spec, then
+  // apply the forest-ne T5 demo seed. Restored saves skip this entirely —
+  // whatever the player had at last save is the source of truth, and the
+  // demo seed must NOT re-fire on every load (would erase progress).
+  if (!restored) {
+    const homeState = makeInitialIslandState(homeSpec, performance.now());
+    islandStates.set('home', homeState);
+    for (const spec of worldState.islands) {
+      if (spec.id === 'home') continue;
+      if (!spec.populated) continue;
+      islandStates.set(spec.id, makeInitialIslandState(spec, performance.now()));
+    }
+    // Step-11/12/13 demo seed: bump forest-ne to level 50 (T5) and pre-load
+    // enough construction materials so the player can fire off a 4×4
+    // artificial island construction without first grinding the smelting
+    // chain. The values exceed the 4×4 Plains cost (~252 steel / 151
+    // iron_ingot / 503 wood) with comfortable headroom for one construct +
+    // a second attempt.
+    // Step 13 bumps the level 30 → 50 and sets aiCoreCrafted = true so the
+    // §13.1 T5 access gate (level ≥ 50 AND AI core crafted) is satisfied —
+    // the catalog UI then displays the T5 band unlocked. Seeds T4/T5
+    // resources so the Reality Forge demo recipe could run if placed.
+    // Forest-ne stays Forest biome, so Volcanic/Arctic biome-locked uniques
+    // (Pyroforge, Cryogenic Compute Center) remain locked from the catalog —
+    // that's the intended §9.5 demo behaviour. T5 defs are biome-agnostic
+    // (no requiredBiomes), so the full T5 band shows up.
+    // Once a save exists this seed never re-runs — the saved IslandState
+    // for forest-ne carries level/aiCoreCrafted/inventory forward.
+    const forestNe = islandStates.get('forest-ne');
+    if (forestNe) {
+      forestNe.level = 50;
+      forestNe.aiCoreCrafted = true; // §13.1 T5 access — manual demo seed
+      forestNe.inventory.steel = 300;
+      forestNe.inventory.iron_ingot = 200;
+      forestNe.inventory.wood = 600;
+      forestNe.inventory.helium_3 = 50; // demo seed — Fusion Core fuel
+      // T4 / T5 seeds so a hypothetical Reality Forge run could draw inputs.
+      forestNe.inventory.exotic_alloy = 20;
+      forestNe.inventory.ai_core = 10;
+      forestNe.inventory.casimir_energy = 10;
+    }
   }
-  // Step-11/12/13 demo seed: bump forest-ne to level 50 (T5) and pre-load
-  // enough construction materials so the player can fire off a 4×4
-  // artificial island construction without first grinding the smelting
-  // chain. The values exceed the 4×4 Plains cost (~252 steel / 151
-  // iron_ingot / 503 wood) with comfortable headroom for one construct +
-  // a second attempt.
-  // Step 13 bumps the level 30 → 50 and sets aiCoreCrafted = true so the
-  // §13.1 T5 access gate (level ≥ 50 AND AI core crafted) is satisfied —
-  // the catalog UI then displays the T5 band unlocked. Seeds T4/T5
-  // resources so the Reality Forge demo recipe could run if placed.
-  // Forest-ne stays Forest biome, so Volcanic/Arctic biome-locked uniques
-  // (Pyroforge, Cryogenic Compute Center) remain locked from the catalog —
-  // that's the intended §9.5 demo behaviour. T5 defs are biome-agnostic
-  // (no requiredBiomes), so the full T5 band shows up.
-  // This seed is demo-only — once the natural economy + production-trigger
-  // for `aiCoreCrafted` (deferred to step 14) flips automatically on first
-  // ai_core production, the manual seed is removed.
-  const forestNe = islandStates.get('forest-ne');
-  if (forestNe) {
-    forestNe.level = 50;
-    forestNe.aiCoreCrafted = true; // §13.1 T5 access — manual demo seed
-    forestNe.inventory.steel = 300;
-    forestNe.inventory.iron_ingot = 200;
-    forestNe.inventory.wood = 600;
-    forestNe.inventory.helium_3 = 50; // demo seed — Fusion Core fuel
-    // T4 / T5 seeds so a hypothetical Reality Forge run could draw inputs.
-    forestNe.inventory.exotic_alloy = 20;
-    forestNe.inventory.ai_core = 10;
-    forestNe.inventory.casimir_energy = 10;
-  }
+  // After init, `homeState` is whichever state is in the map for 'home' —
+  // restored or fresh. The rest of the file binds against homeState by
+  // reference, so we resolve it once here and keep the existing wiring.
+  const homeState = islandStates.get('home');
+  if (!homeState) throw new Error('main: home island state missing after init');
   // Spec lookup by id — also needed by routes UI later. Built once; spec
   // identity is stable across the session (drones flip discovered, but
   // spec objects themselves aren't replaced).
@@ -578,6 +599,32 @@ async function main(): Promise<void> {
     routesUi.toggle();
   });
 
+  // §15.6 persistence: schedule autosaves and a visibility-change save. The
+  // HUD shows a "Saved · Ns ago" indicator driven by `lastSaveAt`; null until
+  // the first save lands. `performance.now()` is fine here because we only
+  // ever subtract it from itself (current frame time) to compute the age —
+  // the same domain as the ticker's `now`. The save itself is fire-and-
+  // forget (`void`) so the timer / event handler doesn't await — failures
+  // are swallowed by `saveWorld`'s try/catch.
+  const SAVE_INTERVAL_MS = 30_000;
+  let lastSaveAt: number | null = null;
+  const triggerSave = (): void => {
+    void saveWorld(worldState, islandStates);
+    lastSaveAt = performance.now();
+  };
+  // setInterval fires the autosave timer; the closure captures the live
+  // worldState/islandStates bindings (which are themselves stable references
+  // even though their contents mutate). The interval id is intentionally
+  // unstored — the page lives until the tab closes, no need to clear.
+  setInterval(triggerSave, SAVE_INTERVAL_MS);
+  // visibilitychange = tab switch / minimize / close. Saving on `hidden`
+  // catches the case where the player closes the tab mid-session before
+  // the next 30s tick — the spec calls this out as the primary "don't
+  // lose 30s of progress" guarantee on top of the timer.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') triggerSave();
+  });
+
   // Update tick: apply held pan flags + sync camera state to the world
   // container, advance every populated island's economy, advance drone fleet,
   // advance inter-island routes, and update the HUD + side panels. One pass
@@ -640,7 +687,9 @@ async function main(): Promise<void> {
       specMul: specMulFor(homeState),
       ncBuff: ncBuffFor(homeState),
     });
-    hud.update(homeState, net, power, homeSpec, ncState);
+    const saveAgeSec =
+      lastSaveAt === null ? null : Math.max(0, Math.floor((now - lastSaveAt) / 1000));
+    hud.update(homeState, net, power, homeSpec, ncState, saveAgeSec);
     // Skill tree only repaints while visible — DOM writes are wasted
     // otherwise. show() also forces a paint on transition so we don't
     // strictly need a per-frame call, but level-up while the panel is open

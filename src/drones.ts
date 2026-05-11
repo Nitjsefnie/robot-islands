@@ -109,6 +109,16 @@ export function _resetDroneIdCounter(): void {
   droneIdCounter = 0;
 }
 
+/** Seed the drone-id counter so the next id is `drone-${value + 1}`. Used by
+ *  the persistence loader (`persistence.ts`) after restoring a save so the
+ *  in-session counter doesn't collide with already-saved drone ids. Walking
+ *  `world.drones` for the numeric suffix max and calling this with that max
+ *  is the fix the in-tree FIXME in this file foresaw. Idempotent: passing a
+ *  smaller value than the current counter is a no-op (we only raise). */
+export function _seedDroneIdCounter(value: number): void {
+  if (value > droneIdCounter) droneIdCounter = value;
+}
+
 export type DispatchResult =
   | { ok: true; drone: Drone }
   | { ok: false; reason: 'insufficient-fuel' | 'invalid-direction' | 'already-in-flight' };

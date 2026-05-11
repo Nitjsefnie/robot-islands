@@ -1,0 +1,327 @@
+// IndexedDB persistence per SPEC §15.6 — save the WorldState + per-island
+// IslandState map across browser sessions, restore on startup. One save
+// slot per origin (the page's IndexedDB). No backend.
+//
+// Versioned snapshot. The v field is the schema version anchor for future
+// migrations — bumping it (v: 2 later) silently invalidates v1 saves
+// (`loadWorld` returns null on unknown v, the caller falls back to a fresh
+// world). Migrations from prior versions are out of scope for step 14.
+//
+// Three concerns the serializer addresses that JSON.stringify alone can't:
+//
+//   1. `IslandSpec.terrainAt` is a closure (`(x, y) => terrainAtForBiome(...)`),
+//      not data. Functions don't survive JSON. We strip it on save and
+//      rehydrate via `terrainAtForBiome(spec.biome, spec.id, x, y)` on load —
+//      the same factory `world.ts` uses to build the demo set.
+//
+//   2. `IslandState.unlockedNodes` is a `Set<NodeId>` and `subPathProgress`
+//      is a `Map<SubPathId, …>`. Both stringify as `{}` by default. We
+//      convert to/from array form explicitly so the round-trip preserves
+//      membership and ordering.
+//
+//   3. Module-level id counters in `drones.ts` and `routes.ts` reset on
+//      page load. After restoring, the loader seeds those counters past
+//      the maximum saved id via `_seedDroneIdCounter` / `_seedRouteIdCounter`
+//      so newly-allocated ids never collide with already-saved ones. The
+//      in-tree FIXME this addresses lives at the counter declarations.
+//
+// `lastTick` timestamp strategy (per §15.5 offline catchup):
+//   `lastTick` lives in the `performance.now()` domain, which is per-page-load
+//   and resets to 0 on reload. Saving the raw value would make the next
+//   session see `lastTick = 1_234_567` while `performance.now()` starts near
+//   0 — `advanceIsland`'s `nowMs <= state.lastTick` guard would silently
+//   stall the economy until time caught up minutes/hours later.
+//
+//   Fix: at save time we record `savedAt = Date.now()` (wall-clock ms). At
+//   load time we compute `deltaMs = Date.now() - savedAt` (how long the
+//   tab was closed) and remap each `lastTick = performance.now() - deltaMs`.
+//   On the next frame `advanceIsland(state, performance.now())` processes
+//   the full offline gap through its existing event-driven loop — the same
+//   path that handles a 1-frame tick handles a 24-hour catchup. No new
+//   integration code; §15.5 catchup falls out for free.
+
+import { get, set } from 'idb-keyval';
+
+import { terrainAtForBiome } from './biomes.js';
+import type { IslandState } from './economy.js';
+import type { Drone } from './drones.js';
+import { _seedDroneIdCounter } from './drones.js';
+import type { Route } from './routes.js';
+import { _seedRouteIdCounter } from './routes.js';
+import type { NodeId, SubPathId } from './skilltree.js';
+import type { IslandSpec, WorldState } from './world.js';
+
+/** IndexedDB key. Bumping the trailing version (`:v2` later) is the
+ *  intended migration entry point — `loadWorld` keys on this string, so a
+ *  new key returns "no save" without colliding with the v1 store. */
+export const STORAGE_KEY = 'robot-islands:save:v1';
+
+/** Current schema version. `loadWorld` rejects (returns null) any
+ *  snapshot whose `v` is not strictly equal to this. */
+export const SCHEMA_VERSION = 1 as const;
+
+// ---------------------------------------------------------------------------
+// Serialized shapes
+// ---------------------------------------------------------------------------
+//
+// Each `SerializedXxx` shape mirrors the live one with the non-JSON-safe
+// fields swapped out. Live → Serialized at save time, Serialized → live at
+// load time.
+
+/** IslandSpec without the `terrainAt` closure (which isn't JSON-safe). The
+ *  loader rehydrates it via `terrainAtForBiome(biome, id, x, y)`. */
+export type SerializedIslandSpec = Omit<IslandSpec, 'terrainAt'>;
+
+/** IslandState with Set and Map fields converted to arrays for JSON. */
+export interface SerializedIslandState
+  extends Omit<IslandState, 'unlockedNodes' | 'subPathProgress'> {
+  readonly unlockedNodes: ReadonlyArray<NodeId>;
+  readonly subPathProgress: ReadonlyArray<
+    readonly [SubPathId, { readonly spent: number; readonly complete: boolean }]
+  >;
+}
+
+/** One entry of the per-island state map. We avoid serializing a `Map`
+ *  directly because `JSON.stringify(map)` is `{}`; an array of pairs is
+ *  the de-facto idiom and survives every transport. */
+export interface SerializedIslandStateEntry {
+  readonly id: string;
+  readonly state: SerializedIslandState;
+}
+
+/** World data minus the per-island closures. Drones and Routes are already
+ *  JSON-friendly (only numbers, strings, and arrays — see `Drone` and
+ *  `Route` types) and round-trip without transformation. */
+export interface SerializedWorld {
+  readonly islands: ReadonlyArray<SerializedIslandSpec>;
+  readonly drones: ReadonlyArray<Drone>;
+  readonly routes: ReadonlyArray<Route>;
+}
+
+/** Top-level snapshot. The `v` field is the schema-version anchor: this
+ *  step ships v1, future revisions bump it and the loader returns null
+ *  on a v mismatch (caller falls back to a fresh world). */
+export interface SaveSnapshot {
+  readonly v: typeof SCHEMA_VERSION;
+  /** `Date.now()` wall-clock ms at save time. Used to compute the offline
+   *  delta on restore — see the module head for the lastTick remapping. */
+  readonly savedAt: number;
+  readonly world: SerializedWorld;
+  readonly islandStates: ReadonlyArray<SerializedIslandStateEntry>;
+}
+
+// ---------------------------------------------------------------------------
+// Serialize
+// ---------------------------------------------------------------------------
+
+/**
+ * Project the runtime world + island-state map into a JSON-safe snapshot.
+ * Pure — no IDB access, no Date.now beyond the timestamp field. Tested in
+ * isolation.
+ *
+ * `nowWallMs` is the wall-clock save timestamp (defaults to `Date.now()`);
+ * accepting it as a parameter lets tests assert exact values.
+ */
+export function serializeWorld(
+  world: WorldState,
+  islandStates: ReadonlyMap<string, IslandState>,
+  nowWallMs: number = Date.now(),
+): SaveSnapshot {
+  const islands: SerializedIslandSpec[] = world.islands.map((s) => {
+    // Strip terrainAt; preserve every other field including the mutable
+    // `discovered` flag and the buildings array (which is shared by
+    // reference with `IslandState.buildings` at runtime but is JSON-safe
+    // either way — only the contents matter at serialization time).
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { terrainAt: _terrainAt, ...rest } = s;
+    return rest;
+  });
+
+  const stateEntries: SerializedIslandStateEntry[] = [];
+  for (const [id, state] of islandStates) {
+    const serialized: SerializedIslandState = {
+      ...state,
+      unlockedNodes: [...state.unlockedNodes],
+      subPathProgress: [...state.subPathProgress.entries()],
+    };
+    stateEntries.push({ id, state: serialized });
+  }
+
+  return {
+    v: SCHEMA_VERSION,
+    savedAt: nowWallMs,
+    world: {
+      islands,
+      // Spread to drop any read-only-array exotic-ness from the live arrays.
+      drones: [...world.drones],
+      routes: world.routes.map((r) => ({
+        ...r,
+        // Defensive copy of the mutable inFlight array so post-snapshot
+        // mutations to the live route don't leak into the serialized blob.
+        inFlight: [...r.inFlight],
+      })),
+    },
+    islandStates: stateEntries,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Deserialize
+// ---------------------------------------------------------------------------
+
+/**
+ * Inverse of `serializeWorld`. Rehydrates closures (terrainAt) and converts
+ * arrays back to Set/Map. Also remaps every state's `lastTick` from the
+ * saved wall-clock domain into the current `performance.now()` domain so
+ * the next `advanceIsland` call processes the offline gap correctly.
+ *
+ * `nowWallMs` / `nowPerfMs` default to the current Date/performance values
+ * but are injectable for tests.
+ *
+ * Throws on a snapshot with an unrecognised `v`. Callers (`loadWorld`)
+ * swallow the throw and return null so the game can fall back to a fresh
+ * world on a corrupt save.
+ */
+export function deserializeWorld(
+  snapshot: SaveSnapshot,
+  nowWallMs: number = Date.now(),
+  nowPerfMs: number = performance.now(),
+): { world: WorldState; islandStates: Map<string, IslandState> } {
+  if (snapshot.v !== SCHEMA_VERSION) {
+    throw new Error(`persistence: unknown schema version ${String(snapshot.v)}`);
+  }
+
+  // Wall-clock delta between save and now. Negative would mean the system
+  // clock moved backward; clamp to 0 so we don't replay a synthetic future
+  // tick (advanceIsland's `nowMs <= lastTick` guard handles equality fine).
+  const deltaMs = Math.max(0, nowWallMs - snapshot.savedAt);
+
+  const islands: IslandSpec[] = snapshot.world.islands.map((s) => ({
+    ...s,
+    // Rehydrate the per-island terrainAt closure via the same factory
+    // `world.ts` uses for `DEMO_ISLANDS`. Artificial islands and demo
+    // islands flow through the same path because `terrainAtForBiome`
+    // routes on `id === 'home'` and otherwise on `biome`.
+    terrainAt: (x, y) => terrainAtForBiome(s.biome, s.id, x, y),
+    // The buildings array is mutable on the live spec, so we clone it.
+    // The serializer already deep-copied via JSON-equivalence in the IDB
+    // layer, but explicit cloning makes the in-memory round-trip path
+    // (tests) safe too.
+    buildings: [...s.buildings],
+  }));
+
+  const world: WorldState = {
+    islands,
+    drones: [...snapshot.world.drones],
+    routes: snapshot.world.routes.map((r) => ({
+      ...r,
+      inFlight: [...r.inFlight],
+    })),
+  };
+
+  const islandStates = new Map<string, IslandState>();
+  for (const entry of snapshot.islandStates) {
+    const s = entry.state;
+    // Compose the live IslandState by spreading the serialized form, then
+    // replacing the two non-JSON fields and remapping lastTick. The order
+    // matters: spread first, then the explicit Set/Map/lastTick writes
+    // win over the carried-through values.
+    const live: IslandState = {
+      ...s,
+      // Defensive inventory + storageCaps + funnelPending clones so the
+      // restored state has its own objects (saved snapshot stays inert).
+      inventory: { ...s.inventory },
+      storageCaps: { ...s.storageCaps },
+      funnelPending: { ...s.funnelPending },
+      unlockedNodes: new Set(s.unlockedNodes),
+      subPathProgress: new Map(s.subPathProgress),
+      // Remap lastTick from the saved performance.now() domain into the
+      // current session's performance.now() domain. The save preserved
+      // lastTick literally; we shift by the offline delta so the
+      // economy's next advance step processes the gap.
+      lastTick: nowPerfMs - deltaMs,
+    };
+    // Re-link buildings from the live spec to keep the
+    // `IslandSpec.buildings === IslandState.buildings` invariant that the
+    // post-load placement / economy code depends on. Without this, the
+    // live state would hold the JSON-cloned array and a future placement
+    // would push into the spec's array but not the state's.
+    const spec = islands.find((i) => i.id === entry.id);
+    if (spec) live.buildings = spec.buildings;
+    islandStates.set(entry.id, live);
+  }
+
+  // Seed the module-level id counters in drones.ts / routes.ts past the
+  // largest saved suffix so newly-allocated ids can't collide with saved
+  // ones. Ids are of the form `drone-N` and `route-N`; we parse the suffix
+  // out and feed the max into the seeder. Non-numeric suffixes fall to 0.
+  let droneMax = 0;
+  for (const d of world.drones) {
+    const n = parseSuffixCounter(d.id);
+    if (n > droneMax) droneMax = n;
+  }
+  if (droneMax > 0) _seedDroneIdCounter(droneMax);
+  let routeMax = 0;
+  for (const r of world.routes) {
+    const n = parseSuffixCounter(r.id);
+    if (n > routeMax) routeMax = n;
+  }
+  if (routeMax > 0) _seedRouteIdCounter(routeMax);
+
+  return { world, islandStates };
+}
+
+/** Parse the trailing integer suffix from an id like `drone-7` → 7. Returns
+ *  0 if there's no recognisable trailing integer (defensive — saved data
+ *  with hand-edited or future-format ids won't crash the loader). */
+function parseSuffixCounter(id: string): number {
+  const m = /-(\d+)$/.exec(id);
+  if (!m) return 0;
+  const n = parseInt(m[1]!, 10);
+  return Number.isFinite(n) ? n : 0;
+}
+
+// ---------------------------------------------------------------------------
+// Side-effectful wrappers (IDB)
+// ---------------------------------------------------------------------------
+
+/**
+ * Persist a snapshot to IndexedDB. Swallows errors (logs to console) so a
+ * save failure can't crash the game loop. Returns void.
+ */
+export async function saveWorld(
+  world: WorldState,
+  islandStates: ReadonlyMap<string, IslandState>,
+): Promise<void> {
+  try {
+    const snapshot = serializeWorld(world, islandStates);
+    await set(STORAGE_KEY, snapshot);
+  } catch (err) {
+    console.warn('[robot-islands] saveWorld failed:', err);
+  }
+}
+
+/**
+ * Load and deserialize the latest snapshot, or return null if none exists,
+ * the schema version is unrecognised, or the stored value is corrupt. Any
+ * error path is logged and resolved with null so the caller can fall back
+ * to a fresh world without crashing.
+ */
+export async function loadWorld(): Promise<
+  { world: WorldState; islandStates: Map<string, IslandState> } | null
+> {
+  try {
+    const stored = (await get(STORAGE_KEY)) as SaveSnapshot | undefined;
+    if (stored === undefined) return null;
+    if (stored.v !== SCHEMA_VERSION) {
+      console.warn(
+        `[robot-islands] loadWorld: ignoring snapshot with unknown v=${String(stored.v)}`,
+      );
+      return null;
+    }
+    return deserializeWorld(stored);
+  } catch (err) {
+    console.warn('[robot-islands] loadWorld failed:', err);
+    return null;
+  }
+}
