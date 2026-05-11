@@ -36,6 +36,7 @@ import {
 } from './island.js';
 import { ALL_RESOURCES, type ResourceId } from './recipes.js';
 import type { Route } from './routes.js';
+import { generateWorld } from './world-gen.js';
 
 /** Stratification cell side length, in tiles. SPEC §2.1 calls this R. */
 export const CELL_SIZE_TILES = 16;
@@ -346,13 +347,40 @@ export interface WorldState {
   vehicles: import('./settlement.js').SettlementVehicle[];
 }
 
+/** Default seed for the procedural world. Could later be made
+ *  player-configurable; for now every fresh game uses the same string,
+ *  yielding the same world. Persistence freezes the resolved island list,
+ *  so reloads don't depend on this constant staying stable. */
+export const WORLD_SEED = 'rio-2026';
+
+/** Default world-gen options. Cell extent of ±10 with R=16 spans the
+ *  ~320-tile-radius region, which sits comfortably inside the renderer's
+ *  WORLD_HALF_SIZE_TILES=250 ocean (cell-edge tiles at ±160). Density 0.3
+ *  yields ~130 procedural islands on top of the hand-placed demos. */
+export const DEFAULT_GEN_OPTS: {
+  readonly seed: string;
+  readonly halfExtentCells: number;
+  readonly cellSizeTiles: number;
+  readonly density: number;
+} = {
+  seed: WORLD_SEED,
+  halfExtentCells: 10,
+  cellSizeTiles: CELL_SIZE_TILES,
+  density: 0.3,
+};
+
 /**
- * Build the working world from `DEMO_ISLANDS`. The seed array stays a
- * `ReadonlyArray<IslandSpec>` so it's still safe to import as immutable
- * data; we shallow-spread each spec into a fresh mutable copy here so
- * later `discovered = true` writes don't trip strict-mode "assignment to
- * readonly" errors. References to `buildings` and `terrainAt` stay shared
- * (those are effectively immutable).
+ * Build the working world from `DEMO_ISLANDS` PLUS a procedural batch
+ * appended after them. The hand-placed demos (home, forest-ne, etc.)
+ * preserve every existing demo flow; procedural islands sit in cells the
+ * hand-placed ones don't occupy. Generation runs once on first start; the
+ * resolved island list is persisted, so reloads don't regenerate.
+ *
+ * The seed array stays a `ReadonlyArray<IslandSpec>` so it's still safe to
+ * import as immutable data; we shallow-spread each spec into a fresh
+ * mutable copy here so later `discovered = true` writes don't trip
+ * strict-mode "assignment to readonly" errors. References to `buildings`
+ * and `terrainAt` stay shared (those are effectively immutable).
  */
 export function makeInitialWorld(_nowMs: number): WorldState {
   // Spread each demo spec into a fresh mutable copy AND clone its
@@ -363,6 +391,16 @@ export function makeInitialWorld(_nowMs: number): WorldState {
     ...s,
     buildings: [...s.buildings],
   }));
+  // Procedural generation runs here, ONCE per fresh game. The resolved
+  // list is persisted via the v2 snapshot path; reloads bypass this code.
+  // Overlap detection takes the hand-placed demos as `existingIslands` so
+  // generated islands never land on top of forest-ne / desert-far / etc.
+  // The dynamic import would let us defer the dependency, but a static
+  // import keeps the dependency arrow (`world.ts → world-gen.ts`)
+  // explicit; `world-gen.ts` imports `world.ts` for `IslandSpec` only as
+  // a type-only edge, so the cycle is type-side and TS handles it.
+  const generated = generateWorld({ ...DEFAULT_GEN_OPTS, existingIslands: islands });
+  for (const g of generated) islands.push(g);
   return { islands, drones: [], routes: [], vehicles: [] };
 }
 

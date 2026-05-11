@@ -1,0 +1,239 @@
+// Pure-logic tests for procedural world generation per SPEC §2.1 + §2.3.
+
+import { describe, expect, it } from 'vitest';
+
+import { BIOME_DEFS } from './biomes.js';
+import { generateWorld } from './world-gen.js';
+import { DEMO_ISLANDS, makeInitialWorld, type Biome } from './world.js';
+
+const ALL_BIOMES: ReadonlyArray<Biome> = [
+  'plains',
+  'forest',
+  'coast',
+  'volcanic',
+  'desert',
+  'arctic',
+];
+
+const BASE_OPTS = {
+  seed: 'test-seed',
+  halfExtentCells: 6,
+  cellSizeTiles: 16,
+  density: 0.3,
+};
+
+describe('generateWorld', () => {
+  it('is deterministic given the same seed', () => {
+    const a = generateWorld(BASE_OPTS);
+    const b = generateWorld(BASE_OPTS);
+    expect(a.length).toBe(b.length);
+    for (let i = 0; i < a.length; i++) {
+      const sa = a[i]!;
+      const sb = b[i]!;
+      expect(sa.id).toBe(sb.id);
+      expect(sa.biome).toBe(sb.biome);
+      expect(sa.cx).toBe(sb.cx);
+      expect(sa.cy).toBe(sb.cy);
+      expect(sa.majorRadius).toBe(sb.majorRadius);
+      expect(sa.minorRadius).toBe(sb.minorRadius);
+      expect(sa.modifiers).toEqual(sb.modifiers);
+    }
+  });
+
+  it('different seeds produce different worlds', () => {
+    const a = generateWorld({ ...BASE_OPTS, seed: 'seed-A' });
+    const b = generateWorld({ ...BASE_OPTS, seed: 'seed-B' });
+    // The two worlds should differ in at least one position OR biome.
+    // Length alone could match by coincidence; centre coordinates almost
+    // certainly won't all match across two seeds.
+    let differs = false;
+    const minLen = Math.min(a.length, b.length);
+    for (let i = 0; i < minLen; i++) {
+      if (a[i]!.cx !== b[i]!.cx || a[i]!.cy !== b[i]!.cy || a[i]!.biome !== b[i]!.biome) {
+        differs = true;
+        break;
+      }
+    }
+    expect(differs || a.length !== b.length).toBe(true);
+  });
+
+  it('skips the home cell (0, 0)', () => {
+    // Use density=1 to force a placement attempt in every cell. None
+    // should sit at the home cell's centre (which would be tile (8, 8)
+    // for cellSize=16 — but more importantly, no generated island should
+    // have id `gen-0-0`).
+    const generated = generateWorld({ ...BASE_OPTS, density: 1.0 });
+    for (const s of generated) {
+      expect(s.id).not.toBe('gen-0-0');
+    }
+  });
+
+  it('generated islands have biome ∈ BIOME_DEFS keys', () => {
+    const generated = generateWorld({ ...BASE_OPTS, density: 1.0 });
+    for (const s of generated) {
+      expect(ALL_BIOMES).toContain(s.biome);
+      expect(BIOME_DEFS[s.biome]).toBeDefined();
+    }
+  });
+
+  it("generated islands' radii match their biome's BIOME_DEFS defaults", () => {
+    const generated = generateWorld({ ...BASE_OPTS, density: 1.0 });
+    for (const s of generated) {
+      const def = BIOME_DEFS[s.biome];
+      expect(s.majorRadius).toBe(def.initialMajorRadius);
+      expect(s.minorRadius).toBe(def.initialMinorRadius);
+    }
+  });
+
+  it('generated islands start undiscovered, unpopulated, and empty', () => {
+    const generated = generateWorld({ ...BASE_OPTS, density: 1.0 });
+    expect(generated.length).toBeGreaterThan(0);
+    for (const s of generated) {
+      expect(s.populated).toBe(false);
+      expect(s.discovered).toBe(false);
+      expect(s.buildings).toEqual([]);
+    }
+  });
+
+  it('frozen_core modifier only appears on arctic islands', () => {
+    // Run many seeds; gather every generated island carrying frozen_core
+    // and assert the biome is arctic.
+    let saw = 0;
+    for (let s = 0; s < 20; s++) {
+      const generated = generateWorld({
+        ...BASE_OPTS,
+        seed: `frozen-${s}`,
+        density: 1.0,
+      });
+      for (const isl of generated) {
+        if (isl.modifiers.includes('frozen_core')) {
+          expect(isl.biome).toBe('arctic');
+          saw++;
+        }
+      }
+    }
+    // Confidence guard: at least one frozen_core arctic should have rolled
+    // somewhere across 20 dense seeds. If not, the modifier might not be
+    // wired into the generator at all.
+    expect(saw).toBeGreaterThan(0);
+  });
+
+  it('no two generated islands overlap (centre-distance ellipse approximation)', () => {
+    const generated = generateWorld({ ...BASE_OPTS, density: 1.0 });
+    for (let i = 0; i < generated.length; i++) {
+      for (let j = i + 1; j < generated.length; j++) {
+        const a = generated[i]!;
+        const b = generated[j]!;
+        const dx = a.cx - b.cx;
+        const dy = a.cy - b.cy;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const minGap =
+          Math.max(a.majorRadius, a.minorRadius) +
+          Math.max(b.majorRadius, b.minorRadius);
+        expect(dist).toBeGreaterThanOrEqual(minGap);
+      }
+    }
+  });
+
+  it("generated islands' terrainAt closure routes through terrainAtForBiome", () => {
+    // Calling terrainAt should not throw and should return a valid TerrainKind.
+    // (The exact tile a generator picks isn't load-bearing here; we just
+    // verify the closure exists and produces a string.)
+    const generated = generateWorld({ ...BASE_OPTS, density: 1.0 });
+    const s = generated[0]!;
+    expect(typeof s.terrainAt).toBe('function');
+    const kind = s.terrainAt!(0, 0);
+    expect(typeof kind).toBe('string');
+  });
+
+  it('respects existingIslands — no generated island overlaps any of them', () => {
+    // Make a fake existing island in the middle of the grid and check that
+    // no generated island lands on top of it.
+    const existing = [
+      {
+        id: 'mock',
+        biome: 'plains' as const,
+        cx: 0,
+        cy: 0,
+        majorRadius: 14,
+        minorRadius: 14,
+        populated: true,
+        discovered: true,
+        buildings: [],
+        modifiers: [],
+      },
+      {
+        id: 'mock2',
+        biome: 'forest' as const,
+        cx: 40,
+        cy: -10,
+        majorRadius: 10,
+        minorRadius: 10,
+        populated: true,
+        discovered: true,
+        buildings: [],
+        modifiers: [],
+      },
+    ];
+    const generated = generateWorld({ ...BASE_OPTS, density: 1.0, existingIslands: existing });
+    for (const g of generated) {
+      for (const e of existing) {
+        const dx = g.cx - e.cx;
+        const dy = g.cy - e.cy;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const minGap =
+          Math.max(g.majorRadius, g.minorRadius) +
+          Math.max(e.majorRadius, e.minorRadius);
+        expect(dist).toBeGreaterThanOrEqual(minGap);
+      }
+    }
+  });
+});
+
+describe('makeInitialWorld + procedural integration', () => {
+  it('keeps all hand-placed demo islands present', () => {
+    const w = makeInitialWorld(0);
+    for (const demo of DEMO_ISLANDS) {
+      const found = w.islands.find((s) => s.id === demo.id);
+      expect(found, `demo ${demo.id} missing from initial world`).toBeDefined();
+      // Position is preserved exactly.
+      expect(found!.cx).toBe(demo.cx);
+      expect(found!.cy).toBe(demo.cy);
+    }
+  });
+
+  it('appends procedural islands beyond the demo set', () => {
+    const w = makeInitialWorld(0);
+    expect(w.islands.length).toBeGreaterThan(DEMO_ISLANDS.length);
+  });
+
+  it('no procedural island overlaps a hand-placed demo island', () => {
+    const w = makeInitialWorld(0);
+    const demos = w.islands.filter((s) => DEMO_ISLANDS.some((d) => d.id === s.id));
+    const generated = w.islands.filter((s) => !DEMO_ISLANDS.some((d) => d.id === s.id));
+    for (const g of generated) {
+      for (const d of demos) {
+        const dx = g.cx - d.cx;
+        const dy = g.cy - d.cy;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const minGap =
+          Math.max(g.majorRadius, g.minorRadius) +
+          Math.max(d.majorRadius, d.minorRadius);
+        expect(
+          dist,
+          `procedural ${g.id} overlaps demo ${d.id} (dist ${dist.toFixed(1)} vs min ${minGap})`,
+        ).toBeGreaterThanOrEqual(minGap);
+      }
+    }
+  });
+
+  it('procedural islands all start unpopulated and undiscovered', () => {
+    const w = makeInitialWorld(0);
+    const generated = w.islands.filter((s) => !DEMO_ISLANDS.some((d) => d.id === s.id));
+    expect(generated.length).toBeGreaterThan(0);
+    for (const g of generated) {
+      expect(g.populated).toBe(false);
+      expect(g.discovered).toBe(false);
+    }
+  });
+});
