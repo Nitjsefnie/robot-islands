@@ -24,6 +24,13 @@
 // Conduit, Spacetime Resonator, Eldritch Sieve) and their multi-hour cycle
 // times are deferred.
 //
+// §13.2 deliberate substitution: spec §13.2 lists Probability Engine in the
+// T5 building set, but step 13 ships Time Lock instead. Time Lock has richer
+// §13.3 behavioural detail (banking + spending semantics) which makes its
+// placeholder more meaningful as documentation; Probability Engine's drone
+// rare-encounter bias is conceptually simpler and slots in cleanly later.
+// Probability Engine is reserved for step 14+.
+//
 // Heat-source adjacency (§5.2) is not yet implemented — Blast Furnace and
 // Pyroforge run without their required heat source; comment flags the
 // deferred constraint. T4 omnidirectional pulse mechanic (§11.5) for the
