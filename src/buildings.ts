@@ -32,7 +32,13 @@ export interface PlacedBuilding {
 // Step-9 home-island layout. Tile coords are island-local; the home island's
 // ellipse has radius 14. Footprints are verified non-overlapping; the Smelter
 // at (-4, 6) sits inside the radius-14 ellipse and below the workshop.
-export const HOME_ISLAND_BUILDINGS: ReadonlyArray<PlacedBuilding> = [
+//
+// Typed as `PlacedBuilding[]` (mutable) rather than ReadonlyArray since
+// step-2.5 placement pushes onto the spec's `buildings` field, which is the
+// same array reference. We don't actually mutate this seed at module scope;
+// `makeInitialWorld` spreads each spec into a fresh copy with its own array
+// (see world.ts `makeInitialWorld`).
+export const HOME_ISLAND_BUILDINGS: PlacedBuilding[] = [
   // T1 staples preserved from step 1-8 (same positions, defId redirects).
   { id: 'home-solar-1',    defId: 'solar',    x: 2,  y: -1 },
   { id: 'home-workshop-1', defId: 'workshop', x: -1, y: 1 },

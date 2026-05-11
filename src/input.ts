@@ -102,6 +102,11 @@ export function installDefaultBindings(reg: InputRegistry): void {
   // (step 11). Same modal pattern as buildings + skill tree; Escape
   // dismisses via the shared `dismiss-modal` action wired in main.ts.
   bind(reg, 'KeyC', 'toggle-construction');
+  // T = rotate the in-progress building placement (step 2.5). No-op when
+  // not in placement mode; KeyR was already taken by toggle-routes so the
+  // §4.2 rotation key migrated to T (mnemonic stretch but consistent with
+  // common builder games' rotate-on-T convention — Cities: Skylines etc.).
+  bind(reg, 'KeyT', 'rotate-placement');
   bind(reg, 'Equal', 'zoom-in'); // '=' / '+' on US layouts
   bind(reg, 'NumpadAdd', 'zoom-in');
   bind(reg, 'Minus', 'zoom-out');

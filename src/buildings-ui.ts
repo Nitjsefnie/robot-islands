@@ -41,6 +41,12 @@ export interface BuildingsUi {
   isVisible(): boolean;
 }
 
+/** Optional callbacks mounted alongside the catalog. Step-2.5 wires
+ *  `onPlaceRequested` to enter placement mode and hide the modal. */
+export interface BuildingsUiOptions {
+  readonly onPlaceRequested?: (defId: BuildingDefId) => void;
+}
+
 // ---------------------------------------------------------------------------
 // Palette — shared vocabulary with skilltree-ui.ts
 // ---------------------------------------------------------------------------
@@ -161,6 +167,7 @@ export function mountBuildingsUi(
   parentEl: HTMLElement,
   state: IslandState,
   spec: IslandSpec,
+  options: BuildingsUiOptions = {},
 ): BuildingsUi {
   const rowRefs = new Map<BuildingDefId, RowRef>();
   const tierBandRefs: TierBandRef[] = [];
@@ -497,12 +504,16 @@ export function mountBuildingsUi(
     row.appendChild(statusDot);
     row.appendChild(main);
 
-    // Stub click handler — step 2.5 wires placement. Until then, dispatching
-    // logs so the interaction-loop closes back to the developer console.
+    // Step-2.5: clicking an unlocked, biome-eligible row enters placement
+    // mode. The callback (wired in main.ts) hides the catalog modal and
+    // arms the canvas preview. Tier-locked rows ignore the click; biome-
+    // locked rows ignore it too (the row paints them with a WARN rail
+    // already, and `validatePlacement` would reject placement there
+    // anyway).
     row.addEventListener('click', () => {
       if (!buildingUnlocked(state.level, defId, state.aiCoreCrafted)) return;
-      // eslint-disable-next-line no-console
-      console.log(`[buildings] would-place(${defId}) — placement deferred to step 2.5`);
+      if (!canPlaceOnIsland(BUILDING_DEFS[defId], spec)) return;
+      options.onPlaceRequested?.(defId);
     });
     row.addEventListener('mouseenter', () => {
       if (!buildingUnlocked(state.level, defId, state.aiCoreCrafted)) return;
@@ -752,7 +763,7 @@ export function mountBuildingsUi(
     ].join(';'),
   );
   const footerL = document.createElement('span');
-  footerL.textContent = 'catalog only · placement system pending (step 2.5)';
+  footerL.textContent = 'click a row to place · T rotates · esc cancels';
   const footerR = document.createElement('span');
   footerR.textContent = 'tiers gate by island level · §9.2';
   footer.appendChild(footerL);

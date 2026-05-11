@@ -89,8 +89,13 @@ export interface IslandSpec {
    *  Mutable in step 6: drone returns flip this from false→true on revealed
    *  islands. The rest of the spec stays readonly — only this flag changes. */
   discovered: boolean;
-  /** Buildings placed on this island, in island-local tile coords. */
-  readonly buildings: ReadonlyArray<PlacedBuilding>;
+  /** Buildings placed on this island, in island-local tile coords. Mutable so
+   *  step-2.5 placement can push onto the same array shared with
+   *  `IslandState.buildings` (the state field is a live reference, not a
+   *  copy — see `makeInitialIslandState`). The dual-array footgun is
+   *  intentionally avoided: one array, two consumers, mutation flows to
+   *  both. */
+  buildings: PlacedBuilding[];
   /** Terrain function in island-local coords. Defaults to grass everywhere. */
   readonly terrainAt?: (x: number, y: number) => TerrainKind;
   /** Active modifiers on this island per §3.5. Step 8 hard-codes the demo
@@ -343,7 +348,14 @@ export interface WorldState {
  * (those are effectively immutable).
  */
 export function makeInitialWorld(_nowMs: number): WorldState {
-  const islands: IslandSpec[] = DEMO_ISLANDS.map((s) => ({ ...s }));
+  // Spread each demo spec into a fresh mutable copy AND clone its
+  // `buildings` array, so step-2.5 placement onto the live world doesn't
+  // mutate the immutable seed in `DEMO_ISLANDS` (multiple sessions in a
+  // test runner would otherwise see leaked placements).
+  const islands: IslandSpec[] = DEMO_ISLANDS.map((s) => ({
+    ...s,
+    buildings: [...s.buildings],
+  }));
   return { islands, drones: [], routes: [] };
 }
 

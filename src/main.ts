@@ -50,6 +50,7 @@ import { TILE_PX } from './island.js';
 import { renderOcean } from './ocean.js';
 import { mountBuildingsUi } from './buildings-ui.js';
 import { mountConstructionUi } from './construction-ui.js';
+import { mountPlacementUi } from './placement-ui.js';
 import { mountSkillTreeUi } from './skilltree-ui.js';
 import { mountUi } from './ui.js';
 import {
@@ -212,6 +213,11 @@ async function main(): Promise<void> {
   defineAction(reg, 'toggle-routes', () => undefined);
   // Step-11 modal — bound below after the UI is mounted.
   defineAction(reg, 'toggle-construction', () => undefined);
+  // Step-2.5 placement rotation — bound below after the placement UI is
+  // mounted (it needs the home spec/state, which are constructed further
+  // down). Stub here so KeyT presses don't silently drop while the UI is
+  // still booting.
+  defineAction(reg, 'rotate-placement', () => undefined);
 
   // Map of "release" actions used to clear the held flag on keyup. The
   // action table itself is press-only; on keyup we resolve the binding and
@@ -252,11 +258,23 @@ async function main(): Promise<void> {
   let lastY = 0;
   let accumDrag = 0;
   app.canvas.addEventListener('mousedown', (e) => {
+    // Right-click while in placement mode cancels — same exit as Escape.
+    // Right-click in launch mode is intentionally not cancelled here (the
+    // drone UI doesn't define a right-click semantic).
+    if (e.button === 2 && placementUi.isActive()) {
+      placementUi.cancel();
+      return;
+    }
     if (e.button !== 0) return;
     dragging = true;
     lastX = e.clientX;
     lastY = e.clientY;
     accumDrag = 0;
+  });
+  // Suppress the browser context menu over the canvas so right-click can
+  // be the placement-cancel gesture without a system menu appearing.
+  app.canvas.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
   });
   window.addEventListener('mouseup', (e) => {
     if (!dragging) return;
@@ -276,6 +294,21 @@ async function main(): Promise<void> {
       if (sx < 0 || sx > rect.width || sy < 0 || sy > rect.height) return;
       const wp = screenToWorldTile(sx, sy);
       dronesUi.attemptLaunch(wp.x, wp.y, performance.now());
+      return;
+    }
+    // Step-2.5: small click in placement mode commits a placement.
+    // Mutual-exclusion with launch mode is enforced by the buildings-ui
+    // entry path (entering placement hides the catalog; both modes share
+    // the canvas, but the buildings click won't have armed launch).
+    if (accumDrag < CLICK_DRAG_PX_MAX && placementUi.isActive()) {
+      const rect = app.canvas.getBoundingClientRect();
+      const sx = e.clientX - rect.left;
+      const sy = e.clientY - rect.top;
+      if (sx < 0 || sx > rect.width || sy < 0 || sy > rect.height) return;
+      // The placementUi already tracks cursor pos via mousemove (below),
+      // so we just call attemptCommit — it'll read the current cursor
+      // and validate before pushing.
+      placementUi.attemptCommit();
     }
   });
   window.addEventListener('mousemove', (e) => {
@@ -298,13 +331,22 @@ async function main(): Promise<void> {
   }
   // Reticle follows the cursor while in launch mode. Mousemove on the canvas
   // updates its screen position; mouseleave hides it.
+  // Step-2.5: same mousemove also feeds the placement preview when placement
+  // is armed. Both consumers no-op silently if their mode is off.
   app.canvas.addEventListener('mousemove', (e) => {
-    if (!dronesUi.isLaunchMode()) return;
     const rect = app.canvas.getBoundingClientRect();
-    dronesUi.setReticleScreenPos(e.clientX - rect.left, e.clientY - rect.top);
+    const sx = e.clientX - rect.left;
+    const sy = e.clientY - rect.top;
+    if (dronesUi.isLaunchMode()) {
+      dronesUi.setReticleScreenPos(sx, sy);
+    }
+    if (placementUi.isActive()) {
+      placementUi.setCursorScreenPos(sx, sy);
+    }
   });
   app.canvas.addEventListener('mouseleave', () => {
     dronesUi.hideReticle();
+    placementUi.hidePreview();
   });
 
   // Wheel zoom toward cursor. preventDefault keeps the page from scrolling.
@@ -419,9 +461,37 @@ async function main(): Promise<void> {
   // §9.5: passes homeSpec so the catalog can flag biome-locked uniques
   // (Pyroforge / Cryogenic Compute Center) as placement-locked when the
   // current island's biome doesn't match.
-  const buildingsUi = mountBuildingsUi(document.body, homeState, homeSpec);
+  // §4 (step 2.5): the `onPlaceRequested` callback hides the modal and
+  // arms placement mode on the home island. Per-island target selection
+  // is deferred; placement always targets the home spec for now.
+  const buildingsUi = mountBuildingsUi(document.body, homeState, homeSpec, {
+    onPlaceRequested: (defId) => {
+      buildingsUi.hide();
+      placementUi.begin(defId);
+    },
+  });
   defineAction(reg, 'toggle-buildings', () => {
     buildingsUi.toggle();
+  });
+
+  // Step-2.5 placement UI — sister to drones-ui (armed-mode + canvas
+  // preview). Two layers: `previewLayer` lives in world space so the
+  // footprint outline scales with zoom and overlays the target tiles;
+  // `statusLayer` lives in screen space so the small label stays a fixed
+  // pixel size. Target island defaults to `homeSpec`/`homeState` — the
+  // per-island target picker is deferred per the task brief.
+  const placementUi = mountPlacementUi({
+    targetSpec: homeSpec,
+    targetState: homeState,
+    screenToWorldTile,
+    onPlaced: () => {
+      rebuildWorldLayers();
+    },
+  });
+  world.addChild(placementUi.previewLayer);
+  app.stage.addChild(placementUi.statusLayer);
+  defineAction(reg, 'rotate-placement', () => {
+    placementUi.rotate();
   });
 
   // Step-11 Construction modal — sister to skill tree + buildings catalog.
@@ -453,10 +523,13 @@ async function main(): Promise<void> {
   // calls are idempotent, so the no-modal-open case is a free no-op.
   // Mutual-exclusion isn't enforced — if multiple modals happen to be open
   // Escape closes them all at once.
+  // Step-2.5: Escape also cancels an in-progress placement. `cancel()` is
+  // idempotent too.
   defineAction(reg, 'dismiss-modal', () => {
     skillTree.hide();
     buildingsUi.hide();
     constructionUi.hide();
+    placementUi.cancel();
   });
 
   // Drone-ops side dock + canvas reticle + drone-dot layer.

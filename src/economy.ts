@@ -57,10 +57,13 @@ export interface RatesContext {
 export interface IslandState {
   /** Stable id matching the IslandSpec this state belongs to. */
   readonly id: string;
-  /** Buildings on this island (mirrored from spec, kept here so the economy
-   *  loop never needs the spec). Recipe lookup is via RECIPES[b.defId];
-   *  per-kind static data (power, footprint) is via BUILDING_DEFS[b.defId]. */
-  readonly buildings: ReadonlyArray<PlacedBuilding>;
+  /** Buildings on this island. Live reference to `IslandSpec.buildings` (NOT
+   *  a copy — see `makeInitialIslandState`), so step-2.5 placement pushes
+   *  into a single shared array and the economy loop sees the new building
+   *  on the next tick without an explicit sync step. Recipe lookup is via
+   *  RECIPES[b.defId]; per-kind static data (power, footprint) is via
+   *  BUILDING_DEFS[b.defId]. */
+  buildings: PlacedBuilding[];
   /** Current per-resource stockpile. Missing keys read as 0. */
   inventory: Record<ResourceId, number>;
   /** Per-resource storage cap. Missing keys read as 0 (no storage). */

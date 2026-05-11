@@ -40,7 +40,7 @@ function blankFunnel(): Record<ResourceId, number> {
   return f;
 }
 
-function makeFounderSpec(buildings: ReadonlyArray<PlacedBuilding>): IslandSpec {
+function makeFounderSpec(buildings: PlacedBuilding[]): IslandSpec {
   return {
     id: 'founder',
     biome: 'plains',
@@ -56,7 +56,7 @@ function makeFounderSpec(buildings: ReadonlyArray<PlacedBuilding>): IslandSpec {
 }
 
 function makeFounderState(
-  buildings: ReadonlyArray<PlacedBuilding>,
+  buildings: PlacedBuilding[],
   inv: Partial<Record<ResourceId, number>> = {},
   level = 15,
 ): IslandState {

@@ -27,6 +27,7 @@ import {
   type DefCatalog,
   type IslandState,
 } from './economy.js';
+import { placeBuilding } from './placement.js';
 import { ALL_RESOURCES, type ResourceId } from './recipes.js';
 import { effectiveSpecializationMultipliers } from './specialization.js';
 import { aggregateStorageCaps } from './world.js';
@@ -934,5 +935,68 @@ describe('step-11 — artificial-island construction integration (§2.5)', () =>
     expect(result.newSpec.biome).toBe('plains');
     expect(result.newState.level).toBe(1);
     expect(result.newState.id).toBe('art-plains-1');
+  });
+});
+
+// -----------------------------------------------------------------------
+// Step 2.5 — placement integration
+// -----------------------------------------------------------------------
+
+describe('step-2.5 — placement is recognised by the live economy', () => {
+  it('placing a Smelter on a Plains spec makes computeRates see its iron_ingot recipe', () => {
+    // Build a fresh Plains spec with no buildings, run computeRates → no
+    // production. Then `placeBuilding` a Smelter (and a Mine to feed it),
+    // seed iron_ore + coal, and verify computeRates now reports iron_ingot
+    // production. The integration point under test: spec.buildings.push
+    // is visible to the economy loop on the next call because
+    // state.buildings is a live reference to the same array.
+    const spec = {
+      id: 'plains-test',
+      biome: 'plains' as const,
+      cx: 0,
+      cy: 0,
+      majorRadius: 14,
+      minorRadius: 14,
+      populated: true,
+      discovered: true,
+      // Fresh mutable array so placeBuilding can push.
+      buildings: [] as PlacedBuilding[],
+      modifiers: [],
+    };
+    // makeState's `buildings: []` overrides into a fresh array; we then
+    // reassign so the state shares spec.buildings (mirroring makeInitialIslandState).
+    const state = makeState({
+      buildings: spec.buildings,
+      // Seed iron_ore + coal so the Smelter recipe has inputs from inventory
+      // (no Mine output flow-through needed for this test).
+      inventory: { ...blankInventory(), iron_ore: 100, coal: 100 },
+      storageCaps: blankCaps(10000),
+      level: 5, // T1 unlocked; Smelter is T1
+    });
+    // Before placement: no recipes running.
+    const before = computeRates(state, { defs: POWER_FREE });
+    expect(before.production.iron_ingot ?? 0).toBe(0);
+
+    // Place a Smelter at island origin.
+    let counter = 0;
+    const gen = (): string => `int-${++counter}`;
+    placeBuilding(spec, state, 'smelter', 0, 0, 0, gen);
+    expect(spec.buildings).toHaveLength(1);
+    expect(state.buildings).toBe(spec.buildings); // live reference
+
+    // After placement: Smelter (cycle 8s) produces 1 iron_ingot / 8s = 0.125/s.
+    // POWER_FREE strips mine/workshop only; Smelter retains its power.consumes,
+    // and the test state has no power producers, so powerFactor = 0 → effective
+    // rate = 0. Strip Smelter's power too for this test.
+    const noSmelterPower = ((): DefCatalog => {
+      const base = { ...BUILDING_DEFS } as Record<BuildingDefId, BuildingDef>;
+      const { power: _p, ...rest } = base.smelter;
+      base.smelter = rest as BuildingDef;
+      return base;
+    })();
+    const after = computeRates(state, { defs: noSmelterPower });
+    expect(after.production.iron_ingot ?? 0).toBeCloseTo(0.125, 9);
+    expect(after.byBuilding).toHaveLength(1);
+    expect(after.byBuilding[0]!.building.defId).toBe('smelter');
   });
 });
