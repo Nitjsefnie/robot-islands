@@ -289,6 +289,65 @@ describe('computeRates', () => {
   });
 });
 
+// -----------------------------------------------------------------------
+// §4.5 buff-adjacency — observable in production rates
+// -----------------------------------------------------------------------
+
+describe('§4.5 — buff adjacency in computeRates / advanceIsland', () => {
+  it('two adjacent mines each gain the same_def +10% buff (1 match, cap 2)', () => {
+    // Mine placeholder buff: +10% per same_def neighbor, cap 2. Two mines
+    // sharing a footprint border (2x2 at (0,0) and (2,0) → mine-A's east
+    // border at column 2 intersects mine-B's western column) → each has
+    // one matching neighbor → rate × 1.10. Base rate 1/50s = 0.02.
+    const mineA: PlacedBuilding = { id: 'b-mine-a', defId: 'mine', x: 0, y: 0 };
+    const mineB: PlacedBuilding = { id: 'b-mine-b', defId: 'mine', x: 2, y: 0 };
+    const state = makeState({
+      buildings: [mineA, mineB],
+      inventory: blankInventory(),
+    });
+    const { production, byBuilding } = computeRates(state, { defs: POWER_FREE });
+    // Each mine at 0.02 × 1.10 = 0.022; aggregate iron_ore = 0.044.
+    expect(production.iron_ore).toBeCloseTo(0.044, 9);
+    for (const r of byBuilding) {
+      expect(r.effectiveRate).toBeCloseTo(0.022, 9);
+    }
+  });
+
+  it('three mines in a line: middle caps at +20%, outer +10% each', () => {
+    // Three 2x2 mines at x = -2, 0, 2 (all y=0). Middle (0,0) has TWO
+    // neighbors (cap 2 hit): rate × 1.20. Outer two each have one
+    // neighbor: rate × 1.10. Verifies the cap is the right ceiling and
+    // not silently exceeded.
+    const west: PlacedBuilding = { id: 'b-w', defId: 'mine', x: -2, y: 0 };
+    const mid: PlacedBuilding = { id: 'b-m', defId: 'mine', x: 0, y: 0 };
+    const east: PlacedBuilding = { id: 'b-e', defId: 'mine', x: 2, y: 0 };
+    const state = makeState({
+      buildings: [west, mid, east],
+      inventory: blankInventory(),
+    });
+    const { byBuilding } = computeRates(state, { defs: POWER_FREE });
+    const midRate = byBuilding.find((r) => r.building === mid)?.effectiveRate;
+    const westRate = byBuilding.find((r) => r.building === west)?.effectiveRate;
+    const eastRate = byBuilding.find((r) => r.building === east)?.effectiveRate;
+    expect(midRate).toBeCloseTo(0.02 * 1.2, 9);
+    expect(westRate).toBeCloseTo(0.02 * 1.1, 9);
+    expect(eastRate).toBeCloseTo(0.02 * 1.1, 9);
+  });
+
+  it('buff stack is observable in actual production over time', () => {
+    // Two adjacent mines, 100s. Each at 0.022/s → 2 × 0.022 × 100 = 4.4
+    // iron_ore. Without the buff the same setup yields 4.0.
+    const mineA: PlacedBuilding = { id: 'b-mine-a', defId: 'mine', x: 0, y: 0 };
+    const mineB: PlacedBuilding = { id: 'b-mine-b', defId: 'mine', x: 2, y: 0 };
+    const state = makeState({
+      buildings: [mineA, mineB],
+      inventory: blankInventory(),
+    });
+    advanceIsland(state, 100_000, { defs: POWER_FREE });
+    expect(state.inventory.iron_ore).toBeCloseTo(4.4, 6);
+  });
+});
+
 // Building fixtures with §5.1 power fields. SOLAR and COAL_GEN inherit
 // their power values from BUILDING_DEFS. Mine and Workshop pick up the
 // production defs' 40W / 60W consumes via the production catalog. The

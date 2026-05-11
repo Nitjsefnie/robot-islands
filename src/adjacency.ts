@@ -1,0 +1,168 @@
+// §4.4 / §4.5 buff-adjacency resolution.
+//
+// SPEC §4.4: "Adjacency is computed using 4-neighbors. For a multi-tile
+// building, the adjacent set is the union of tiles bordering any cell of the
+// footprint, minus the footprint itself."
+//
+// SPEC §4.5 (buff form): "building gains a multiplier per matching neighbor,
+// capped at N. Format: `+X% statKey per adjacent matchType, max N matches`."
+//
+// `computeBuffStack` returns the multiplicative buff multiplier to apply to
+// a building's recipe rate. It walks the focal building's 4-neighbor border,
+// collects the set of distinct neighbor building ids that touch the border,
+// and for each AdjacencyBuff entry on the focal building's def counts the
+// number of neighbors satisfying the entry's `matchKind` predicate (capped
+// at `maxMatches`). Multiple entries compose multiplicatively; within a
+// single entry, N matches contribute additively as `1 + N × percentPerMatch/100`.
+//
+// Pure module — no PixiJS, no DOM. The 4-neighbor footprint walk mirrors
+// `heat.ts`'s pattern (footprintKeySet → borderTiles); we keep the helpers
+// local rather than exporting them from heat.ts so the two resolvers can
+// evolve independently. Both compute the same set per §4.4.
+//
+// Gating adjacency (Smelter→Heat Source, Refinery→Wastewater, etc.) is NOT
+// implemented here — heat gating lives in `heat.ts`. This module covers the
+// buff-stack half of §4.5 only.
+
+import {
+  BUILDING_DEFS,
+  type AdjacencyBuff,
+  type BuildingDef,
+  type BuildingDefId,
+} from './building-defs.js';
+import type { PlacedBuilding } from './buildings.js';
+import { footprintTiles, type Rotation } from './placement.js';
+
+/** All footprint tiles a building occupies, returned as a Set of "x,y" keys
+ *  for O(1) membership tests during border-overlap checks. Mirrors the
+ *  helper in heat.ts (kept local so the two adjacency resolvers stay
+ *  independent — see module header). */
+function footprintKeySet(
+  b: PlacedBuilding,
+  defs: Readonly<Record<BuildingDefId, BuildingDef>>,
+): Set<string> {
+  const def = defs[b.defId];
+  const rot = (b.rotation ?? 0) as Rotation;
+  const tiles = footprintTiles(def.width, def.height, b.x, b.y, rot);
+  const out = new Set<string>();
+  for (const t of tiles) out.add(`${t.x},${t.y}`);
+  return out;
+}
+
+/** 4-neighbor border tiles of a footprint, EXCLUDING tiles that are part of
+ *  the footprint itself (per §4.4: "minus the footprint itself"). Required
+ *  for multi-tile buildings — without the exclusion a 2×2 footprint's
+ *  internal cardinal neighbors would loop back into its own cells. */
+function borderTiles(footprint: Set<string>): Set<string> {
+  const border = new Set<string>();
+  for (const key of footprint) {
+    const [xs, ys] = key.split(',');
+    const x = Number(xs);
+    const y = Number(ys);
+    const candidates: ReadonlyArray<readonly [number, number]> = [
+      [x, y - 1],
+      [x, y + 1],
+      [x - 1, y],
+      [x + 1, y],
+    ];
+    for (const [nx, ny] of candidates) {
+      const nk = `${nx},${ny}`;
+      if (!footprint.has(nk)) border.add(nk);
+    }
+  }
+  return border;
+}
+
+/** True iff any tile of `other`'s footprint lies in `border`. */
+function touchesBorder(
+  other: PlacedBuilding,
+  border: Set<string>,
+  defs: Readonly<Record<BuildingDefId, BuildingDef>>,
+): boolean {
+  const def = defs[other.defId];
+  const rot = (other.rotation ?? 0) as Rotation;
+  const tiles = footprintTiles(def.width, def.height, other.x, other.y, rot);
+  for (const t of tiles) {
+    if (border.has(`${t.x},${t.y}`)) return true;
+  }
+  return false;
+}
+
+/** Predicate: does `neighbor` satisfy the AdjacencyBuff entry relative to
+ *  the focal building? Encapsulates the three matchKind variants per §4.5. */
+function neighborMatches(
+  focal: PlacedBuilding,
+  neighbor: PlacedBuilding,
+  entry: AdjacencyBuff,
+  defs: Readonly<Record<BuildingDefId, BuildingDef>>,
+): boolean {
+  switch (entry.matchKind) {
+    case 'same_def':
+      return neighbor.defId === focal.defId;
+    case 'same_category':
+      return defs[neighbor.defId].category === defs[focal.defId].category;
+    case 'def_id':
+      return entry.matchDefId !== undefined && neighbor.defId === entry.matchDefId;
+  }
+}
+
+/**
+ * Compute the multiplicative §4.5 buff stack for the focal building.
+ *
+ * Walks the focal building's 4-neighbor footprint border once to identify
+ * the set of distinct neighboring buildings (de-duplicated by id, so a
+ * multi-tile neighbor that shares N border tiles counts as a single
+ * neighbor per §4.4's "union of tiles" framing). Then for each
+ * AdjacencyBuff entry on the focal def, counts the matching neighbors and
+ * applies `1 + min(count, maxMatches) × percentPerMatch/100` to the
+ * running product.
+ *
+ * Returns 1.0 when:
+ *   - the focal def has no `adjacencyBuffs`,
+ *   - or no neighbors match any entry.
+ *
+ * Pure function: no input is mutated. The `defs` parameter defaults to the
+ * canonical `BUILDING_DEFS` catalog; tests pass overrides to wire
+ * placeholder buffs without touching the production catalog. The economy
+ * threads its `RatesContext.defs` catalog through so a power-free /
+ * heavy-mine test catalog continues to work.
+ */
+export function computeBuffStack(
+  b: PlacedBuilding,
+  buildings: ReadonlyArray<PlacedBuilding>,
+  defs: Readonly<Record<BuildingDefId, BuildingDef>> = BUILDING_DEFS,
+): number {
+  const def = defs[b.defId];
+  const buffs = def.adjacencyBuffs;
+  if (!buffs || buffs.length === 0) return 1;
+
+  const fp = footprintKeySet(b, defs);
+  const border = borderTiles(fp);
+
+  // Distinct neighboring buildings (by id) whose footprint touches our
+  // border. De-duplication is the §4.4 "union" semantics: a 3×3 neighbor
+  // crossing three of the focal's border tiles counts as one neighbor,
+  // not three. Self is excluded both by border-tile filtering (own
+  // footprint excluded from border) and a defensive id check.
+  const neighbors: PlacedBuilding[] = [];
+  const seen = new Set<string>();
+  for (const other of buildings) {
+    if (other.id === b.id) continue;
+    if (seen.has(other.id)) continue;
+    if (!touchesBorder(other, border, defs)) continue;
+    seen.add(other.id);
+    neighbors.push(other);
+  }
+
+  let stack = 1;
+  for (const entry of buffs) {
+    let count = 0;
+    for (const n of neighbors) {
+      if (neighborMatches(b, n, entry, defs)) count++;
+    }
+    if (count <= 0) continue;
+    const effective = Math.min(count, entry.maxMatches);
+    stack *= 1 + (effective * entry.percentPerMatch) / 100;
+  }
+  return stack;
+}

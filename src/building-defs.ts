@@ -177,6 +177,34 @@ export type BuildingDefId =
   | 'plasma_heater';
 
 /**
+ * §4.5 buff-adjacency entry: per matching 4-neighbor, multiply the building's
+ * recipe rate by `1 + percentPerMatch / 100`, summed additively up to
+ * `maxMatches` matches. Multiple AdjacencyBuff entries on the same def stack
+ * MULTIPLICATIVELY (e.g. two entries each yielding ×1.20 → final ×1.44).
+ *
+ * `matchKind` selects what counts as a "matching" neighbor:
+ *   - `'same_def'` — neighbor's `defId === this.defId` (clustering bonus).
+ *   - `'same_category'` — neighbor's def category === this def's category.
+ *   - `'def_id'` — neighbor's `defId === matchDefId` (cross-def synergy).
+ *     `matchDefId` is REQUIRED when `matchKind === 'def_id'`.
+ *
+ * Resolution lives in `adjacency.ts` (`computeBuffStack`); the economy
+ * applies the returned multiplier to the building's recipe `baseRate` in
+ * both passes of `computeRates`. Per spec §4.4 the adjacency relation is
+ * 4-neighbor over the footprint border, with a multi-tile neighbor sharing
+ * multiple border tiles counted as a single match.
+ */
+export interface AdjacencyBuff {
+  readonly matchKind: 'same_def' | 'same_category' | 'def_id';
+  /** Required when `matchKind === 'def_id'`; ignored otherwise. */
+  readonly matchDefId?: BuildingDefId;
+  /** Per-match additive percentage (e.g. 10 → +10%/match). */
+  readonly percentPerMatch: number;
+  /** Cap on the number of matches counted. */
+  readonly maxMatches: number;
+}
+
+/**
  * Per-kind static definition. Step 9 fills the fields needed by the
  * economy + render layer; `requiredTile`, adjacency, and the heat flag stay
  * in SPEC §15.1's BuildingDef shape but are not used yet.
@@ -260,6 +288,11 @@ export interface BuildingDef {
    *  set on the T1 Smelter — the basic smelter remains the bootstrap
    *  unconditional iron→ingot link (a Smelter without heat is intentional). */
   readonly requiresHeat?: boolean;
+  /** §4.5 buff-adjacency entries. Each entry contributes additively up to
+   *  its `maxMatches` cap; entries compose multiplicatively. Undefined or
+   *  empty = no adjacency buff (default). Resolution: `computeBuffStack`
+   *  in `adjacency.ts`, called from `computeRates`. */
+  readonly adjacencyBuffs?: ReadonlyArray<AdjacencyBuff>;
 }
 
 /** Read-only catalog. Keys = BuildingDefId; every defId MUST have an entry. */
@@ -287,6 +320,11 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     power: { consumes: 40 },
     requiredTile: ['ore', 'coal'],
     glyph: '⛏',
+    // §4.5 placeholder — tune in Appendix A. Mild clustering bonus rewards
+    // packing mines onto adjacent ore/coal veins.
+    adjacencyBuffs: [
+      { matchKind: 'same_def', percentPerMatch: 10, maxMatches: 2 },
+    ],
   },
   workshop: {
     id: 'workshop',
@@ -299,6 +337,11 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     stroke: 0x6b2f00,
     power: { consumes: 60 },
     glyph: '⚙',
+    // §4.5 placeholder — tune in Appendix A. Manufacturing co-location bonus:
+    // small per-match rate boost up to three adjacent Workshops.
+    adjacencyBuffs: [
+      { matchKind: 'same_def', percentPerMatch: 5, maxMatches: 3 },
+    ],
   },
   solar: {
     id: 'solar',
@@ -377,6 +420,11 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     stroke: 0x3a1a1a,
     power: { consumes: 50 },
     glyph: '△',
+    // §4.5 placeholder — tune in Appendix A. Paired smelters share heat
+    // efficiencies; gentle clustering bonus rewards a two-smelter line.
+    adjacencyBuffs: [
+      { matchKind: 'same_def', percentPerMatch: 10, maxMatches: 2 },
+    ],
   },
   crate: {
     id: 'crate',

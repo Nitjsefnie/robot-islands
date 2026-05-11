@@ -24,6 +24,7 @@
 // linear and exact. The integration converges in O(events × resources)
 // regardless of `now - lastTick`, so multi-day offline catchup is cheap.
 
+import { computeBuffStack } from './adjacency.js';
 import { IDENTITY_MODIFIER_MULTIPLIERS, type ModifierMultipliers } from './biomes.js';
 import { BUILDING_DEFS, type BuildingDef, type BuildingDefId } from './building-defs.js';
 import type { PlacedBuilding } from './buildings.js';
@@ -175,12 +176,14 @@ export function cap(state: IslandState, r: ResourceId): number {
  *
  * Per §15.3 with §5.1 power: `effectiveRate = baseRate × inputAvail ×
  * (consumesPower ? powerFactor : 1)`, where `baseRate = (1/cycleSec) ×
- * outputAvail × buffStack`. `buffStack` (§15.3 — adjacency, specialization,
- * Network Consciousness) is still 1 in step 4; `powerFactor` lives on the
- * `PowerBalance` returned by `computeRates` and is recomputed each call.
- * The four-pass implementation in `computeRates` documents how the
- * inputAvail/powerFactor circular dependency is broken (nominal-rate
- * inputAvail, post-applied powerFactor).
+ * outputAvail × buffStack`. `buffStack` carries the §4.5 buff-adjacency
+ * multiplier (`computeBuffStack` in `adjacency.ts`) per building; it is
+ * computed once in pass 1 and reused verbatim in pass 2 so producer /
+ * consumer supply ratios stay consistent when only one side is buffed.
+ * `powerFactor` lives on the `PowerBalance` returned by `computeRates`
+ * and is recomputed each call. The four-pass implementation in
+ * `computeRates` documents how the inputAvail/powerFactor circular
+ * dependency is broken (nominal-rate inputAvail, post-applied powerFactor).
  */
 interface BuildingRate {
   readonly building: PlacedBuilding;
@@ -334,7 +337,10 @@ export function computeRates(
   // nominalRate (so producer/consumer supply ratios stay correct when only
   // one side is buffed). Power multipliers apply in pass 3.
   const skillMul = effectiveSkillMultipliers(state);
-  const buffStack = 1;
+  // §4.5 buff-adjacency stack is per-building, not global — computed
+  // lazily inside the pass-1 loop and stashed on the Tentative entry so
+  // pass-2's nominalRate sees the same multiplier (preserves
+  // producer/consumer supply ratios when only one side is buffed).
   // §5.2: resolve heat assignments BEFORE the per-recipe passes. A consumer
   // with `requiresHeat` and no adjacent Heat Source is forced to baseRate=0
   // in pass-1 (no recipe pickup → no rate, no consumption) and excluded
@@ -347,6 +353,10 @@ export function computeRates(
     readonly recipe: Recipe;
     /** Base cycles/sec before input-availability throttling. */
     readonly baseRate: number;
+    /** §4.5 buff-adjacency multiplier for this building, captured in pass-1
+     *  and reused in pass-2's nominal-rate computation. 1.0 when the def
+     *  has no `adjacencyBuffs` or no matching neighbors. */
+    readonly buffStack: number;
   }
   const tentative: Tentative[] = [];
   /** Gross production by resource from all tentatively-running buildings. */
@@ -358,17 +368,22 @@ export function computeRates(
     const def = defs[b.defId];
     const recipe = resolveRecipe(def, b, terrainAt);
     if (!recipe) continue;
+    // §4.5 buff-adjacency multiplier — computed once per building from its
+    // 4-neighbor footprint border. Captured here so pass 2's nominal-rate
+    // sees the same factor and producer/consumer supply ratios stay correct.
+    // Returns 1.0 when the def has no `adjacencyBuffs` or no matches.
+    const buffStack = computeBuffStack(b, state.buildings, defs);
     // §5.2 heat gate: a `requiresHeat` building with no adjacent source
     // is fully stalled this tick — no production, no consumption, no power
     // draw. Recorded as a tentative entry with baseRate=0 so pass-3's
     // power-balance loop also skips it (matched via inputAvail = 0).
     if (def.requiresHeat && heat.hasHeat.get(b.id) !== true) {
-      tentative.push({ building: b, recipe, baseRate: 0 });
+      tentative.push({ building: b, recipe, baseRate: 0, buffStack });
       continue;
     }
     const oa = outputAvail(state, recipe);
     if (oa === 0) {
-      tentative.push({ building: b, recipe, baseRate: 0 });
+      tentative.push({ building: b, recipe, baseRate: 0, buffStack });
       continue;
     }
     // Recipe-rate multipliers compose: skill-tree (per-category) × modifier
@@ -383,7 +398,7 @@ export function computeRates(
       specMul.globalRecipeRate *
       ncBuff;
     const baseRate = (1 / recipe.cycleSec) * buffStack * rateMul;
-    tentative.push({ building: b, recipe, baseRate });
+    tentative.push({ building: b, recipe, baseRate, buffStack });
     for (const [r, yld] of Object.entries(recipe.outputs)) {
       const id = r as ResourceId;
       tentSupply[id] = (tentSupply[id] ?? 0) + (yld ?? 0) * baseRate;
@@ -407,7 +422,7 @@ export function computeRates(
       (specMul.recipeRateByCategory[t.recipe.category] ?? 1) *
       specMul.globalRecipeRate *
       ncBuff;
-    const nominalRate = (1 / t.recipe.cycleSec) * buffStack * rateMul;
+    const nominalRate = (1 / t.recipe.cycleSec) * t.buffStack * rateMul;
     const externalSupply: Record<ResourceId, number> = {} as Record<ResourceId, number>;
     for (const r of Object.keys(tentSupply) as ResourceId[]) {
       externalSupply[r] = tentSupply[r] ?? 0;
