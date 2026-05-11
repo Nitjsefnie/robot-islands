@@ -46,6 +46,7 @@
 
 import type { TerrainKind } from './island.js';
 import { tierForLevel } from './skilltree.js';
+import type { StorageCategory } from './storage-categories.js';
 // Type-only imports avoid a runtime cycle with world.ts (which imports
 // BUILDING_DEFS from this file). The Biome union and IslandSpec interface
 // are pure types — `import type` strips the edge at compile time.
@@ -94,8 +95,11 @@ export type BuildingDefId =
   | 'steel_mill'
   | 'assembler'
   | 'tank'
+  | 'cold_storage'
+  | 'component_warehouse'
   // New T3
   | 'electric_arc_furnace'
+  | 'vault'
   | 'platform_constructor'
   // New T4 (§6.5 / §9.5 / step 12)
   | 'fusion_core'
@@ -176,11 +180,17 @@ export interface BuildingDef {
   readonly fill: number;
   /** Stroke / outline colour. */
   readonly stroke: number;
-  /** Optional storage cap contribution. Per §8.4 spec, Silo is dry-goods-only
-   *  and Tank liquids/gases-only; for step 9 we simplify and aggregate
-   *  `storageCap` as a uniform "+N to ALL resources" on placement. The
-   *  category-routed-storage system is deferred. */
-  readonly storageCap?: number;
+  /** §4.6 storage contribution. Specialized buildings (Silo dry-goods, Tank
+   *  liquids/gases, Cold Storage temp-sensitive, Component Warehouse
+   *  components, Vault rare) declare a non-`generic` category; their capacity
+   *  applies to every ResourceId whose `RESOURCE_STORAGE_CATEGORY` matches.
+   *  Generic buildings (Crate, Warehouse) use `category: 'generic'` and bump
+   *  capacity only for the single resource named on each PlacedBuilding's
+   *  `cargoLabel`. Undefined = the def doesn't contribute storage at all. */
+  readonly storage?: {
+    readonly category: StorageCategory | 'generic';
+    readonly capacity: number;
+  };
   /** §5.1 electrical contribution. Either side may be undefined / 0. */
   readonly power?: { readonly produces?: number; readonly consumes?: number };
   /** §15.1 / §9.5 biome restriction for biome-locked uniques (T4). Undefined
@@ -348,9 +358,10 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     height: 1,
     fill: 0x8a6a3a,
     stroke: 0x402a10,
-    // §8.4: spec says +100 cap on one player-CHOSEN resource. For step 9
-    // we simplify to +100 to ALL resources (player choice UI = deferred).
-    storageCap: 100,
+    // §4.6 / §8.4: +100 cap on ONE player-chosen resource per instance.
+    // Generic storage — each PlacedBuilding picks its `cargoLabel` and only
+    // that resource's cap is raised.
+    storage: { category: 'generic', capacity: 100 },
     glyph: '▦',
   },
   silo: {
@@ -362,9 +373,9 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     height: 2,
     fill: 0xa08a5a,
     stroke: 0x504028,
-    // §8.4: spec says +2000 cap, dry-goods-only. Categorised routing is
-    // deferred for step 9; we apply uniformly to all resources.
-    storageCap: 2000,
+    // §4.6 / §8.4: +2000 cap, dry-goods category only. Bumps every resource
+    // whose RESOURCE_STORAGE_CATEGORY === 'dry_goods'.
+    storage: { category: 'dry_goods', capacity: 2000 },
     glyph: '▦',
   },
   biomass_plant: {
@@ -539,9 +550,39 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     height: 2,
     fill: 0x2a4078,
     stroke: 0x0a1a3a,
-    storageCap: 2000,
-    // §8.4: liquids/gases-only. Categorised routing deferred — Tank
-    // applies uniformly to all resources for step 9.
+    // §4.6 / §8.4: +2000 cap, liquids/gases category only.
+    storage: { category: 'liquid_gas', capacity: 2000 },
+    glyph: '▦',
+  },
+  // §4.6 / §8.4: Cold Storage — T2 specialized storage for temperature-
+  // sensitive resources (cryogenic compound, cryo-coolant, liquid nitrogen,
+  // certain plastics). +1500 cap. Cool steel-grey fill keys to the
+  // refrigeration role.
+  cold_storage: {
+    id: 'cold_storage',
+    displayName: 'Cold Storage',
+    category: 'storage',
+    tier: 2,
+    width: 2,
+    height: 2,
+    fill: 0x8090a0,
+    stroke: 0x2a3848,
+    storage: { category: 'temp_sensitive', capacity: 1500 },
+    glyph: '▦',
+  },
+  // §4.6 / §8.4: Component Warehouse — T2 specialized storage for
+  // manufactured T2-T3 components (wire, bolt, gear, microchip, etc.).
+  // +2000 cap. Industrial-tan fill keys to the parts-warehouse role.
+  component_warehouse: {
+    id: 'component_warehouse',
+    displayName: 'Component Warehouse',
+    category: 'storage',
+    tier: 2,
+    width: 2,
+    height: 2,
+    fill: 0x806840,
+    stroke: 0x3a2810,
+    storage: { category: 'components', capacity: 2000 },
     glyph: '▦',
   },
   // -------------------------------------------------------------------------
@@ -578,6 +619,22 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     // smelting-category convention. Gated like Blast Furnace / Pyroforge.
     requiresHeat: true,
     glyph: '△',
+  },
+  // §4.6 / §8.4: Vault — T3 specialized storage for rare/valuable resources
+  // (helium_3, AI core, exotic alloy, T5 raws/components). +5000 cap.
+  // Dusky-violet fill — high-security vault aesthetic, tracking the "rare"
+  // category.
+  vault: {
+    id: 'vault',
+    displayName: 'Vault',
+    category: 'storage',
+    tier: 3,
+    width: 3,
+    height: 3,
+    fill: 0x504860,
+    stroke: 0x1a1830,
+    storage: { category: 'rare', capacity: 5000 },
+    glyph: '▦',
   },
   // §8.9: Platform Constructor (a.k.a. Foundry of Lands). T3 special building
   // — gates artificial-island construction (§2.5). Step 11 only checks for the
@@ -723,11 +780,13 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     glyph: '✺',
   },
   // §8.4: Singularity Battery — "effectively infinite electrical power
-  // storage" per spec. Categorised here as `power` per the task brief: the
-  // §5.1 model has no power-buffer concept yet, so the step-13 def carries a
-  // generic `storageCap` of 10000 (Crate/Silo-style uniform resource cap) as
-  // a stand-in until power buffering arrives. Tiny consumption (100W) models
-  // continuous overhead. Power-storage mechanic per §13.3 DEFERRED to step 14+.
+  // storage" per spec. Power-storage mechanic per §13.3 DEFERRED to step 14+.
+  // Per the §8.4 note ("not a resource storage building") this def carries
+  // NO `storage` contribution — it never raised any resource cap. The earlier
+  // step-13 `storageCap: 10000` placeholder is removed by the §4.6
+  // categorized-storage cleanup; resource caps are now category-routed and
+  // a power-buffer doesn't fit any category. Tiny consumption (100W) models
+  // continuous standby overhead.
   singularity_battery: {
     id: 'singularity_battery',
     displayName: 'Singularity Battery',
@@ -738,7 +797,6 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0x202060, // deep ultramarine
     stroke: 0x0a0a30,
     power: { consumes: 100 },
-    storageCap: 10000,
     glyph: '▦',
   },
   // §8.9 / §13.3: Time Lock — banks offline-time stockpile per island and

@@ -631,9 +631,13 @@ export function mountBuildingsUi(
         makeMetaBadge(`-${def.power.consumes}W`, unlocked ? WARN : WARN_DIM, metaBorder),
       );
     }
-    if (def.storageCap !== undefined && def.storageCap > 0) {
+    if (def.storage && def.storage.capacity > 0) {
+      // §4.6: badge surfaces the capacity contribution. Specialized building
+      // capacity bumps every category-matching resource; generic capacity
+      // bumps only the cargoLabel resource — the catalog row doesn't know
+      // the per-instance label so we just show the headline number.
       ref.metaRail.appendChild(
-        makeMetaBadge(`+${def.storageCap} cap`, metaFg, metaBorder),
+        makeMetaBadge(`+${def.storage.capacity} cap`, metaFg, metaBorder),
       );
     }
 

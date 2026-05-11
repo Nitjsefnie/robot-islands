@@ -33,7 +33,16 @@ import type { PlacedBuilding } from './buildings.js';
 import type { IslandState } from './economy.js';
 import { tileInscribedInEllipse } from './island.js';
 import { ALL_RESOURCES, type ResourceId } from './recipes.js';
+import { RESOURCE_STORAGE_CATEGORY } from './storage-categories.js';
 import type { IslandSpec } from './world.js';
+
+/** Default cargo label for a freshly-placed generic-storage building (Crate,
+ *  Warehouse). The §4.6 spec says the player labels at placement time, but
+ *  the placement modal hasn't been extended for the label picker yet — so we
+ *  seed a sensible default and let the inspector's relabel path take it
+ *  from there. `iron_ore` is the cheapest, earliest-game resource the player
+ *  is reliably producing, so labeling defaults to it. */
+const DEFAULT_CARGO_LABEL: ResourceId = 'iron_ore';
 
 /** 4-way rotation in 90° CW increments. 0 = identity, 1 = 90° CW, etc. */
 export type Rotation = 0 | 1 | 2 | 3;
@@ -253,22 +262,38 @@ export function placeBuilding(
   rotation: Rotation,
   idGenerator: () => string,
 ): PlacedBuilding {
+  const def = BUILDING_DEFS[defId];
+  // §4.6: generic-storage instances (Crate, Warehouse) carry a per-instance
+  // cargoLabel naming which resource they hold. The placement modal label
+  // picker isn't built yet, so we seed a sensible default; the inspector
+  // exposes a relabel control afterward.
+  const cargoLabel =
+    def.storage?.category === 'generic' ? DEFAULT_CARGO_LABEL : undefined;
   const placed: PlacedBuilding = {
     id: idGenerator(),
     defId,
     x: anchorX,
     y: anchorY,
     rotation,
+    ...(cargoLabel !== undefined ? { cargoLabel } : {}),
   };
   spec.buildings.push(placed);
-  // Bump storage caps if this def adds capacity. Same uniform-all-resources
-  // model as `aggregateStorageCaps` (categorised dry-goods / liquids routing
-  // is still deferred per §8.4 simplification).
-  const def = BUILDING_DEFS[defId];
-  const bump = def.storageCap ?? 0;
-  if (bump > 0) {
-    for (const r of ALL_RESOURCES as ReadonlyArray<ResourceId>) {
-      state.storageCaps[r] = (state.storageCaps[r] ?? 0) + bump;
+  // Bump storage caps per §4.6 categorized routing. Specialized buildings
+  // bump every resource matching their category; generic buildings bump
+  // only the cargoLabel resource. Both paths mirror `aggregateStorageCaps`.
+  const storage = def.storage;
+  if (storage) {
+    if (storage.category === 'generic') {
+      if (cargoLabel !== undefined) {
+        state.storageCaps[cargoLabel] =
+          (state.storageCaps[cargoLabel] ?? 0) + storage.capacity;
+      }
+    } else {
+      for (const r of ALL_RESOURCES as ReadonlyArray<ResourceId>) {
+        if (RESOURCE_STORAGE_CATEGORY[r] === storage.category) {
+          state.storageCaps[r] = (state.storageCaps[r] ?? 0) + storage.capacity;
+        }
+      }
     }
   }
   return placed;
@@ -340,13 +365,14 @@ export interface DemolishResult {
  * Mutations on the `{ ok: true }` path:
  *   - Removes the building from `spec.buildings` (state.buildings is the
  *     same array reference, so both stay consistent).
- *   - For storage defs (def.storageCap > 0): subtracts the same `storageCap`
- *     contribution from every resource in `state.storageCaps`. Mirrors the
+ *   - For storage defs (def.storage defined): subtracts the `storage.capacity`
+ *     contribution from every category-matching resource (specialized) or
+ *     only the building's cargoLabel resource (generic). Mirrors the
  *     `placeBuilding` bump exactly, so place→demolish round-trips to the
  *     same caps. Per §4.6 last paragraph ("If current inventory of any
  *     affected resource now exceeds the reduced cap, the excess is lost —
  *     inventory clamps down to the new cap"), we then clamp `inventory[r]`
- *     to the new cap for every resource.
+ *     to the new cap on every affected resource.
  *   - Credits `state.inventory.scrap`, clamped to the post-demolish scrap cap.
  *
  * Returns `{ ok: false, reason: 'not-found' }` when the id isn't present —
@@ -380,15 +406,25 @@ export function demolishBuilding(
   spec.buildings.splice(idx, 1);
   // Strip storage contribution if the demolished def was a storage building.
   // §4.6: after the cap reduction, inventory clamps to the new cap (the lost
-  // excess models the spec's "excess is lost" rule literally).
-  const bump = def.storageCap ?? 0;
-  if (bump > 0) {
-    for (const r of ALL_RESOURCES as ReadonlyArray<ResourceId>) {
-      const next = (state.storageCaps[r] ?? 0) - bump;
+  // excess models the spec's "excess is lost" rule literally). Categorized
+  // routing mirrors `placeBuilding` — specialized buildings subtract from
+  // every category-matching resource; generic buildings subtract only from
+  // the cargoLabel resource.
+  const storage = def.storage;
+  if (storage) {
+    const stripResource = (r: ResourceId): void => {
+      const next = (state.storageCaps[r] ?? 0) - storage.capacity;
       state.storageCaps[r] = next < 0 ? 0 : next;
       const have = state.inventory[r] ?? 0;
       const newCap = state.storageCaps[r] ?? 0;
       if (have > newCap) state.inventory[r] = newCap;
+    };
+    if (storage.category === 'generic') {
+      if (b.cargoLabel !== undefined) stripResource(b.cargoLabel);
+    } else {
+      for (const r of ALL_RESOURCES as ReadonlyArray<ResourceId>) {
+        if (RESOURCE_STORAGE_CATEGORY[r] === storage.category) stripResource(r);
+      }
     }
   }
   // Credit the Scrap, clamped to its post-demolish cap. The clamp matches

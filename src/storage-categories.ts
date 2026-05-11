@@ -1,0 +1,127 @@
+// Per SPEC §4.6: storage is categorized. Each resource belongs to exactly
+// one category; specialized storage buildings (Silo, Tank, Cold Storage,
+// Component Warehouse, Vault) raise the cap only for resources in their
+// matching category. Generic storage (Crate, Warehouse) labels a single
+// resource at placement time and bumps only that resource's cap.
+//
+// This module is the canonical resource→category mapping. Pure data — no
+// PixiJS, no DOM. Imported by `building-defs.ts` (StorageCategory union),
+// `world.ts` (aggregateStorageCaps), and `placement.ts` (place/demolish).
+//
+// Assignments follow §6 (T0 raws → dry_goods, T1+ refined by chemistry,
+// T4-T5 components → rare). When in doubt, the brief says default to
+// dry_goods.
+
+import type { ResourceId } from './recipes.js';
+
+/**
+ * Storage category per SPEC §4.6. Five specialized buckets, one per
+ * §8.4 specialized-storage building. Generic storage (Crate, Warehouse)
+ * is NOT a category — it carries a per-instance label instead and only
+ * contributes capacity to that single resource.
+ */
+export type StorageCategory =
+  | 'dry_goods'      // Silo: T0 raws (ore, wood, coal, stone, sand, …) + T1 refined dry
+  | 'liquid_gas'     // Tank: water, oil, gas, hydrogen, fuels, acids
+  | 'temp_sensitive' // Cold Storage: cryogenic compound, liquid nitrogen, certain plastics
+  | 'components'     // Component Warehouse: T2-T3 manufactured parts (bolt, gear, wire, …)
+  | 'rare';          // Vault: rare/valuable (helium_3, AI core, exotic alloy, T5 raws)
+
+/**
+ * Canonical mapping. Every ResourceId MUST appear here exactly once;
+ * `storage-categories.test.ts` enforces this. The bucketing rules per §6:
+ *
+ *   dry_goods  — T0 raw extractables (ore, wood, coal, stone, sand, quartz, …)
+ *                plus T1 dry refined (lumber, glass, iron_ingot, pig_iron,
+ *                coke, foundation_kit). Scrap (§6.7) is a T1 dry good.
+ *   liquid_gas — all fluids and gases: water (fresh + salt), crude oil,
+ *                natural gas, hydrogen, biofuel, naphtha, chlorine,
+ *                lubricant, diesel, aviation kerosene, nitrogen,
+ *                cryogenic_hydrogen, plasma_charge (T5 fuel/propellant).
+ *   temp_sensitive — cryo_coolant (per §4.6 "cryo-coolant" example).
+ *                cryogenic_compound + liquid_nitrogen aren't in the catalog
+ *                yet (deferred) — Cold Storage capacity will gain consumers
+ *                when they ship.
+ *   components — T2-T3 manufactured parts: bolt, gear, wire, sheet_metal
+ *                (deferred), microchip, quantum_chip. Silicon is a T3
+ *                semiconductor intermediate but lives in components since
+ *                it's a manufactured solid, not a raw.
+ *   rare       — helium_3 (T3 raw, per §4.6 "all T4-T6 components" and
+ *                "Helium-3" example), exotic_alloy (T4), ai_core (T4 per
+ *                brief), and every T5 resource (casimir_energy,
+ *                reality_anchor, plasma_charge — wait: plasma_charge is a
+ *                T5 fuel per §6.6, so it's liquid_gas; eldritch_processor,
+ *                phase_converter, aetheric_current, tachyon_stream,
+ *                dark_matter, strange_matter).
+ *
+ * Per the task brief: quantum_chip → components (T4 but a manufactured
+ * chip), ai_core → rare. plasma_charge → liquid_gas as a T5 propellant.
+ */
+export const RESOURCE_STORAGE_CATEGORY: Readonly<Record<ResourceId, StorageCategory>> = {
+  // T0 raws — dry_goods.
+  wood: 'dry_goods',
+  iron_ore: 'dry_goods',
+  coal: 'dry_goods',
+  scrap: 'dry_goods',          // §6.7: explicitly "T1 dry-goods storage category".
+  stone: 'dry_goods',
+  sand: 'dry_goods',
+  salt: 'dry_goods',
+  quartz: 'dry_goods',
+
+  // T0 liquids/gases.
+  fresh_water: 'liquid_gas',
+  saltwater: 'liquid_gas',
+  crude_oil: 'liquid_gas',
+  natural_gas: 'liquid_gas',
+  hydrogen: 'liquid_gas',
+
+  // T1 refined dry — dry_goods.
+  iron_ingot: 'dry_goods',
+  coke: 'dry_goods',
+  pig_iron: 'dry_goods',
+  lumber: 'dry_goods',
+  glass: 'dry_goods',
+  foundation_kit: 'dry_goods', // composite-but-dry assembly per §12.3.
+
+  // T1 refined fluid.
+  biofuel: 'liquid_gas',
+
+  // T2 alloy / components.
+  bolt: 'components',
+  gear: 'components',
+  steel: 'components',          // sheet steel: a manufactured solid, not a raw.
+
+  // T2 petrochemical liquids.
+  naphtha: 'liquid_gas',
+  chlorine: 'liquid_gas',
+  lubricant: 'liquid_gas',
+  diesel: 'liquid_gas',
+
+  // T2 components.
+  wire: 'components',
+
+  // T3 chemistry/electronics.
+  silicon: 'components',        // §6.4: semiconductor solid → component.
+  nitrogen: 'liquid_gas',
+  cryo_coolant: 'temp_sensitive', // §4.6 lists "cryo-coolant" under temp_sensitive.
+  aviation_kerosene: 'liquid_gas',
+  microchip: 'components',
+
+  // T4 — components/rare/liquid.
+  helium_3: 'rare',             // §6.4 T3-rare raw; §4.6 names it explicitly.
+  cryogenic_hydrogen: 'liquid_gas',
+  quantum_chip: 'components',   // T4 chip; brief locates it in components.
+  exotic_alloy: 'rare',         // T4 alloy; brief locates it in rare.
+  ai_core: 'rare',              // T4 component; brief locates it in rare.
+
+  // T5 transcendent — all rare except plasma_charge (T5 propellant/fuel).
+  casimir_energy: 'rare',
+  reality_anchor: 'rare',
+  plasma_charge: 'liquid_gas',  // §6.6 / §11.7: T5 fuel / propellant.
+  eldritch_processor: 'rare',
+  phase_converter: 'rare',
+  aetheric_current: 'rare',
+  tachyon_stream: 'rare',
+  dark_matter: 'rare',
+  strange_matter: 'rare',
+};

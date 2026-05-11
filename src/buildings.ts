@@ -15,6 +15,7 @@ import { Container, Graphics, Text } from 'pixi.js';
 
 import { BUILDING_DEFS, type BuildingDefId } from './building-defs.js';
 import { TILE_PX, desaturate, lighten } from './island.js';
+import type { ResourceId } from './recipes.js';
 
 /** Per-instance placement. `id` is unique across the world; `defId` points
  *  into BUILDING_DEFS. (x, y) is the top-left tile of the footprint —
@@ -27,6 +28,16 @@ export interface PlacedBuilding {
   /** Per §15.1 BuildingDef shape, but placement (step 2.5) isn't built;
    *  every demo instance ships rotation: 0. Optional for forward-compat. */
   readonly rotation?: 0 | 1 | 2 | 3;
+  /** §4.6 generic-storage label. Meaningful ONLY for buildings whose def
+   *  carries `storage.category === 'generic'` (Crate, Warehouse). Names the
+   *  single ResourceId this storage instance contributes capacity to.
+   *  Undefined → no resource cap contribution (forward-compat with old saves
+   *  written before this field existed; those Crates load with no label and
+   *  the player can label them via the inspector). The economy treats
+   *  undefined-label generic storage as zero-cap; on load it does NOT
+   *  back-fill a default — the inspector relabel path is the only way to
+   *  attach a resource to a previously-unlabeled Crate. */
+  readonly cargoLabel?: ResourceId;
 }
 
 // Step-9 home-island layout. Tile coords are island-local; the home island's
@@ -63,9 +74,11 @@ export const HOME_ISLAND_BUILDINGS: PlacedBuilding[] = [
   // refining link.
   { id: 'home-smelter-1',  defId: 'smelter',  x: -4, y: 6 },
   // Silo for storage-aggregation demo — single 2×2 at (-7, -3). All four
-  // tiles (-7,-3),(-6,-3),(-7,-2),(-6,-2) inside radius 14. Raises every
-  // resource cap on the home island from 100 → 2100, per the §15.7-step-9
-  // aggregation rule (see world.ts `aggregateStorageCaps`).
+  // tiles (-7,-3),(-6,-3),(-7,-2),(-6,-2) inside radius 14. Per §4.6
+  // categorized storage, Silo bumps only dry_goods resources (coal, wood,
+  // iron_ore, stone, sand, salt, quartz, scrap, iron_ingot, coke, pig_iron,
+  // lumber, glass, foundation_kit). Liquid_gas resources (biofuel, water,
+  // etc.) and components stay at the baseline 2000.
   { id: 'home-silo-1',     defId: 'silo',     x: -7, y: -3 },
   // Step-12: Kit Assembler at (-1, -5). 2×2 footprint inside the radius-14
   // ellipse, no overlap with neighbours (dronepad at 5,-3; workshop at

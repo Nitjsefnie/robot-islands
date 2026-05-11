@@ -16,6 +16,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { PlacedBuilding } from './buildings.js';
 import { ALL_RESOURCES, type ResourceId } from './recipes.js';
+import { RESOURCE_STORAGE_CATEGORY } from './storage-categories.js';
 import {
   buildingAtTile,
   demolishBuilding,
@@ -292,16 +293,49 @@ describe('placeBuilding', () => {
     expect(state.buildings[0]).toBe(placed);
   });
 
-  it('bumps storage caps when placing a storage def', () => {
+  it('bumps storage caps when placing a generic Crate (only the cargoLabel resource)', () => {
+    // §4.6: Crate is generic storage — it bumps only the resource named on
+    // its `cargoLabel`. `placeBuilding` defaults the label to iron_ore.
     const spec = makeSpec();
     const state = makeState(spec);
-    // Pick one resource to baseline against — the baseline is the same for
-    // every key in startingInventory's record.
-    const before = state.storageCaps.iron_ore ?? 0;
-    // crate has storageCap = 100.
-    placeBuilding(spec, state, 'crate', 0, 0, 0, () => 'p-crate');
+    const before = { ...state.storageCaps };
+    const placed = placeBuilding(spec, state, 'crate', 0, 0, 0, () => 'p-crate');
+    expect(placed.cargoLabel).toBe('iron_ore');
+    // iron_ore bumps by +100; every other resource stays at baseline.
+    expect(state.storageCaps.iron_ore).toBe((before.iron_ore ?? 0) + 100);
     for (const r of ALL_RESOURCES as ReadonlyArray<ResourceId>) {
-      expect(state.storageCaps[r]).toBe(before + 100);
+      if (r === 'iron_ore') continue;
+      expect(state.storageCaps[r]).toBe(before[r]);
+    }
+  });
+
+  it('bumps category-matching caps when placing a specialized Silo (dry_goods only)', () => {
+    // §4.6: Silo is specialized for dry_goods. Bumps every dry_goods resource
+    // by +2000, leaves every other category at baseline.
+    const spec = makeSpec();
+    const state = makeState(spec);
+    const before = { ...state.storageCaps };
+    placeBuilding(spec, state, 'silo', 0, 0, 0, () => 'p-silo');
+    for (const r of ALL_RESOURCES as ReadonlyArray<ResourceId>) {
+      const expected =
+        RESOURCE_STORAGE_CATEGORY[r] === 'dry_goods'
+          ? (before[r] ?? 0) + 2000
+          : before[r];
+      expect(state.storageCaps[r]).toBe(expected);
+    }
+  });
+
+  it('bumps category-matching caps when placing a specialized Tank (liquid_gas only)', () => {
+    const spec = makeSpec();
+    const state = makeState(spec);
+    const before = { ...state.storageCaps };
+    placeBuilding(spec, state, 'tank', 0, 0, 0, () => 'p-tank');
+    for (const r of ALL_RESOURCES as ReadonlyArray<ResourceId>) {
+      const expected =
+        RESOURCE_STORAGE_CATEGORY[r] === 'liquid_gas'
+          ? (before[r] ?? 0) + 2000
+          : before[r];
+      expect(state.storageCaps[r]).toBe(expected);
     }
   });
 
@@ -454,18 +488,38 @@ describe('demolishBuilding', () => {
     }
   });
 
-  it('subtracts storageCap contribution from every resource when a storage def is demolished', () => {
+  it('subtracts the storage contribution from category-matching resources when a Silo is demolished', () => {
+    // §4.6: Silo is dry_goods-only — its demolition reverses the dry_goods
+    // bump and leaves other categories untouched.
+    const spec = makeSpec();
+    const state = makeState(spec);
+    const before = { ...state.storageCaps };
+    placeBuilding(spec, state, 'silo', 0, 0, 0, () => 'p-silo');
+    // Sanity: only dry_goods bumped.
+    for (const r of ALL_RESOURCES as ReadonlyArray<ResourceId>) {
+      const expected =
+        RESOURCE_STORAGE_CATEGORY[r] === 'dry_goods'
+          ? (before[r] ?? 0) + 2000
+          : before[r];
+      expect(state.storageCaps[r]).toBe(expected);
+    }
+    const dem = demolishBuilding(spec, state, 'p-silo');
+    expect(dem.ok).toBe(true);
+    for (const r of ALL_RESOURCES as ReadonlyArray<ResourceId>) {
+      expect(state.storageCaps[r]).toBe(before[r]);
+    }
+  });
+
+  it('subtracts the storage contribution from only the cargoLabel resource when a Crate is demolished', () => {
+    // §4.6: Crate is generic — demolition reverses only the cargoLabel's
+    // bump, leaving every other resource at its baseline.
     const spec = makeSpec();
     const state = makeState(spec);
     const before = { ...state.storageCaps };
     placeBuilding(spec, state, 'crate', 0, 0, 0, () => 'p-crate');
-    // Sanity: place bumped caps by +100 across the board.
-    for (const r of ALL_RESOURCES as ReadonlyArray<ResourceId>) {
-      expect(state.storageCaps[r]).toBe((before[r] ?? 0) + 100);
-    }
+    expect(state.storageCaps.iron_ore).toBe((before.iron_ore ?? 0) + 100);
     const dem = demolishBuilding(spec, state, 'p-crate');
     expect(dem.ok).toBe(true);
-    // Demolish restored caps to their pre-placement baseline.
     for (const r of ALL_RESOURCES as ReadonlyArray<ResourceId>) {
       expect(state.storageCaps[r]).toBe(before[r]);
     }

@@ -30,6 +30,7 @@ import {
 import { placeBuilding } from './placement.js';
 import { ALL_RESOURCES, type ResourceId } from './recipes.js';
 import { effectiveSpecializationMultipliers } from './specialization.js';
+import { RESOURCE_STORAGE_CATEGORY } from './storage-categories.js';
 import { aggregateStorageCaps } from './world.js';
 
 const MINE: PlacedBuilding = { id: 'b-mine', defId: 'mine', x: 0, y: 0 };
@@ -694,15 +695,47 @@ describe('step-9 chain — Smelter T1 + storage aggregation', () => {
     expect(state.inventory.coal).toBeCloseTo(48.75, 6);
   });
 
-  it('aggregateStorageCaps: Silo on an island raises every cap to 4000', () => {
-    // Rebalanced for idle-game scale, step #19: baseline 2000 + silo 2000 = 4000
+  it('aggregateStorageCaps: Silo on an island raises only dry_goods caps to 4000', () => {
+    // §4.6 categorized storage: Silo bumps dry_goods only. Other categories
+    // stay at baseline 2000. (rebalanced step #19: baseline 2000 + silo 2000 = 4000)
     const buildings: PlacedBuilding[] = [
       { id: 't-silo', defId: 'silo', x: 0, y: 0 },
     ];
     const caps = aggregateStorageCaps(buildings);
     for (const r of ALL_RESOURCES) {
-      expect(caps[r]).toBe(4000); // baseline 2000 + silo 2000
+      const expected = RESOURCE_STORAGE_CATEGORY[r] === 'dry_goods' ? 4000 : 2000;
+      expect(caps[r]).toBe(expected);
     }
+  });
+
+  it('aggregateStorageCaps: Tank on an island raises only liquid_gas caps to 4000', () => {
+    // §4.6: Tank is liquid_gas-only.
+    const caps = aggregateStorageCaps([
+      { id: 't-tank', defId: 'tank', x: 0, y: 0 },
+    ]);
+    for (const r of ALL_RESOURCES) {
+      const expected = RESOURCE_STORAGE_CATEGORY[r] === 'liquid_gas' ? 4000 : 2000;
+      expect(caps[r]).toBe(expected);
+    }
+  });
+
+  it('aggregateStorageCaps: Crate with cargoLabel raises only that resource', () => {
+    // §4.6: generic storage adds capacity to ONE labeled resource per
+    // instance. An unlabeled Crate contributes nothing (forward-compat).
+    const labeled: PlacedBuilding[] = [
+      { id: 't-crate', defId: 'crate', x: 0, y: 0, cargoLabel: 'iron_ore' },
+    ];
+    const caps = aggregateStorageCaps(labeled);
+    for (const r of ALL_RESOURCES) {
+      const expected = r === 'iron_ore' ? 2100 : 2000;
+      expect(caps[r]).toBe(expected);
+    }
+    // An unlabeled Crate (old save) contributes nothing.
+    const unlabeled: PlacedBuilding[] = [
+      { id: 't-crate', defId: 'crate', x: 0, y: 0 },
+    ];
+    const capsU = aggregateStorageCaps(unlabeled);
+    for (const r of ALL_RESOURCES) expect(capsU[r]).toBe(2000);
   });
 
   it('aggregateStorageCaps: no storage buildings → baseline 2000 caps', () => {
@@ -713,14 +746,26 @@ describe('step-9 chain — Smelter T1 + storage aggregation', () => {
     for (const r of ALL_RESOURCES) expect(caps[r]).toBe(2000);
   });
 
-  it('aggregateStorageCaps: Crate + Silo + Tank stack additively (2000 + 100 + 2000 + 2000)', () => {
-    // Rebalanced for idle-game scale, step #19: baseline 2000 + crate 100 + silo 2000 + tank 2000 = 6100
-    const caps = aggregateStorageCaps([
-      { id: 't-crate', defId: 'crate', x: 0, y: 0 },
-      { id: 't-silo', defId: 'silo', x: 2, y: 0 },
-      { id: 't-tank', defId: 'tank', x: 4, y: 0 },
-    ]);
-    for (const r of ALL_RESOURCES) expect(caps[r]).toBe(6100);
+  it('aggregateStorageCaps: mixed-category buildings — each category bumps independently', () => {
+    // §4.6: a Silo (dry_goods +2000), Tank (liquid_gas +2000), Vault
+    // (rare +5000), Crate labeled iron_ore (+100). Each resource picks up
+    // its category bump plus the label-specific bump iff named.
+    const buildings: PlacedBuilding[] = [
+      { id: 't-silo', defId: 'silo', x: 0, y: 0 },
+      { id: 't-tank', defId: 'tank', x: 2, y: 0 },
+      { id: 't-vault', defId: 'vault', x: 4, y: 0 },
+      { id: 't-crate', defId: 'crate', x: 6, y: 0, cargoLabel: 'iron_ore' },
+    ];
+    const caps = aggregateStorageCaps(buildings);
+    for (const r of ALL_RESOURCES) {
+      let expected = 2000;
+      const cat = RESOURCE_STORAGE_CATEGORY[r];
+      if (cat === 'dry_goods') expected += 2000;
+      if (cat === 'liquid_gas') expected += 2000;
+      if (cat === 'rare') expected += 5000;
+      if (r === 'iron_ore') expected += 100;
+      expect(caps[r]).toBe(expected);
+    }
   });
 });
 

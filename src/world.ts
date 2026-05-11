@@ -36,6 +36,7 @@ import {
 } from './island.js';
 import { ALL_RESOURCES, type ResourceId } from './recipes.js';
 import type { Route } from './routes.js';
+import { RESOURCE_STORAGE_CATEGORY } from './storage-categories.js';
 import { generateWorld } from './world-gen.js';
 
 /** Stratification cell side length, in tiles. SPEC §2.1 calls this R. */
@@ -473,28 +474,49 @@ function startingInventory(): Record<ResourceId, number> {
 /** Baseline cap before any storage building is placed. Rebalanced for
  *  idle-game scale, step #19: bumped from 100 → 2000 so a few minutes of
  *  T1 production doesn't instantly fill storage. Storage buildings add on
- *  top of this baseline. */
-const BASELINE_STORAGE_CAP = 2000; // rebalanced for idle-game scale, step #19 (was 100)
+ *  top of this baseline. Exported so `placement.ts` and persistence
+ *  forward-compat can use the same constant. */
+export const BASELINE_STORAGE_CAP = 2000; // rebalanced for idle-game scale, step #19 (was 100)
 
 /**
- * Aggregate placement-time storage caps from a building list. Per §8.4
- * spec, storage buildings carry per-resource specialisation (Silo →
- * dry-goods, Tank → liquids/gases). For step 9 the simplification is
- * "Crate/Silo/Tank apply uniformly to ALL resources" — the categorised
- * routing system is deferred. The result: each resource cap = baseline +
- * sum of every placed storage def's `storageCap`.
+ * Aggregate placement-time storage caps from a building list per §4.6
+ * categorized storage:
+ *
+ *   - Specialized buildings (Silo, Tank, Cold Storage, Component
+ *     Warehouse, Vault) add their `storage.capacity` to every resource
+ *     whose `RESOURCE_STORAGE_CATEGORY` matches the def's category.
+ *   - Generic buildings (Crate, Warehouse) add their capacity only to the
+ *     single resource named on the PlacedBuilding's `cargoLabel`. An
+ *     unlabeled generic building (cargoLabel === undefined) contributes
+ *     nothing — forward-compatible with old saves and with freshly-placed
+ *     buildings that haven't been labeled yet.
+ *
+ * Every resource starts at BASELINE_STORAGE_CAP, regardless of category.
  *
  * Pure — no PixiJS, no DOM, no IslandState dependency.
  */
 export function aggregateStorageCaps(
   buildings: ReadonlyArray<PlacedBuilding>,
 ): Record<ResourceId, number> {
-  let extra = 0;
-  for (const b of buildings) {
-    extra += BUILDING_DEFS[b.defId].storageCap ?? 0;
-  }
   const caps = {} as Record<ResourceId, number>;
-  for (const r of ALL_RESOURCES) caps[r] = BASELINE_STORAGE_CAP + extra;
+  for (const r of ALL_RESOURCES) caps[r] = BASELINE_STORAGE_CAP;
+  for (const b of buildings) {
+    const def = BUILDING_DEFS[b.defId];
+    const storage = def.storage;
+    if (!storage) continue;
+    if (storage.category === 'generic') {
+      const label = b.cargoLabel;
+      if (label !== undefined) {
+        caps[label] = (caps[label] ?? 0) + storage.capacity;
+      }
+    } else {
+      for (const r of ALL_RESOURCES) {
+        if (RESOURCE_STORAGE_CATEGORY[r] === storage.category) {
+          caps[r] = (caps[r] ?? 0) + storage.capacity;
+        }
+      }
+    }
+  }
   return caps;
 }
 

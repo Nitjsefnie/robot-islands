@@ -32,8 +32,9 @@ import {
 } from './building-defs.js';
 import type { PlacedBuilding } from './buildings.js';
 import type { IslandState } from './economy.js';
-import { computeRates, inv } from './economy.js';
-import { resolveRecipe, type Recipe, type ResourceId } from './recipes.js';
+import { computeRates } from './economy.js';
+import { ALL_RESOURCES, resolveRecipe, type Recipe, type ResourceId } from './recipes.js';
+import { RESOURCE_STORAGE_CATEGORY, type StorageCategory } from './storage-categories.js';
 import type { IslandSpec } from './world.js';
 
 // ---------------------------------------------------------------------------
@@ -63,9 +64,27 @@ const CATEGORY_LABEL: Readonly<Record<BuildingCategory, string>> = {
   special: 'Special',
 };
 
+/** Display label for each §4.6 storage category. Used by the inspector's
+ *  storage section to render the specialized-building bucket name. */
+const STORAGE_CATEGORY_LABEL: Readonly<Record<StorageCategory, string>> = {
+  dry_goods: 'Dry Goods',
+  liquid_gas: 'Liquids / Gases',
+  temp_sensitive: 'Temp-Sensitive',
+  components: 'Components',
+  rare: 'Rare / Valuable',
+};
+
 function styled(el: HTMLElement, css: string): void {
   el.style.cssText = css;
 }
+
+/** Strip `readonly` from every field. The §4.6 relabel path mutates
+ *  `PlacedBuilding.cargoLabel`; the readonly modifier on PlacedBuilding is
+ *  a documentation convention (the economy and persistence layers already
+ *  mutate `populated` / `discovered` on IslandSpec), but TypeScript still
+ *  rejects writes through the readonly type. `Mutable<T>` is the standard
+ *  cast we use at the relabel site to avoid `as any`. */
+type Mutable<T> = { -readonly [K in keyof T]: T[K] };
 
 // ---------------------------------------------------------------------------
 // Demolition-credit formula (mirrors `demolishBuilding` in placement.ts)
@@ -426,7 +445,7 @@ export function mountInspectorUi(
   );
   powerSection.body.appendChild(powerLine);
 
-  // Storage section (only shown when def.storageCap > 0)
+  // Storage section (only shown when def.storage exists)
   const storageSection = makeSection('Storage');
   const storageLine = document.createElement('span');
   styled(
@@ -434,6 +453,188 @@ export function mountInspectorUi(
     [`color: ${FG}`, 'font-size: 11px', 'letter-spacing: 0.02em'].join(';'),
   );
   storageSection.body.appendChild(storageLine);
+
+  // §4.6 generic-storage controls — cargo-label dropdown + force-clear button.
+  // Shown only when the selected building's def is generic-category storage
+  // (Crate, Warehouse). The dropdown lists every ResourceId; selecting a new
+  // value relabels the building IF the current label's inventory is empty,
+  // otherwise the force-clear button is offered (destroys the held stock to
+  // free up the relabel).
+  const cargoLabelControls = (() => {
+    const wrap = document.createElement('div');
+    styled(
+      wrap,
+      ['display: flex', 'flex-direction: column', 'gap: 4px', 'padding-top: 4px'].join(';'),
+    );
+    const row = document.createElement('div');
+    styled(
+      row,
+      ['display: flex', 'gap: 6px', 'align-items: center'].join(';'),
+    );
+    const labelTxt = document.createElement('span');
+    labelTxt.textContent = 'LABEL';
+    styled(
+      labelTxt,
+      [`color: ${FG_DIM}`, 'font-size: 9.5px', 'letter-spacing: 0.14em'].join(';'),
+    );
+    const select = document.createElement('select');
+    styled(
+      select,
+      [
+        'flex: 1 1 auto',
+        `color: ${FG}`,
+        `background: ${STRIP_BG}`,
+        `border: 1px solid ${PANEL_BORDER}`,
+        'border-radius: 2px',
+        'padding: 2px 4px',
+        'font-family: ui-monospace, monospace',
+        'font-size: 10.5px',
+        'letter-spacing: 0.02em',
+      ].join(';'),
+    );
+    for (const r of ALL_RESOURCES) {
+      const opt = document.createElement('option');
+      opt.value = r;
+      opt.textContent = `${r}  (${STORAGE_CATEGORY_LABEL[RESOURCE_STORAGE_CATEGORY[r]]})`;
+      select.appendChild(opt);
+    }
+    row.appendChild(labelTxt);
+    row.appendChild(select);
+    // Force-clear path — shown only when the current cargo has non-zero
+    // inventory and the player picks a different label.
+    const blockedNote = document.createElement('span');
+    styled(
+      blockedNote,
+      [`color: ${WARN}`, 'font-size: 10px', 'letter-spacing: 0.02em'].join(';'),
+    );
+    const forceClearBtn = document.createElement('button');
+    styled(
+      forceClearBtn,
+      [
+        'background: transparent',
+        `color: ${WARN}`,
+        `border: 1px solid ${WARN_DIM}`,
+        'padding: 3px 8px',
+        'cursor: pointer',
+        'font-family: ui-monospace, monospace',
+        'font-size: 10px',
+        'letter-spacing: 0.1em',
+        'text-transform: uppercase',
+        'border-radius: 2px',
+      ].join(';'),
+    );
+    forceClearBtn.textContent = '▼ DESTROY CONTENTS';
+    wrap.appendChild(row);
+    wrap.appendChild(blockedNote);
+    wrap.appendChild(forceClearBtn);
+    return { wrap, select, blockedNote, forceClearBtn };
+  })();
+  storageSection.body.appendChild(cargoLabelControls.wrap);
+
+  // -------------------------------------------------------------------------
+  // Cargo-label relabel logic. The dropdown's change event proposes a new
+  // label; the relabel succeeds when current-label inventory is empty,
+  // otherwise the force-clear button must be pressed first to destroy
+  // contents (§4.6: "or accepts a force-clear that destroys current
+  // contents"). After a successful relabel:
+  //   - subtract the building's capacity from oldLabel's cap
+  //   - add to newLabel's cap
+  //   - update b.cargoLabel
+  // -------------------------------------------------------------------------
+  /** Latest proposed-but-not-yet-applied label (when blocked on non-empty
+   *  inventory). Cleared on every paint() so a stale selection doesn't
+   *  bleed across building switches. */
+  let pendingRelabel: ResourceId | null = null;
+
+  function applyRelabel(b: PlacedBuilding, newLabel: ResourceId): void {
+    if (!target) return;
+    const def = BUILDING_DEFS[b.defId];
+    if (!def.storage || def.storage.category !== 'generic') return;
+    const oldLabel = b.cargoLabel;
+    if (oldLabel === newLabel) return;
+    const cap = def.storage.capacity;
+    if (oldLabel !== undefined) {
+      const next = (target.state.storageCaps[oldLabel] ?? 0) - cap;
+      target.state.storageCaps[oldLabel] = next < 0 ? 0 : next;
+      const have = target.state.inventory[oldLabel] ?? 0;
+      const newCap = target.state.storageCaps[oldLabel] ?? 0;
+      if (have > newCap) target.state.inventory[oldLabel] = newCap;
+    }
+    target.state.storageCaps[newLabel] =
+      (target.state.storageCaps[newLabel] ?? 0) + cap;
+    // PlacedBuilding fields are `readonly` at the type level, but the
+    // economy loop already mutates `populated` / `discovered` on IslandSpec;
+    // the readonly modifier is a doc convention, not a runtime guard. Cast
+    // through `Mutable<>` so we don't sprinkle `as any` at the call site.
+    (b as Mutable<PlacedBuilding>).cargoLabel = newLabel;
+    pendingRelabel = null;
+  }
+
+  cargoLabelControls.select.addEventListener('change', () => {
+    if (!target) return;
+    const newLabel = cargoLabelControls.select.value as ResourceId;
+    const b = target.building;
+    const oldLabel = b.cargoLabel;
+    const heldOld = oldLabel !== undefined
+      ? (target.state.inventory[oldLabel] ?? 0)
+      : 0;
+    if (heldOld <= 0) {
+      applyRelabel(b, newLabel);
+      paint();
+      return;
+    }
+    // Non-empty: stage the relabel and surface the force-clear path.
+    pendingRelabel = newLabel;
+    paint();
+  });
+  cargoLabelControls.forceClearBtn.addEventListener('click', () => {
+    if (!target || pendingRelabel === null) return;
+    const b = target.building;
+    const oldLabel = b.cargoLabel;
+    if (oldLabel !== undefined) {
+      // §4.6 force-clear: destroy contents.
+      target.state.inventory[oldLabel] = 0;
+    }
+    applyRelabel(b, pendingRelabel);
+    paint();
+  });
+
+  /** Render the cargo-label UI for the currently-targeted generic-storage
+   *  building. Encapsulates the dropdown's selected value, the contribution
+   *  text, and the force-clear visibility. Called from `paint()` only. */
+  function renderCargoLabelUi(
+    b: PlacedBuilding,
+    state: IslandState,
+    capacity: number,
+  ): void {
+    cargoLabelControls.wrap.style.display = '';
+    const current = b.cargoLabel;
+    const proposed = pendingRelabel ?? current;
+    cargoLabelControls.select.value = (proposed ?? 'iron_ore') as string;
+    if (current === undefined) {
+      storageLine.textContent = `+${capacity} cap (unlabeled — pick a resource)`;
+      storageLine.style.color = FG_DIM;
+    } else {
+      storageLine.textContent = `+${capacity} cap on ${current}`;
+      storageLine.style.color = FG;
+    }
+    const held = current !== undefined ? (state.inventory[current] ?? 0) : 0;
+    // Force-clear path: visible only when player has staged a new label AND
+    // the current label still holds inventory.
+    if (
+      pendingRelabel !== null &&
+      pendingRelabel !== current &&
+      current !== undefined &&
+      held > 0
+    ) {
+      cargoLabelControls.blockedNote.style.display = '';
+      cargoLabelControls.blockedNote.textContent = `${Math.floor(held)} units of ${current} — destroy to relabel`;
+      cargoLabelControls.forceClearBtn.style.display = '';
+    } else {
+      cargoLabelControls.blockedNote.style.display = 'none';
+      cargoLabelControls.forceClearBtn.style.display = 'none';
+    }
+  }
 
   // Heat section (§5.2) — only shown when the def is a heat consumer
   // (`requiresHeat`) OR a heat source (`heatSource`). For a consumer, shows
@@ -572,19 +773,7 @@ export function mountInspectorUi(
   function paint(): void {
     if (!target) return;
     const { spec, state, building } = target;
-    const def: {
-      displayName: string;
-      tier: number;
-      category: BuildingCategory;
-      width: number;
-      height: number;
-      power?: { produces?: number; consumes?: number };
-      storageCap?: number;
-      requiredBiomes?: ReadonlyArray<string>;
-      requiredTile?: ReadonlyArray<string>;
-      requiresHeat?: boolean;
-      heatSource?: { freeOrCoal: 'free' | 'coal' };
-    } = BUILDING_DEFS[building.defId as BuildingDefId];
+    const def = BUILDING_DEFS[building.defId as BuildingDefId];
 
     nameEl.textContent = def.displayName;
     tierBadge.textContent = `T${def.tier}`;
@@ -651,21 +840,25 @@ export function mountInspectorUi(
       powerSection.wrap.style.display = '';
     }
 
-    // Storage section — only show when this def contributes capacity.
-    if ((def.storageCap ?? 0) > 0) {
-      const cap = def.storageCap ?? 0;
-      // Show its contribution + the resource's CURRENT inventory (a quick
-      // proxy for "is this storage building actually serving content").
-      const totalInv = (() => {
-        let n = 0;
-        for (const k of Object.keys(state.inventory) as ResourceId[]) n += inv(state, k);
-        return n;
-      })();
-      storageLine.textContent = `+${cap} cap per resource  ·  ${Math.floor(totalInv)} total stored`;
-      storageLine.style.color = FG;
+    // Storage section — §4.6 categorized routing. Specialized buildings
+    // report their category and capacity; generic buildings additionally
+    // expose the cargo-label dropdown for relabeling.
+    if (def.storage) {
+      const cap = def.storage.capacity;
+      if (def.storage.category === 'generic') {
+        // Generic: show "+cap on <label>" plus the dropdown.
+        renderCargoLabelUi(building, state, cap);
+      } else {
+        // Specialized: show "+cap to <category>" with the matching count.
+        cargoLabelControls.wrap.style.display = 'none';
+        const catLabel = STORAGE_CATEGORY_LABEL[def.storage.category];
+        storageLine.textContent = `+${cap} cap on ${catLabel}`;
+        storageLine.style.color = FG;
+      }
       storageSection.wrap.style.display = '';
     } else {
       storageSection.wrap.style.display = 'none';
+      cargoLabelControls.wrap.style.display = 'none';
     }
 
     // Heat section (§5.2). Shown only for heat consumers / heat sources.
@@ -730,12 +923,16 @@ export function mountInspectorUi(
   // -------------------------------------------------------------------------
   function open(t: InspectorTarget): void {
     target = t;
+    // Reset any staged relabel from a previous inspection — pendingRelabel
+    // is per-selection state, not per-panel.
+    pendingRelabel = null;
     panel.style.display = 'flex';
     paint();
   }
   function close(): void {
     if (!target) return;
     target = null;
+    pendingRelabel = null;
     panel.style.display = 'none';
   }
   function refresh(): void {

@@ -38,7 +38,10 @@ const KNOWN_DEF_IDS: ReadonlyArray<BuildingDefId> = [
   'steel_mill',
   'assembler',
   'tank',
+  'cold_storage',
+  'component_warehouse',
   'electric_arc_furnace',
+  'vault',
   'platform_constructor',
   // Step-12 T4 endgame (§6.5 / §9.5)
   'fusion_core',
@@ -155,15 +158,19 @@ describe('BUILDING_DEFS catalog', () => {
     }
   });
 
-  it('storage defs declare storageCap; others do not', () => {
-    expect(BUILDING_DEFS.crate.storageCap).toBe(100);
-    expect(BUILDING_DEFS.silo.storageCap).toBe(2000);
-    expect(BUILDING_DEFS.tank.storageCap).toBe(2000);
-    // Non-storage defs must not declare storageCap (would silently
+  it('storage defs declare categorized storage; others do not', () => {
+    // §4.6 categorized routing: storage carries { category, capacity }.
+    expect(BUILDING_DEFS.crate.storage).toEqual({ category: 'generic', capacity: 100 });
+    expect(BUILDING_DEFS.silo.storage).toEqual({ category: 'dry_goods', capacity: 2000 });
+    expect(BUILDING_DEFS.tank.storage).toEqual({ category: 'liquid_gas', capacity: 2000 });
+    expect(BUILDING_DEFS.cold_storage.storage).toEqual({ category: 'temp_sensitive', capacity: 1500 });
+    expect(BUILDING_DEFS.component_warehouse.storage).toEqual({ category: 'components', capacity: 2000 });
+    expect(BUILDING_DEFS.vault.storage).toEqual({ category: 'rare', capacity: 5000 });
+    // Non-storage defs must not declare `storage` (would silently
     // contribute to aggregateStorageCaps otherwise).
-    expect(BUILDING_DEFS.mine.storageCap).toBeUndefined();
-    expect(BUILDING_DEFS.workshop.storageCap).toBeUndefined();
-    expect(BUILDING_DEFS.solar.storageCap).toBeUndefined();
+    expect(BUILDING_DEFS.mine.storage).toBeUndefined();
+    expect(BUILDING_DEFS.workshop.storage).toBeUndefined();
+    expect(BUILDING_DEFS.solar.storage).toBeUndefined();
   });
 });
 
@@ -426,11 +433,15 @@ describe('step-13 T5 catalog (§13.2 / §8.4 / §8.5 / §8.9)', () => {
     expect(def.category).toBe('manufacturing');
   });
 
-  it('Singularity Battery: 2×2, power category with +10000 cap placeholder, low standby draw', () => {
+  it('Singularity Battery: 2×2, power category with no resource storage, low standby draw', () => {
+    // §8.4 "effectively infinite electrical power storage (not a resource
+    // storage building)" — the §4.6 categorized-storage cleanup removed the
+    // earlier 10000-cap placeholder. Power-buffer mechanic per §13.3 still
+    // deferred to step 14+.
     const def = BUILDING_DEFS.singularity_battery;
     expect(def.width).toBe(2);
     expect(def.height).toBe(2);
-    expect(def.storageCap).toBe(10000);
+    expect(def.storage).toBeUndefined();
     expect(def.power?.consumes).toBe(100);
     expect(def.category).toBe('power');
   });
