@@ -77,6 +77,7 @@ function makeFounderState(
     funnelPending: blankFunnel(),
     specializationRole: null,
     declaredAt: null,
+    aiCoreCrafted: false,
     lastTick: 0,
   };
 }

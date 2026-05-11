@@ -437,6 +437,11 @@ export function makeInitialIslandState(spec: IslandSpec, nowMs: number): IslandS
     // (level ≥ 15) and one-way until §9.7 Tier Reset lands.
     specializationRole: null,
     declaredAt: null,
+    // §13.1 T5 access gate. Defaults to false on every fresh island — T5
+    // catalog rows stay locked until the player has both reached level 50
+    // and crafted at least one AI core. Production-trigger flip deferred
+    // to step 14; the step-13 demo seeds this true manually on forest-ne.
+    aiCoreCrafted: false,
     lastTick: nowMs,
   };
 }

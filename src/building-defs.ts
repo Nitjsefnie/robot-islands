@@ -13,6 +13,16 @@
 // Particle Accelerator, Launch Tower. Pyroforge + Cryogenic Compute Center
 // carry `requiredBiomes` per §15.1; the `canPlaceOnIsland` helper at the
 // bottom of this file is the canonical gate.
+// Step-13 catalog: adds 7 T5 Transcendent defs (§13.2 / §8.4 / §8.5 / §8.9) —
+// Casimir Tap, Reality Forge, Singularity Battery, Time Lock, Genesis Chamber,
+// Universe Editor, Lattice Node. Data-only: §13.3 mechanics (time banking,
+// free creation, biome reassignment, network unity, etc.) are explicitly
+// DEFERRED to step 14+ with a comment at each def site. The T5 access gate
+// (§13.1) — level ≥ 50 AND `aiCoreCrafted` flag — is enforced in
+// `buildingUnlocked` below, not by the tier-only `tierForLevel`. The Casimir
+// Tap power figure is a placeholder; full §8.10 T5 raw extractors (Aetheric
+// Conduit, Spacetime Resonator, Eldritch Sieve) and their multi-hour cycle
+// times are deferred.
 //
 // Heat-source adjacency (§5.2) is not yet implemented — Blast Furnace and
 // Pyroforge run without their required heat source; comment flags the
@@ -74,7 +84,15 @@ export type BuildingDefId =
   | 'pyroforge'
   | 'cryogenic_compute_center'
   | 'particle_accelerator'
-  | 'launch_tower';
+  | 'launch_tower'
+  // New T5 (§13.2 / §8.4 / §8.5 / §8.9 / step 13)
+  | 'casimir_tap'
+  | 'reality_forge'
+  | 'singularity_battery'
+  | 'time_lock'
+  | 'genesis_chamber'
+  | 'universe_editor'
+  | 'lattice_node';
 
 /**
  * Per-kind static definition. Step 9 fills the fields needed by the
@@ -422,20 +440,154 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     stroke: 0x303010,
     power: { consumes: 400 },
   },
+  // -------------------------------------------------------------------------
+  // T5 (levels 50+, AI Core required) — Transcendent per §13 / step 13
+  // -------------------------------------------------------------------------
+  // §8.5 / §8.10: Casimir Tap — T5 power source AND raw extractor for
+  // Casimir energy / Zero-point flux. Step-13 simplification: declared as a
+  // power producer (8000W placeholder; §8.5 says "free vacuum energy") with
+  // a slow recipe emitting `casimir_energy`. Full §8.10 dual-output cycle
+  // (Casimir energy OR Zero-point flux per cycle) plus the §8.10 30-minute
+  // cycle time stay deferred — step-13 recipe uses 1800s (30 min) for the
+  // placeholder, consistent with the §8.10 lower-bound dwell.
+  casimir_tap: {
+    id: 'casimir_tap',
+    displayName: 'Casimir Tap',
+    category: 'power',
+    tier: 5,
+    width: 2,
+    height: 2,
+    fill: 0x3a0a4a, // deep void violet
+    stroke: 0x100020,
+    power: { produces: 8000 },
+  },
+  // §8.3: Reality Forge — T5 manufacturing. Consumes T4 components +
+  // Casimir energy to produce Reality Anchor (a T5 component per §6.6).
+  // This is the demonstrative T5 chain: T4 Exotic Alloy + AI Core +
+  // T5 Casimir energy → Reality Anchor.
+  reality_forge: {
+    id: 'reality_forge',
+    displayName: 'Reality Forge',
+    category: 'manufacturing',
+    tier: 5,
+    width: 4,
+    height: 4,
+    fill: 0x6020a0, // amethyst violet
+    stroke: 0x100040,
+    power: { consumes: 3000 },
+  },
+  // §8.4: Singularity Battery — "effectively infinite electrical power
+  // storage" per spec. Categorised here as `power` per the task brief: the
+  // §5.1 model has no power-buffer concept yet, so the step-13 def carries a
+  // generic `storageCap` of 10000 (Crate/Silo-style uniform resource cap) as
+  // a stand-in until power buffering arrives. Tiny consumption (100W) models
+  // continuous overhead. Power-storage mechanic per §13.3 DEFERRED to step 14+.
+  singularity_battery: {
+    id: 'singularity_battery',
+    displayName: 'Singularity Battery',
+    category: 'power',
+    tier: 5,
+    width: 2,
+    height: 2,
+    fill: 0x202060, // deep ultramarine
+    stroke: 0x0a0a30,
+    power: { consumes: 100 },
+    storageCap: 10000,
+  },
+  // §8.9 / §13.3: Time Lock — banks offline-time stockpile per island and
+  // spends to accelerate any chosen island's tick rate at 3×. Time-banking
+  // mechanics per §13.3 DEFERRED to step 14: in step 13 the def ships as a
+  // visible catalog row + power-consuming placeholder. No recipe (the
+  // banking/spending model isn't an inputs→outputs recipe).
+  time_lock: {
+    id: 'time_lock',
+    displayName: 'Time Lock',
+    category: 'special',
+    tier: 5,
+    width: 3,
+    height: 3,
+    fill: 0xc080e0, // pale aurora violet
+    stroke: 0x400060,
+    power: { consumes: 1500 },
+  },
+  // §8.9 / §13.3: Genesis Chamber — free-creation of T1-T4 resources from
+  // electrical power alone (placeholder cycle 5 min, tier-scaling power
+  // draw). Free-creation mechanic per §13.3 DEFERRED to step 14; def ships
+  // as a visible catalog row + power-consuming placeholder. No recipe (the
+  // player-target-resource selection isn't a fixed inputs→outputs recipe).
+  genesis_chamber: {
+    id: 'genesis_chamber',
+    displayName: 'Genesis Chamber',
+    category: 'special',
+    tier: 5,
+    width: 4,
+    height: 4,
+    fill: 0xa0e0a0, // ethereal green
+    stroke: 0x205020,
+    power: { consumes: 2500 },
+  },
+  // §8.9 / §13.3: Universe Editor — reassigns an island's biome and
+  // regenerates terrain. Biome reassignment per §13.3 DEFERRED to step 14;
+  // def ships as a visible catalog row + power-consuming placeholder. No
+  // recipe (the biome-rewrite invocation isn't a continuous production
+  // cycle).
+  universe_editor: {
+    id: 'universe_editor',
+    displayName: 'Universe Editor',
+    category: 'special',
+    tier: 5,
+    width: 3,
+    height: 3,
+    fill: 0xff80a0, // rose-pink
+    stroke: 0x500020,
+    power: { consumes: 4000 },
+  },
+  // §8.9 / §13.3: Lattice Node — one per networked T5 island; activates
+  // Omniscient Lattice (unified inventory + cross-island adjacency) when
+  // N nodes are placed across N T5-mastered islands. Network unity per
+  // §13.3 (Omniscient Lattice) DEFERRED to step 14; def ships as an inert
+  // placeholder with a small standby power draw. No recipe.
+  lattice_node: {
+    id: 'lattice_node',
+    displayName: 'Lattice Node',
+    category: 'special',
+    tier: 5,
+    width: 2,
+    height: 2,
+    fill: 0x80f0c0, // mint-cyan
+    stroke: 0x205040,
+    power: { consumes: 800 },
+  },
 };
 
 /** Whether `defId` is buildable at the given island level. Pure — no DOM,
  *  no PixiJS. Consumers: Building Catalog UI (locks rows above current
- *  tier) and (future, step 2.5) placement validator. */
-export function buildingUnlocked(islandLevel: number, defId: BuildingDefId): boolean {
-  return tierForLevel(islandLevel) >= BUILDING_DEFS[defId].tier;
+ *  tier) and (future, step 2.5) placement validator.
+ *
+ *  Step-13: T5 defs require an additional `aiCoreCrafted` gate per §13.1
+ *  ("Island reaches level 50 AND has crafted at least one AI core"). The
+ *  parameter defaults to `false` so existing callers (and the unlockedDefs
+ *  helper) keep working without modification — T5 rows stay locked unless
+ *  the caller explicitly opts in by passing `state.aiCoreCrafted`. */
+export function buildingUnlocked(
+  islandLevel: number,
+  defId: BuildingDefId,
+  aiCoreCrafted: boolean = false,
+): boolean {
+  const def = BUILDING_DEFS[defId];
+  if (def.tier === 5) return islandLevel >= 50 && aiCoreCrafted;
+  return tierForLevel(islandLevel) >= def.tier;
 }
 
-/** Every def unlocked at the given island level, in catalog declaration order. */
-export function unlockedDefs(islandLevel: number): BuildingDefId[] {
-  const tier = tierForLevel(islandLevel);
-  return (Object.keys(BUILDING_DEFS) as BuildingDefId[]).filter(
-    (id) => BUILDING_DEFS[id].tier <= tier,
+/** Every def unlocked at the given island level, in catalog declaration order.
+ *  Step-13: T5 defs are EXCLUDED from this list unless `aiCoreCrafted` is
+ *  also true (defaults to false to keep tier-only callers unaffected). */
+export function unlockedDefs(
+  islandLevel: number,
+  aiCoreCrafted: boolean = false,
+): BuildingDefId[] {
+  return (Object.keys(BUILDING_DEFS) as BuildingDefId[]).filter((id) =>
+    buildingUnlocked(islandLevel, id, aiCoreCrafted),
   );
 }
 

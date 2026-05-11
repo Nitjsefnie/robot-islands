@@ -500,12 +500,12 @@ export function mountBuildingsUi(
     // Stub click handler — step 2.5 wires placement. Until then, dispatching
     // logs so the interaction-loop closes back to the developer console.
     row.addEventListener('click', () => {
-      if (!buildingUnlocked(state.level, defId)) return;
+      if (!buildingUnlocked(state.level, defId, state.aiCoreCrafted)) return;
       // eslint-disable-next-line no-console
       console.log(`[buildings] would-place(${defId}) — placement deferred to step 2.5`);
     });
     row.addEventListener('mouseenter', () => {
-      if (!buildingUnlocked(state.level, defId)) return;
+      if (!buildingUnlocked(state.level, defId, state.aiCoreCrafted)) return;
       row.style.background = ROW_BG_HOVER;
       row.style.borderLeftColor = ACCENT;
       row.style.cursor = 'pointer';
@@ -523,7 +523,7 @@ export function mountBuildingsUi(
 
   function paintRow(defId: BuildingDefId, ref: RowRef): void {
     const def = BUILDING_DEFS[defId];
-    const unlocked = buildingUnlocked(state.level, defId);
+    const unlocked = buildingUnlocked(state.level, defId, state.aiCoreCrafted);
     // §9.5: biome-locked uniques (those with `requiredBiomes`) are tier-
     // unlocked but cannot be placed on this island unless biome matches and
     // the island is not artificial. `canPlaceOnIsland` is the canonical
@@ -762,7 +762,9 @@ export function mountBuildingsUi(
     islandLevelVal.textContent = String(state.level);
     const playerTier = tierForLevel(state.level);
     islandTierVal.textContent = `T${playerTier}`;
-    const unlocked = ALL_BUILDING_DEF_IDS.filter((id) => buildingUnlocked(state.level, id)).length;
+    const unlocked = ALL_BUILDING_DEF_IDS.filter((id) =>
+      buildingUnlocked(state.level, id, state.aiCoreCrafted),
+    ).length;
     unlockedCountVal.textContent = `${unlocked} / ${ALL_BUILDING_DEF_IDS.length}`;
     for (const band of tierBandRefs) paintTierBand(band);
     paintRows();

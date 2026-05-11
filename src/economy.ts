@@ -96,6 +96,13 @@ export interface IslandState {
    *  step 10 — it's a UX hook for the §9.7 Tier Reset cooldown timer
    *  (reset disallowed within 24 real-time hours of the last reset). */
   declaredAt: number | null;
+  /** §13.1 T5 access gate. Becomes `true` the first time the island has ever
+   *  produced (and counted in `production` of) an AI core, and stays true
+   *  thereafter. Composed with `level >= 50` by `t5Unlocked` (skilltree.ts) /
+   *  `buildingUnlocked` to gate the T5 catalog rows. Step-13 deferral: the
+   *  automatic flip-on-first-ai_core production-trigger is deferred to
+   *  step 14; in step 13 the flag is seeded manually on the demo island. */
+  aiCoreCrafted: boolean;
   /** Wall-clock timestamp of the last advance, in milliseconds. */
   lastTick: number;
 }

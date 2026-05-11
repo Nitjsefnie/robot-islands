@@ -44,6 +44,9 @@ function makeIslandState(over: Partial<IslandState> = {}): IslandState {
       // Step-12 T4 resources
       helium_3: 100, cryogenic_hydrogen: 100, quantum_chip: 100,
       exotic_alloy: 100, ai_core: 100,
+      // Step-13 T5 resources (partial catalog per §6.6)
+      casimir_energy: 100, reality_anchor: 100, plasma_charge: 100,
+      eldritch_processor: 100, phase_converter: 100,
     },
     xp: 0,
     level: 1,
@@ -53,6 +56,7 @@ function makeIslandState(over: Partial<IslandState> = {}): IslandState {
     funnelPending: emptyFunnel(),
     specializationRole: null,
     declaredAt: null,
+    aiCoreCrafted: false,
     lastTick: 0,
     ...over,
   };

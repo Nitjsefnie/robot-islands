@@ -11,6 +11,7 @@ import {
   effectiveSkillMultipliers,
   nodeRequiredTier,
   spendPoint,
+  t5Unlocked,
   tierForLevel,
   type SkillNode,
 } from './skilltree.js';
@@ -47,6 +48,7 @@ function makeState(over: Partial<IslandState> = {}): IslandState {
     funnelPending: blankFunnel(),
     specializationRole: null,
     declaredAt: null,
+    aiCoreCrafted: false,
     lastTick: 0,
     ...over,
   };
@@ -69,9 +71,30 @@ describe('tierForLevel (§9.2)', () => {
     expect(tierForLevel(30)).toBe(4);
     expect(tierForLevel(49)).toBe(4);
   });
-  it('returns 5 at the T5 breakpoint and above (AI-core gate elided pre-implementation)', () => {
+  it('returns 5 at the T5 breakpoint and above (tier identification only; access gate via t5Unlocked)', () => {
+    // tierForLevel is the band identification — level 50+ IS in the T5 band.
+    // Whether T5 features (catalog rows, recipes, sub-paths) are accessible
+    // is a separate composability against `aiCoreCrafted` via `t5Unlocked`.
     expect(tierForLevel(50)).toBe(5);
     expect(tierForLevel(75)).toBe(5);
+  });
+});
+
+describe('t5Unlocked (§13.1 T5 access gate)', () => {
+  it('locked at level 49 + aiCoreCrafted=true (level requirement)', () => {
+    expect(t5Unlocked({ level: 49, aiCoreCrafted: true })).toBe(false);
+  });
+  it('locked at level 50 + aiCoreCrafted=false (AI-core requirement)', () => {
+    expect(t5Unlocked({ level: 50, aiCoreCrafted: false })).toBe(false);
+  });
+  it('unlocked at level 50 + aiCoreCrafted=true', () => {
+    expect(t5Unlocked({ level: 50, aiCoreCrafted: true })).toBe(true);
+  });
+  it('still unlocked well above level 50 with AI core', () => {
+    expect(t5Unlocked({ level: 99, aiCoreCrafted: true })).toBe(true);
+  });
+  it('locked at level 1 without AI core (sanity)', () => {
+    expect(t5Unlocked({ level: 1, aiCoreCrafted: false })).toBe(false);
   });
 });
 

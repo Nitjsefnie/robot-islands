@@ -126,11 +126,16 @@ export const BRANCH_LABEL: Readonly<Record<BranchId, string>> = {
  * breakpoint values; the "crossing N unlocks Tier" parentheticals resolve
  * the boundaries: level=5 IS T2, level=15 IS T3, level=30 IS T4, level=50 IS T5.
  *
- * Simplification for step 5: T5 requires "level 50 + AI core crafted" per
- * §9.2, and T6 requires "Ascendant Core crafted + Spaceport". Neither AI
- * core nor Ascendant Core/Spaceport exist yet, so this function returns 5
- * at level ≥ 50 (treating the AI-core gate as satisfied) and never 6. The
- * caller in step 5 only uses tiers 2 and below.
+ * This is tier IDENTIFICATION (which tier band does this level belong to),
+ * not full T5 ACCESS — the §13.1 T5 access gate also requires `aiCoreCrafted`,
+ * enforced by `t5Unlocked` below and by `buildingUnlocked` in `building-defs.ts`.
+ * `tierForLevel(50) === 5` regardless of the AI-core flag because the tier
+ * band is a level-bucket concept; the AI-core gate is a separate composability
+ * on top.
+ *
+ * T6 ("Ascendant Core + Spaceport" per §9.2) is never returned by this
+ * function — neither artefact exists yet. T6 access will mirror T5 with its
+ * own composability when step 14+ lands.
  */
 export function tierForLevel(level: number): Tier {
   if (level >= 50) return 5;
@@ -138,6 +143,17 @@ export function tierForLevel(level: number): Tier {
   if (level >= 15) return 3;
   if (level >= 5) return 2;
   return 1;
+}
+
+/**
+ * §13.1 T5 access gate: an island unlocks T5 only after BOTH reaching level
+ * 50 AND crafting at least one AI core. Pure — takes the minimal duck-typed
+ * shape so it can be called with a full `IslandState` or any fixture that
+ * carries the two fields. Used by `buildingUnlocked` (for T5 defs) and by
+ * any future T5-feature gate (T5 skill-tree sub-paths, T5 recipes, etc.).
+ */
+export function t5Unlocked(state: { level: number; aiCoreCrafted: boolean }): boolean {
+  return state.level >= 50 && state.aiCoreCrafted;
 }
 
 /**

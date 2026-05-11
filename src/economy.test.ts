@@ -84,6 +84,7 @@ function makeState(over: Partial<IslandState> = {}): IslandState {
     funnelPending: blankFunnel(),
     specializationRole: null,
     declaredAt: null,
+    aiCoreCrafted: false,
     lastTick: 0,
     ...over,
   };

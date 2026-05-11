@@ -354,25 +354,35 @@ async function main(): Promise<void> {
     if (!spec.populated) continue;
     islandStates.set(spec.id, makeInitialIslandState(spec, performance.now()));
   }
-  // Step-11/12 demo seed: bump forest-ne to level 30 (T4) and pre-load enough
-  // construction materials so the player can fire off a 4×4 artificial
-  // island construction without first grinding the smelting chain. The
-  // values exceed the 4×4 Plains cost (~252 steel / 151 iron_ingot / 503
-  // wood) with comfortable headroom for one construct + a second attempt.
-  // Step 12 bumps the level 20 → 30 so the catalog UI shows the T4 band
-  // unlocked, and seeds `helium_3` so a Fusion Core placed on forest-ne can
-  // actually run. Forest-ne stays Forest biome, so Volcanic/Arctic biome-
-  // locked uniques (Pyroforge, Cryogenic Compute Center) remain locked from
-  // the catalog — that's the intended §9.5 demo behaviour.
-  // This seed is demo-only — once the natural economy reaches forest-ne
-  // (via funneled routes from the home island), the seed is removed.
+  // Step-11/12/13 demo seed: bump forest-ne to level 50 (T5) and pre-load
+  // enough construction materials so the player can fire off a 4×4
+  // artificial island construction without first grinding the smelting
+  // chain. The values exceed the 4×4 Plains cost (~252 steel / 151
+  // iron_ingot / 503 wood) with comfortable headroom for one construct +
+  // a second attempt.
+  // Step 13 bumps the level 30 → 50 and sets aiCoreCrafted = true so the
+  // §13.1 T5 access gate (level ≥ 50 AND AI core crafted) is satisfied —
+  // the catalog UI then displays the T5 band unlocked. Seeds T4/T5
+  // resources so the Reality Forge demo recipe could run if placed.
+  // Forest-ne stays Forest biome, so Volcanic/Arctic biome-locked uniques
+  // (Pyroforge, Cryogenic Compute Center) remain locked from the catalog —
+  // that's the intended §9.5 demo behaviour. T5 defs are biome-agnostic
+  // (no requiredBiomes), so the full T5 band shows up.
+  // This seed is demo-only — once the natural economy + production-trigger
+  // for `aiCoreCrafted` (deferred to step 14) flips automatically on first
+  // ai_core production, the manual seed is removed.
   const forestNe = islandStates.get('forest-ne');
   if (forestNe) {
-    forestNe.level = 30;
+    forestNe.level = 50;
+    forestNe.aiCoreCrafted = true; // §13.1 T5 access — manual demo seed
     forestNe.inventory.steel = 300;
     forestNe.inventory.iron_ingot = 200;
     forestNe.inventory.wood = 600;
     forestNe.inventory.helium_3 = 50; // demo seed — Fusion Core fuel
+    // T4 / T5 seeds so a hypothetical Reality Forge run could draw inputs.
+    forestNe.inventory.exotic_alloy = 20;
+    forestNe.inventory.ai_core = 10;
+    forestNe.inventory.casimir_energy = 10;
   }
   // Spec lookup by id — also needed by routes UI later. Built once; spec
   // identity is stable across the session (drones flip discovered, but

@@ -46,6 +46,14 @@ const KNOWN_DEF_IDS: ReadonlyArray<BuildingDefId> = [
   'cryogenic_compute_center',
   'particle_accelerator',
   'launch_tower',
+  // Step-13 T5 transcendent (§13.2 / §8.4 / §8.5 / §8.9)
+  'casimir_tap',
+  'reality_forge',
+  'singularity_battery',
+  'time_lock',
+  'genesis_chamber',
+  'universe_editor',
+  'lattice_node',
 ];
 
 // Helper: build a minimal IslandSpec for the canPlaceOnIsland tests. The
@@ -300,5 +308,125 @@ describe('unlockedDefs', () => {
     // T3 / T2 / T1 still present.
     expect(list).toContain('electric_arc_furnace');
     expect(list).toContain('mine');
+    // T5 still locked (no aiCoreCrafted flag, and level 30 < 50 anyway).
+    expect(list).not.toContain('casimir_tap');
+    expect(list).not.toContain('reality_forge');
+  });
+
+  it('keeps T5 locked at level 50 without aiCoreCrafted flag', () => {
+    // Default third arg is `false` — level alone never unlocks T5 per §13.1.
+    const list = unlockedDefs(50);
+    expect(list).not.toContain('casimir_tap');
+    expect(list).not.toContain('reality_forge');
+    expect(list).not.toContain('singularity_battery');
+    expect(list).not.toContain('time_lock');
+    expect(list).not.toContain('genesis_chamber');
+    expect(list).not.toContain('universe_editor');
+    expect(list).not.toContain('lattice_node');
+    // T1-T4 still listed.
+    expect(list).toContain('fusion_core');
+    expect(list).toContain('mine');
+  });
+
+  it('returns T1..T5 ids at level 50 + aiCoreCrafted', () => {
+    const list = unlockedDefs(50, true);
+    // All T5 defs unlocked.
+    expect(list).toContain('casimir_tap');
+    expect(list).toContain('reality_forge');
+    expect(list).toContain('singularity_battery');
+    expect(list).toContain('time_lock');
+    expect(list).toContain('genesis_chamber');
+    expect(list).toContain('universe_editor');
+    expect(list).toContain('lattice_node');
+    // T1-T4 still listed.
+    expect(list).toContain('fusion_core');
+    expect(list).toContain('mine');
+  });
+});
+
+describe('step-13 T5 catalog (§13.2 / §8.4 / §8.5 / §8.9)', () => {
+  const T5_IDS = [
+    'casimir_tap',
+    'reality_forge',
+    'singularity_battery',
+    'time_lock',
+    'genesis_chamber',
+    'universe_editor',
+    'lattice_node',
+  ] as const;
+
+  it('all 7 T5 defs are present with tier 5', () => {
+    for (const id of T5_IDS) {
+      expect(BUILDING_DEFS[id]).toBeDefined();
+      expect(BUILDING_DEFS[id].tier).toBe(5);
+    }
+  });
+
+  it('Casimir Tap: 2×2, +8000W producer, power category', () => {
+    const def = BUILDING_DEFS.casimir_tap;
+    expect(def.width).toBe(2);
+    expect(def.height).toBe(2);
+    expect(def.power?.produces).toBe(8000);
+    expect(def.category).toBe('power');
+    expect(def.requiredBiomes).toBeUndefined();
+  });
+
+  it('Reality Forge: 4×4, -3000W consumer, manufacturing', () => {
+    const def = BUILDING_DEFS.reality_forge;
+    expect(def.width).toBe(4);
+    expect(def.height).toBe(4);
+    expect(def.power?.consumes).toBe(3000);
+    expect(def.category).toBe('manufacturing');
+  });
+
+  it('Singularity Battery: 2×2, power category with +10000 cap placeholder, low standby draw', () => {
+    const def = BUILDING_DEFS.singularity_battery;
+    expect(def.width).toBe(2);
+    expect(def.height).toBe(2);
+    expect(def.storageCap).toBe(10000);
+    expect(def.power?.consumes).toBe(100);
+    expect(def.category).toBe('power');
+  });
+
+  it('Time Lock / Genesis Chamber / Universe Editor / Lattice Node are special-category placeholders', () => {
+    for (const id of ['time_lock', 'genesis_chamber', 'universe_editor', 'lattice_node'] as const) {
+      const def = BUILDING_DEFS[id];
+      expect(def.category).toBe('special');
+      // Mechanics-deferred defs have no recipe — they're inert catalog rows
+      // in step 13 until the §13.3 mechanics land in step 14+.
+      expect(def.requiredBiomes).toBeUndefined();
+    }
+  });
+
+  it('buildingUnlocked: level 49 + aiCoreCrafted=true → T5 locked (level)', () => {
+    for (const id of T5_IDS) {
+      expect(buildingUnlocked(49, id, true)).toBe(false);
+    }
+  });
+
+  it('buildingUnlocked: level 50 + aiCoreCrafted=false → T5 locked (AI core)', () => {
+    for (const id of T5_IDS) {
+      expect(buildingUnlocked(50, id, false)).toBe(false);
+    }
+  });
+
+  it('buildingUnlocked: level 50 + aiCoreCrafted=true → T5 unlocked', () => {
+    for (const id of T5_IDS) {
+      expect(buildingUnlocked(50, id, true)).toBe(true);
+    }
+  });
+
+  it('buildingUnlocked: lower-tier defs unaffected by aiCoreCrafted flag', () => {
+    // T1/T2/T3/T4 defs only consult level → tier; aiCoreCrafted has no effect.
+    expect(buildingUnlocked(1, 'mine', false)).toBe(true);
+    expect(buildingUnlocked(1, 'mine', true)).toBe(true);
+    expect(buildingUnlocked(5, 'coke_oven', false)).toBe(true);
+    expect(buildingUnlocked(5, 'coke_oven', true)).toBe(true);
+    expect(buildingUnlocked(15, 'electric_arc_furnace', false)).toBe(true);
+    expect(buildingUnlocked(15, 'electric_arc_furnace', true)).toBe(true);
+    expect(buildingUnlocked(30, 'fusion_core', false)).toBe(true);
+    expect(buildingUnlocked(30, 'fusion_core', true)).toBe(true);
+    // Levels below the tier breakpoint still locked regardless of flag.
+    expect(buildingUnlocked(29, 'fusion_core', true)).toBe(false);
   });
 });

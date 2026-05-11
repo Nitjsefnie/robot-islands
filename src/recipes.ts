@@ -12,9 +12,22 @@
 //   T4 raw/fuel:  helium_3, cryogenic_hydrogen
 //   T4 component: quantum_chip, exotic_alloy, ai_core
 //
-// `xp_weight` per SPEC §9.1: T0 raws = 1, T1 = 3, T2 = 10, T4 = 100. Higher-tier
-// outputs grant proportionally more XP per unit produced, so the progression
-// curve rewards climbing the recipe chain rather than just stockpiling raws.
+// Step-13 (T5 Transcendent, §6.6) adds a partial T5 catalog — just enough
+// to drive the Reality Forge chain + T5 fuel:
+//
+//   T5 raw:       casimir_energy   (per §8.10 Casimir Tap "free vacuum energy")
+//   T5 fuel:      plasma_charge    (T5 propellant per §6.6 / §11.7)
+//   T5 component: reality_anchor, eldritch_processor, phase_converter
+//
+// Full §6.6 T5 raw catalog (Dark matter, Zero-point flux, Tachyon stream,
+// Neutronium, Strange matter, Higgs flux, Quantum foam, Aetheric current,
+// Spacetime fragment) is DEFERRED to step 14 — only the resources the
+// Reality Forge / Casimir Tap demo recipes consume ship in step 13.
+//
+// `xp_weight` per SPEC §9.1: T0 raws = 1, T1 = 3, T2 = 10, T4 = 100, T5 = 300.
+// Higher-tier outputs grant proportionally more XP per unit produced, so the
+// progression curve rewards climbing the recipe chain rather than just
+// stockpiling raws.
 
 import type { BuildingDefId } from './building-defs.js';
 
@@ -37,7 +50,14 @@ export type ResourceId =
   | 'cryogenic_hydrogen'
   | 'quantum_chip'
   | 'exotic_alloy'
-  | 'ai_core';
+  | 'ai_core'
+  // T5 transcendent (§6.6) — partial step-13 catalog (raws/components needed
+  // for the Reality Forge demo chain + T5 fuel). Full §6.6 raws deferred.
+  | 'casimir_energy'
+  | 'reality_anchor'
+  | 'plasma_charge'
+  | 'eldritch_processor'
+  | 'phase_converter';
 
 /** All known resources, useful for iterating to initialise inventories. */
 export const ALL_RESOURCES: ReadonlyArray<ResourceId> = [
@@ -56,6 +76,12 @@ export const ALL_RESOURCES: ReadonlyArray<ResourceId> = [
   'quantum_chip',
   'exotic_alloy',
   'ai_core',
+  // T5 transcendent (§6.6) — step-13 partial catalog
+  'casimir_energy',
+  'reality_anchor',
+  'plasma_charge',
+  'eldritch_processor',
+  'phase_converter',
 ];
 
 /**
@@ -66,6 +92,8 @@ export const ALL_RESOURCES: ReadonlyArray<ResourceId> = [
  *      component
  *   T4 endgame   = 100 (helium_3, cryogenic_hydrogen, quantum_chip,
  *                       exotic_alloy, ai_core)
+ *   T5 transcendent = 300 (casimir_energy, reality_anchor, plasma_charge,
+ *                          eldritch_processor, phase_converter)
  */
 export const XP_WEIGHT: Readonly<Record<ResourceId, number>> = {
   // T0 raws
@@ -87,6 +115,12 @@ export const XP_WEIGHT: Readonly<Record<ResourceId, number>> = {
   quantum_chip: 100,
   exotic_alloy: 100,
   ai_core: 100,
+  // T5 transcendent (§6.6) — partial step-13 catalog
+  casimir_energy: 300,
+  reality_anchor: 300,
+  plasma_charge: 300,
+  eldritch_processor: 300,
+  phase_converter: 300,
 };
 
 /**
@@ -299,5 +333,38 @@ export const RECIPES: Partial<Record<BuildingDefId, Recipe>> = {
     inputs: { steel: 4, pig_iron: 4 },
     outputs: { quantum_chip: 1 },
     category: 'electronics',
+  },
+
+  // ---------------------------------------------------------------------------
+  // T5 Transcendent chain (§6.6 / §7.12 / §8.10 / step 13)
+  // ---------------------------------------------------------------------------
+  // Two recipes ship in step 13 to demonstrate the chain end-to-end:
+  //   casimir_tap     → 1 casimir_energy / 1800s (no inputs; §8.10 "free vacuum energy")
+  //   reality_forge   → 1 reality_anchor / 600s from 2 exotic_alloy + 1 ai_core + 1 casimir_energy
+  // The §7.12 spec recipe ("4 ai_core + 1 antimatter_capsule + 1 time_crystal + 1 exotic_alloy
+  // + 24h cycle → Reality Anchor") is the full T5 chain; the step-13 placeholder skips
+  // antimatter_capsule + time_crystal (not yet in catalog) and condenses cycle time to 600s
+  // so the demo chain is exercisable without a 24-hour wait. Full §7.12 recipe deferred
+  // to step 14 alongside the missing T4 raws.
+
+  // T5 raw extraction — placeholder for the §8.10 Casimir Tap. Spec cycle
+  // 30 min to 4 h; we use the 30 min lower bound. No inputs (free vacuum
+  // energy per §8.5 / §8.10). The bulk-power contribution is on
+  // def.power.produces (8000W); this recipe is the discrete-unit emission.
+  casimir_tap: {
+    cycleSec: 1800,
+    inputs: {},
+    outputs: { casimir_energy: 1 },
+    category: 'power',
+  },
+
+  // T5 manufacturing — Reality Forge condenses T4 endgame components +
+  // T5 raw into a T5 component. Cycle 600s (10 min) placeholder; full
+  // §7.12 24h cycle deferred until antimatter_capsule + time_crystal land.
+  reality_forge: {
+    cycleSec: 600,
+    inputs: { exotic_alloy: 2, ai_core: 1, casimir_energy: 1 },
+    outputs: { reality_anchor: 1 },
+    category: 'manufacturing',
   },
 };
