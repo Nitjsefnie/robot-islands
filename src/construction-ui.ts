@@ -162,11 +162,30 @@ function positionIsFree(
 /** Tiny stable id generator so multiple constructs in one session get
  *  unique ids without colliding with the demo set. */
 let constructionCounter = 0;
-function nextArtificialId(): string {
+/** Next allocated `art-N` id. Exported so persistence tests can verify the
+ *  seeder raised the counter past the saved max — mirrors `nextDroneId` /
+ *  `nextRouteId` / `nextVehicleId`. The construction UI itself still calls
+ *  this directly. */
+export function nextArtificialId(): string {
   constructionCounter += 1;
   // `art-1`, `art-2`, ... — short enough for log readability, distinct from
   // the existing demo ids (home, forest-ne, desert-far, …).
   return `art-${constructionCounter}`;
+}
+
+/** Seed the construction id counter so the next id is `art-${value + 1}`.
+ *  Used by the persistence loader after restoring a save: the loader walks
+ *  `world.islands`, finds the highest existing `art-N` suffix, and calls
+ *  this with that max. Idempotent: passing a smaller value than the current
+ *  counter is a no-op (we only raise). Mirrors the `_seedDroneIdCounter` /
+ *  `_seedRouteIdCounter` / `_seedVehicleIdCounter` pattern. */
+export function _seedConstructionCounter(value: number): void {
+  if (value > constructionCounter) constructionCounter = value;
+}
+
+/** Reset the construction id counter. Test-only. */
+export function _resetConstructionCounter(): void {
+  constructionCounter = 0;
 }
 
 export function mountConstructionUi(

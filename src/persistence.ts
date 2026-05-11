@@ -45,6 +45,7 @@ import { del, get, set } from 'idb-keyval';
 import { terrainAtForBiome } from './biomes.js';
 import type { IslandState } from './economy.js';
 import type { Drone } from './drones.js';
+import { _seedConstructionCounter } from './construction-ui.js';
 import { _seedDroneIdCounter } from './drones.js';
 import type { Route } from './routes.js';
 import { _seedRouteIdCounter } from './routes.js';
@@ -424,6 +425,19 @@ export function deserializeWorld(
     if (n > vehicleMax) vehicleMax = n;
   }
   if (vehicleMax > 0) _seedVehicleIdCounter(vehicleMax);
+  // `art-N` artificial-island ids per construction-ui.ts. Match strictly so
+  // demo fixtures (e.g. `art-volcanic-1`, `desert-art-1`) don't poison the
+  // seed — only ids of the production-allocated form count toward the next
+  // construction's id.
+  let constructionMax = 0;
+  for (const s of world.islands) {
+    const m = /^art-(\d+)$/.exec(s.id);
+    if (m) {
+      const n = Number.parseInt(m[1]!, 10);
+      if (n > constructionMax) constructionMax = n;
+    }
+  }
+  if (constructionMax > 0) _seedConstructionCounter(constructionMax);
 
   return { world, islandStates };
 }

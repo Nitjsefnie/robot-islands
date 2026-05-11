@@ -11,6 +11,10 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { terrainAtForBiome } from './biomes.js';
 import type { IslandState } from './economy.js';
 import {
+  _resetConstructionCounter,
+  nextArtificialId,
+} from './construction-ui.js';
+import {
   _resetDroneIdCounter,
   nextDroneId,
 } from './drones.js';
@@ -402,6 +406,70 @@ describe('id counter seeding', () => {
     _resetDroneIdCounter();
     deserializeWorld(json, 0, 0);
     expect(nextDroneId()).toBe('drone-13');
+  });
+
+  it('seeds construction id counter past the maximum saved art-N suffix', () => {
+    // Reload after generating two artificial islands must not reuse `art-1`.
+    _resetConstructionCounter();
+    const world = makeInitialWorld(0);
+    world.islands.push(
+      {
+        id: 'art-3',
+        biome: 'plains',
+        cx: 60,
+        cy: 60,
+        majorRadius: 6,
+        minorRadius: 6,
+        populated: true,
+        discovered: true,
+        buildings: [],
+        modifiers: [],
+        artificial: true,
+      },
+      {
+        id: 'art-7',
+        biome: 'desert',
+        cx: 80,
+        cy: -40,
+        majorRadius: 5,
+        minorRadius: 5,
+        populated: false,
+        discovered: true,
+        buildings: [],
+        modifiers: [],
+        artificial: true,
+      },
+    );
+    const snap = serializeWorld(world, new Map(), 0);
+    const json = JSON.parse(JSON.stringify(snap)) as SaveSnapshot;
+    _resetConstructionCounter(); // simulate a fresh page load
+    deserializeWorld(json, 0, 0);
+    expect(nextArtificialId()).toBe('art-8');
+  });
+
+  it('ignores non-art-N island ids when seeding the construction counter', () => {
+    // Demo fixtures like `desert-art-1` or `art-volcanic-1` carry their own
+    // suffix shape and must not poison the next `art-N` allocation.
+    _resetConstructionCounter();
+    const world = makeInitialWorld(0);
+    world.islands.push({
+      id: 'desert-art-42', // matches /art-\d+/ but NOT /^art-\d+$/
+      biome: 'desert',
+      cx: 100,
+      cy: 0,
+      majorRadius: 4,
+      minorRadius: 4,
+      populated: false,
+      discovered: true,
+      buildings: [],
+      modifiers: [],
+      artificial: true,
+    });
+    const snap = serializeWorld(world, new Map(), 0);
+    const json = JSON.parse(JSON.stringify(snap)) as SaveSnapshot;
+    _resetConstructionCounter();
+    deserializeWorld(json, 0, 0);
+    expect(nextArtificialId()).toBe('art-1');
   });
 
   it('seeds vehicle id counter past the maximum saved vehicle suffix', () => {
