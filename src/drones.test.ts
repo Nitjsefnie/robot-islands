@@ -41,6 +41,8 @@ function makeIslandState(over: Partial<IslandState> = {}): IslandState {
       wood: 100, iron_ore: 100, coal: 100, biofuel: 100,
       iron_ingot: 100, coke: 100, pig_iron: 100,
       bolt: 100, steel: 100, gear: 100,
+      // Step-12 §12 settlement composite resource
+      foundation_kit: 100,
       // Step-12 T4 resources
       helium_3: 100, cryogenic_hydrogen: 100, quantum_chip: 100,
       exotic_alloy: 100, ai_core: 100,
@@ -123,7 +125,7 @@ describe('pointToSegmentDistSq', () => {
 
 describe('dispatchDrone', () => {
   function freshWorld(): WorldState {
-    return { islands: [], drones: [], routes: [] };
+    return { islands: [], drones: [], routes: [], vehicles: [] };
   }
 
   it('happy path: deducts biofuel, appends drone, computes expectedReturnTime', () => {
@@ -210,7 +212,7 @@ describe('dispatchDrone', () => {
 
 describe('tickDrones', () => {
   function world(islands: IslandSpec[]): WorldState {
-    return { islands, drones: [], routes: [] };
+    return { islands, drones: [], routes: [], vehicles: [] };
   }
 
   it('returns empty when no drones are in flight', () => {

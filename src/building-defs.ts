@@ -77,6 +77,12 @@ export type BuildingDefId =
   | 'crate'
   | 'silo'
   | 'biomass_plant'
+  // T1 manufacturing — Foundation Kit Assembler (§12.3 / §12 settlement)
+  | 'kit_assembler'
+  // T1 logistics — Shipyard for §12 ship dispatch
+  | 'shipyard'
+  // T2 logistics — Helipad for §12 helicopter dispatch
+  | 'helipad'
   // New T2
   | 'coke_oven'
   | 'blast_furnace'
@@ -270,6 +276,53 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0x3e7a36,
     stroke: 0x1a3a16,
     power: { produces: 80 },
+  },
+  // §12.3: Foundation Kit Assembler. A T1 manufacturing building dedicated
+  // to crafting the Standard Foundation Kit consumed by §12 settlement
+  // vehicles. Step-12 simplification: the spec lists Workshop (T1) and
+  // Assembler (T2+) as the kit-crafting buildings, but those already own
+  // bolt/gear recipes in our 1:1 recipe-per-building model. Introducing a
+  // dedicated `kit_assembler` defId keeps the recipe table conflict-free
+  // until the engine grows true multi-recipe-per-building selection.
+  kit_assembler: {
+    id: 'kit_assembler',
+    displayName: 'Kit Assembler',
+    category: 'manufacturing',
+    tier: 1,
+    width: 2,
+    height: 2,
+    fill: 0xb88a5a,
+    stroke: 0x4a3520,
+    power: { consumes: 70 },
+  },
+  // §8.8 / §12.2: Shipyard — T1 logistics building that launches §12 cargo
+  // ships for settlement (and, later, T1 cargo routes). Spec requires
+  // coastal placement; coastal-tile gating is DEFERRED (no water-tile
+  // system yet). Step-12 places Shipyard freely on any tile inside the
+  // island ellipse.
+  shipyard: {
+    id: 'shipyard',
+    displayName: 'Shipyard',
+    category: 'logistics',
+    tier: 1,
+    width: 3,
+    height: 3,
+    fill: 0x3a7bd5,
+    stroke: 0x0a2a55,
+    power: { consumes: 80 },
+  },
+  // §8.8 / §12.2: Helipad — T2 logistics building that launches §12
+  // helicopters for settlement. Faster than ships, no coastal requirement.
+  helipad: {
+    id: 'helipad',
+    displayName: 'Helipad',
+    category: 'logistics',
+    tier: 2,
+    width: 2,
+    height: 2,
+    fill: 0x6a8a9a,
+    stroke: 0x1f3340,
+    power: { consumes: 60 },
   },
   // -------------------------------------------------------------------------
   // T2 (levels 5-15)

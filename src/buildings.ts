@@ -57,6 +57,17 @@ export const HOME_ISLAND_BUILDINGS: PlacedBuilding[] = [
   // resource cap on the home island from 100 → 2100, per the §15.7-step-9
   // aggregation rule (see world.ts `aggregateStorageCaps`).
   { id: 'home-silo-1',     defId: 'silo',     x: -7, y: -3 },
+  // Step-12: Kit Assembler at (-1, -5). 2×2 footprint inside the radius-14
+  // ellipse, no overlap with neighbours (dronepad at 5,-3; workshop at
+  // -1,1). Lets the player craft `foundation_kit` on demand once the
+  // initial seed of 3 kits runs out.
+  { id: 'home-kit-assembler-1', defId: 'kit_assembler', x: -1, y: -5 },
+  // Step-12: Shipyard at (4, 6). 3×3 footprint inside the radius-14
+  // ellipse (corners (4,6)..(6,8) all within √(36+64) = 10.0 < 14).
+  // No overlap with workshop(-1,1)..(0,2), coal_gen(3,4)..(4,5),
+  // smelter(-4,6)..(-3,7), or dock(7,1)..(8,2). Coastal-tile gating
+  // deferred — see §12.2 / building-defs.ts comment on `shipyard`.
+  { id: 'home-shipyard-1',     defId: 'shipyard',      x: 4, y: 6 },
 ];
 
 /**

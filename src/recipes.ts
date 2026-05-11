@@ -45,6 +45,10 @@ export type ResourceId =
   // T2 alloy / component
   | 'steel'
   | 'gear'
+  // T1 composite (§12.3 Foundation Kit). Standard variant only — Enriched/
+  // Refined per-tier variants deferred. The kit is a single inventory item;
+  // its decomposition into raw constituents on arrival (§12.4) is deferred.
+  | 'foundation_kit'
   // T4 endgame (§6.5)
   | 'helium_3'
   | 'cryogenic_hydrogen'
@@ -71,6 +75,7 @@ export const ALL_RESOURCES: ReadonlyArray<ResourceId> = [
   'bolt',
   'steel',
   'gear',
+  'foundation_kit',
   'helium_3',
   'cryogenic_hydrogen',
   'quantum_chip',
@@ -109,6 +114,9 @@ export const XP_WEIGHT: Readonly<Record<ResourceId, number>> = {
   bolt: 10,
   steel: 10,
   gear: 10,
+  // T1 composite (§12.3). xp_weight 10 — task brief assigns the kit the same
+  // weight as T2 components since one kit represents a non-trivial assembly.
+  foundation_kit: 10,
   // T4 endgame (§6.5)
   helium_3: 100,
   cryogenic_hydrogen: 100,
@@ -269,6 +277,19 @@ export const RECIPES: Partial<Record<BuildingDefId, Recipe>> = {
     cycleSec: 8,
     inputs: { iron_ingot: 1, bolt: 2 },
     outputs: { gear: 1 },
+    category: 'manufacturing',
+  },
+
+  // T1 manufacturing — Kit Assembler (§12.3). Composite recipe producing
+  // a single Foundation Kit per cycle. Spec's full Standard Foundation Kit
+  // is `50 Iron ingot + 20 Brick + 10 Lumber + 5 Glass + 5 Gear`; step-12
+  // simplifies the bill to resources already in the catalog (iron_ingot,
+  // wood, bolt) since Brick/Glass aren't catalogued yet. The cycleSec (60s)
+  // makes one kit a meaningful commitment compared to a 10s bolt or 8s gear.
+  kit_assembler: {
+    cycleSec: 60,
+    inputs: { iron_ingot: 5, wood: 10, bolt: 5 },
+    outputs: { foundation_kit: 1 },
     category: 'manufacturing',
   },
 

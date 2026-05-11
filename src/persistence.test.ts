@@ -18,6 +18,10 @@ import {
   _resetRouteIdCounter,
   nextRouteId,
 } from './routes.js';
+import {
+  _resetVehicleIdCounter,
+  nextVehicleId,
+} from './settlement.js';
 import { ALL_RESOURCES, type ResourceId } from './recipes.js';
 import {
   SCHEMA_VERSION,
@@ -79,6 +83,7 @@ function makeIslandState(over: Partial<IslandState> = {}): IslandState {
 beforeEach(() => {
   _resetDroneIdCounter();
   _resetRouteIdCounter();
+  _resetVehicleIdCounter();
 });
 
 // ---------------------------------------------------------------------------
@@ -86,12 +91,12 @@ beforeEach(() => {
 // ---------------------------------------------------------------------------
 
 describe('serializeWorld', () => {
-  it('produces a snapshot with v: 1 and a savedAt timestamp', () => {
+  it('produces a snapshot with v: 2 and a savedAt timestamp', () => {
     const world = makeInitialWorld(0);
     const states = new Map<string, IslandState>();
     const snap = serializeWorld(world, states, /* savedAt */ 1_234_567);
     expect(snap.v).toBe(SCHEMA_VERSION);
-    expect(snap.v).toBe(1);
+    expect(snap.v).toBe(2);
     expect(snap.savedAt).toBe(1_234_567);
   });
 
@@ -310,8 +315,8 @@ describe('schema version', () => {
     expect(() => deserializeWorld(future, 0, 0)).toThrow(/unknown schema version/);
   });
 
-  it('exports STORAGE_KEY containing v1 so a future v2 key never collides', () => {
-    expect(STORAGE_KEY).toMatch(/v1$/);
+  it('exports STORAGE_KEY containing v2 so it does not collide with stale v1 saves', () => {
+    expect(STORAGE_KEY).toMatch(/v2$/);
   });
 });
 
@@ -376,6 +381,29 @@ describe('id counter seeding', () => {
     deserializeWorld(json, 0, 0);
     expect(nextDroneId()).toBe('drone-13');
   });
+
+  it('seeds vehicle id counter past the maximum saved vehicle suffix', () => {
+    _resetVehicleIdCounter();
+    const world = makeInitialWorld(0);
+    world.vehicles.push({
+      id: 'vehicle-9',
+      kind: 'ship',
+      tier: 1,
+      from: 'home',
+      target: 'coast-unknown',
+      fuelLoaded: 10,
+      foundationKitCount: 1,
+      speed: 1,
+      launchTime: 1000,
+      expectedArrivalTime: 11_000,
+      weatherMultiplier: 1.0,
+    });
+    const snap = serializeWorld(world, new Map(), 0);
+    const json = JSON.parse(JSON.stringify(snap)) as SaveSnapshot;
+    _resetVehicleIdCounter();
+    deserializeWorld(json, 0, 0);
+    expect(nextVehicleId()).toBe('vehicle-10');
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -417,6 +445,35 @@ describe('drone and route timestamp remapping', () => {
     expect(d.expectedReturnTime - d.launchTime).toBe(10_000);
     // expectedReturnTime is now in the past relative to nowPerfMs=5_000.
     expect(d.expectedReturnTime).toBeLessThan(5_000);
+  });
+
+  it('shifts settlement-vehicle launchTime + expectedArrivalTime across the perf-domain reset', () => {
+    // Same setup as the drone case: in-flight vehicle, 10s remaining at
+    // save, 15s offline gap, new session perf-time 5_000.
+    const world = makeInitialWorld(0);
+    world.vehicles.push({
+      id: 'vehicle-1',
+      kind: 'ship',
+      tier: 1,
+      from: 'home',
+      target: 'coast-unknown',
+      fuelLoaded: 10,
+      foundationKitCount: 1,
+      speed: 1,
+      launchTime: 1_500_000,
+      expectedArrivalTime: 1_510_000,
+      weatherMultiplier: 1.0,
+    });
+    const states = new Map<string, IslandState>();
+    const savedAtWallMs = 100_000;
+    const savedAtPerfMs = 1_500_000;
+    const snap = serializeWorld(world, states, savedAtWallMs, savedAtPerfMs);
+    const { world: restored } = deserializeWorld(snap, savedAtWallMs + 15_000, 5_000);
+    const v = restored.vehicles[0]!;
+    // Delta between launch and arrival is preserved.
+    expect(v.expectedArrivalTime - v.launchTime).toBe(10_000);
+    // Arrival is now in the past — next tickVehicles call processes it.
+    expect(v.expectedArrivalTime).toBeLessThan(5_000);
   });
 
   it('shifts route inFlight batch timestamps across the perf-domain reset', () => {

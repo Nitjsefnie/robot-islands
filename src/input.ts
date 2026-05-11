@@ -107,6 +107,10 @@ export function installDefaultBindings(reg: InputRegistry): void {
   // §4.2 rotation key migrated to T (mnemonic stretch but consistent with
   // common builder games' rotate-on-T convention — Cities: Skylines etc.).
   bind(reg, 'KeyT', 'rotate-placement');
+  // V = vehicles — opens the settlement-ops side dock (step 12 / §12).
+  // Sister panel to drones-ui + routes-ui; same side-dock idiom. No
+  // Escape binding (Escape is reserved for modal dismissal).
+  bind(reg, 'KeyV', 'toggle-settlement');
   bind(reg, 'Equal', 'zoom-in'); // '=' / '+' on US layouts
   bind(reg, 'NumpadAdd', 'zoom-in');
   bind(reg, 'Minus', 'zoom-out');

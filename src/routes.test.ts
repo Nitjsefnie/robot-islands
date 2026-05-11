@@ -58,7 +58,7 @@ function makeState(id: string, over: Partial<IslandState> = {}): IslandState {
 function makeWorld(routes: Route[] = []): WorldState {
   // We don't need IslandSpec data for routes logic; supply empty stubs as needed.
   const stub: IslandSpec[] = [];
-  return { islands: stub, drones: [], routes };
+  return { islands: stub, drones: [], routes, vehicles: [] };
 }
 
 function cargoRoute(

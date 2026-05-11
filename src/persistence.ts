@@ -48,17 +48,30 @@ import type { Drone } from './drones.js';
 import { _seedDroneIdCounter } from './drones.js';
 import type { Route } from './routes.js';
 import { _seedRouteIdCounter } from './routes.js';
+import type { SettlementVehicle } from './settlement.js';
+import { _seedVehicleIdCounter } from './settlement.js';
 import type { NodeId, SubPathId } from './skilltree.js';
 import type { IslandSpec, WorldState } from './world.js';
 
 /** IndexedDB key. Bumping the trailing version (`:v2` later) is the
  *  intended migration entry point — `loadWorld` keys on this string, so a
- *  new key returns "no save" without colliding with the v1 store. */
-export const STORAGE_KEY = 'robot-islands:save:v1';
+ *  new key returns "no save" without colliding with the v1 store.
+ *
+ *  Step-12 bumped this from v1 → v2: the world snapshot grew a `vehicles`
+ *  field and the home spec grew a Shipyard + Kit Assembler placement.
+ *  Bumping the key (rather than defaulting `vehicles ?? []`) means a stale
+ *  v1 save is cleanly ignored, so a returning player gets a fresh demo
+ *  seed that includes the new buildings + Foundation Kit starter inventory.
+ *  See the comment on `SCHEMA_VERSION` for the reasoning. */
+export const STORAGE_KEY = 'robot-islands:save:v2';
 
 /** Current schema version. `loadWorld` rejects (returns null) any
- *  snapshot whose `v` is not strictly equal to this. */
-export const SCHEMA_VERSION = 1 as const;
+ *  snapshot whose `v` is not strictly equal to this.
+ *
+ *  Step-12: bumped 1 → 2 to silently invalidate stale v1 saves that lack
+ *  `world.vehicles` and the Step-12 home-island Shipyard/Kit Assembler
+ *  placements. See `STORAGE_KEY` for the matching key change. */
+export const SCHEMA_VERSION = 2 as const;
 
 // ---------------------------------------------------------------------------
 // Serialized shapes
@@ -89,13 +102,14 @@ export interface SerializedIslandStateEntry {
   readonly state: SerializedIslandState;
 }
 
-/** World data minus the per-island closures. Drones and Routes are already
- *  JSON-friendly (only numbers, strings, and arrays — see `Drone` and
- *  `Route` types) and round-trip without transformation. */
+/** World data minus the per-island closures. Drones, Routes, and Vehicles
+ *  are already JSON-friendly (only numbers, strings, and arrays — see the
+ *  respective types) and round-trip without transformation. */
 export interface SerializedWorld {
   readonly islands: ReadonlyArray<SerializedIslandSpec>;
   readonly drones: ReadonlyArray<Drone>;
   readonly routes: ReadonlyArray<Route>;
+  readonly vehicles: ReadonlyArray<SettlementVehicle>;
 }
 
 /** Top-level snapshot. The `v` field is the schema-version anchor: this
@@ -167,6 +181,8 @@ export function serializeWorld(
         // mutations to the live route don't leak into the serialized blob.
         inFlight: [...r.inFlight],
       })),
+      // Vehicles are immutable records, no nested mutable state to deep-copy.
+      vehicles: [...world.vehicles],
     },
     islandStates: stateEntries,
   };
@@ -248,6 +264,17 @@ export function deserializeWorld(
         dispatchTime: b.dispatchTime + perfShift,
       })),
     })),
+    // Settlement vehicles share the same `performance.now()` domain as
+    // drones/routes; apply the same shift so an in-flight vehicle's
+    // arrival lands correctly in the new session's perf-domain.
+    // Default to [] when restoring a snapshot that pre-dates the field
+    // (defensive — v2 always carries `vehicles`, but a hand-crafted or
+    // partially-migrated snapshot might omit it).
+    vehicles: (snapshot.world.vehicles ?? []).map((v) => ({
+      ...v,
+      launchTime: v.launchTime + perfShift,
+      expectedArrivalTime: v.expectedArrivalTime + perfShift,
+    })),
   };
 
   const islandStates = new Map<string, IslandState>();
@@ -298,6 +325,12 @@ export function deserializeWorld(
     if (n > routeMax) routeMax = n;
   }
   if (routeMax > 0) _seedRouteIdCounter(routeMax);
+  let vehicleMax = 0;
+  for (const v of world.vehicles) {
+    const n = parseSuffixCounter(v.id);
+    if (n > vehicleMax) vehicleMax = n;
+  }
+  if (vehicleMax > 0) _seedVehicleIdCounter(vehicleMax);
 
   return { world, islandStates };
 }

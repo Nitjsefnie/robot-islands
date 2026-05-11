@@ -116,6 +116,7 @@ describe('InputRegistry', () => {
     expect(reg.bindings.get('KeyR')).toBe('toggle-routes');
     expect(reg.bindings.get('KeyC')).toBe('toggle-construction');
     expect(reg.bindings.get('KeyT')).toBe('rotate-placement');
+    expect(reg.bindings.get('KeyV')).toBe('toggle-settlement');
     expect(reg.bindings.get('Equal')).toBe('zoom-in');
     expect(reg.bindings.get('Minus')).toBe('zoom-out');
   });

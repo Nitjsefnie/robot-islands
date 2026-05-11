@@ -67,6 +67,8 @@ import { mountDronesUi } from './drones-ui.js';
 import { tickDrones } from './drones.js';
 import { makeIslandScreenPosResolver, mountRoutesUi } from './routes-ui.js';
 import { tickRoutes } from './routes.js';
+import { mountSettlementUi } from './settlement-ui.js';
+import { tickVehicles } from './settlement.js';
 
 /** Pan speed for keyboard input, in screen-pixels-per-frame. */
 const PAN_PX_PER_TICK = 8;
@@ -220,6 +222,7 @@ async function main(): Promise<void> {
   // after the UI is mounted (which needs `homeState`).
   defineAction(reg, 'toggle-drones', () => undefined);
   defineAction(reg, 'toggle-routes', () => undefined);
+  defineAction(reg, 'toggle-settlement', () => undefined);
   // Step-11 modal — bound below after the UI is mounted.
   defineAction(reg, 'toggle-construction', () => undefined);
   // Step-2.5 placement rotation — bound below after the placement UI is
@@ -305,6 +308,20 @@ async function main(): Promise<void> {
       dronesUi.attemptLaunch(wp.x, wp.y, performance.now());
       return;
     }
+    // Same disambiguation for settlement-launch mode: a small click on the
+    // canvas commits a settlement attempt against the nearest discovered,
+    // unpopulated island within tolerance. Mutual-exclusion with drone-
+    // launch is enforced by the onLaunchModeChanged callbacks above —
+    // entering one mode disarms the other.
+    if (accumDrag < CLICK_DRAG_PX_MAX && settlementUi.isLaunchMode()) {
+      const rect = app.canvas.getBoundingClientRect();
+      const sx = e.clientX - rect.left;
+      const sy = e.clientY - rect.top;
+      if (sx < 0 || sx > rect.width || sy < 0 || sy > rect.height) return;
+      const wp = screenToWorldTile(sx, sy);
+      settlementUi.attemptLaunch(wp.x, wp.y, performance.now());
+      return;
+    }
     // Step-2.5: small click in placement mode commits a placement.
     // Mutual-exclusion with launch mode is symmetric: entering placement
     // calls dronesUi.setLaunchMode(false); entering launch calls
@@ -350,12 +367,16 @@ async function main(): Promise<void> {
     if (dronesUi.isLaunchMode()) {
       dronesUi.setReticleScreenPos(sx, sy);
     }
+    if (settlementUi.isLaunchMode()) {
+      settlementUi.setReticleScreenPos(sx, sy);
+    }
     if (placementUi.isActive()) {
       placementUi.setCursorScreenPos(sx, sy);
     }
   });
   app.canvas.addEventListener('mouseleave', () => {
     dronesUi.hideReticle();
+    settlementUi.hideReticle();
     placementUi.hidePreview();
   });
 
@@ -384,6 +405,7 @@ async function main(): Promise<void> {
     { label: 'Buildings (B)', action: 'toggle-buildings' },
     { label: 'Drones (J)', action: 'toggle-drones' },
     { label: 'Routes (R)', action: 'toggle-routes' },
+    { label: 'Settle (V)', action: 'toggle-settlement' },
     { label: 'Construct (C)', action: 'toggle-construction' },
   ]);
 
@@ -408,6 +430,16 @@ async function main(): Promise<void> {
   if (!restored) {
     const homeState = makeInitialIslandState(homeSpec, performance.now());
     islandStates.set('home', homeState);
+    // Step-12 demo seed: foundation_kit + biofuel for settlement-vehicle
+    // dispatch. The default biofuel:50 seed in `startingInventory` is
+    // enough for a few drone launches; we top it up to 100 so the player
+    // can drone-discover AND immediately commission a settlement run.
+    // 3 kits = 3 potential settlements, matches the §12.6 "loadout"
+    // language without committing the player to the full assemble loop
+    // before they see the mechanic in action. New colonies arriving
+    // via settlement vehicles START EMPTY (no kit/biofuel seed).
+    homeState.inventory.foundation_kit = 3;
+    homeState.inventory.biofuel = 100;
     for (const spec of worldState.islands) {
       if (spec.id === 'home') continue;
       if (!spec.populated) continue;
@@ -489,9 +521,16 @@ async function main(): Promise<void> {
   const buildingsUi = mountBuildingsUi(document.body, homeState, homeSpec, {
     onPlaceRequested: (defId) => {
       buildingsUi.hide();
-      // Mutual-exclusion: disarm drone launch before entering placement so a
-      // mouseup-commit reaches the placement branch instead of firing a drone.
+      // Mutual-exclusion: disarm drone launch + settlement launch before
+      // entering placement so a mouseup-commit reaches the placement branch
+      // instead of firing a drone OR a settlement vehicle. The reverse arrows
+      // (entering drone/settlement mode → placementUi.cancel()) are wired in
+      // their respective onLaunchModeChanged callbacks. `disarmSettlement-
+      // Launch` is the same forward-declared shim that dronesUi uses to
+      // reach the settlement panel from a callback that may run before the
+      // settlement panel is fully constructed.
       dronesUi.setLaunchMode(false);
+      disarmSettlementLaunch();
       placementUi.begin(defId);
     },
   });
@@ -557,6 +596,12 @@ async function main(): Promise<void> {
     placementUi.cancel();
   });
 
+  // Forward declaration for the cross-panel disarm callback. Drone-ops
+  // launches before settlement-ops is constructed (function ordering),
+  // so we use a setter function that the settlement bootstrap below
+  // populates once the panel exists. No-op until that runs.
+  let disarmSettlementLaunch: () => void = () => undefined;
+
   // Drone-ops side dock + canvas reticle + drone-dot layer.
   const dronesUi = mountDronesUi(document.body, {
     world: worldState,
@@ -565,9 +610,13 @@ async function main(): Promise<void> {
     screenToWorldTile,
     onDiscoveryChanged: rebuildWorldLayers,
     // Mutual-exclusion: when launch mode arms, cancel any in-progress
-    // placement so a mouseup-commit can't ambiguously route to both.
+    // placement or settlement-arm so a mouseup-commit can't ambiguously
+    // route to multiple consumers.
     onLaunchModeChanged: (armed) => {
-      if (armed) placementUi.cancel();
+      if (armed) {
+        placementUi.cancel();
+        disarmSettlementLaunch();
+      }
     },
   });
   // Drone dots live in world space (between islands and the cell grid so
@@ -597,6 +646,33 @@ async function main(): Promise<void> {
   app.stage.addChild(routesUi.routeLayer);
   defineAction(reg, 'toggle-routes', () => {
     routesUi.toggle();
+  });
+
+  // Step-12 / §12: Settlement-Ops side dock. Sister to drones + routes
+  // panels. Mutual-exclusion with drone-launch + placement modes flows
+  // through the same callback discipline (see drones-ui wiring above).
+  // Vehicle dots live in world space (between islands and cell grid);
+  // reticle lives in screen space (same as drone reticle).
+  const settlementUi = mountSettlementUi(document.body, {
+    world: worldState,
+    islandStates,
+    islandSpecs: islandSpecsById,
+    screenToWorldTile,
+    onLaunchModeChanged: (armed) => {
+      if (armed) {
+        // Disarm sister modes so a click can't ambiguously route to two.
+        dronesUi.setLaunchMode(false);
+        placementUi.cancel();
+      }
+    },
+  });
+  world.addChildAt(settlementUi.vehicleLayer, 3);
+  app.stage.addChild(settlementUi.reticleLayer);
+  // Hook the forward-declared cross-panel disarm callback to the now-
+  // constructed settlement panel. Called by drones-ui when it arms launch.
+  disarmSettlementLaunch = () => settlementUi.setLaunchMode(false);
+  defineAction(reg, 'toggle-settlement', () => {
+    settlementUi.toggle();
   });
 
   // §15.6 persistence: schedule autosaves and a visibility-change save. The
@@ -678,6 +754,25 @@ async function main(): Promise<void> {
       rebuildWorldLayers();
     }
     tickRoutes(worldState, islandStates, now, elapsedSec);
+    // Step-12 / §12: settlement vehicles tick after drones so a frame can
+    // see new discoveries AND a brand-new arrival in the same pass. On
+    // arrival, `tickVehicles` flips `target.populated`, places a Cargo
+    // Dock / Helipad, and inserts a fresh IslandState into the map. We
+    // register the new modifier-multiplier cache entry and rebuild render
+    // layers so the colony becomes visible immediately.
+    const vehicleResult = tickVehicles(worldState, islandStates, now);
+    if (vehicleResult.arrivals.length > 0) {
+      for (const arr of vehicleResult.arrivals) {
+        const newSpec = islandSpecsById.get(arr.targetIslandId);
+        if (newSpec) {
+          modifierMulsById.set(
+            arr.targetIslandId,
+            effectiveModifierMultipliers(newSpec.modifiers),
+          );
+        }
+      }
+      rebuildWorldLayers();
+    }
 
     // Recompute rates AFTER the tick so the HUD shows the current
     // post-advance state (e.g., a freshly-stalled building reads as
@@ -689,7 +784,15 @@ async function main(): Promise<void> {
     });
     const saveAgeSec =
       lastSaveAt === null ? null : Math.max(0, Math.floor((now - lastSaveAt) / 1000));
-    hud.update(homeState, net, power, homeSpec, ncState, saveAgeSec);
+    hud.update(
+      homeState,
+      net,
+      power,
+      homeSpec,
+      ncState,
+      saveAgeSec,
+      worldState.vehicles.length,
+    );
     // Skill tree only repaints while visible — DOM writes are wasted
     // otherwise. show() also forces a paint on transition so we don't
     // strictly need a per-frame call, but level-up while the panel is open
@@ -698,6 +801,7 @@ async function main(): Promise<void> {
     buildingsUi.refresh();
     dronesUi.refresh(now);
     routesUi.refresh(now);
+    settlementUi.refresh(now);
   });
 
   // Recenter the camera's reference point on resize so the world doesn't

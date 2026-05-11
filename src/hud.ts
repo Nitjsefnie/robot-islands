@@ -48,6 +48,11 @@ export interface HudHandle {
     spec: IslandSpec,
     ncState: NetworkConsciousnessState,
     saveAgeSec: number | null,
+    /** Step-12: count of in-flight settlement vehicles. Extends the
+     *  Network line with `... · +N en route` so the player has visual
+     *  feedback that a dispatched ship/heli is still under way. 0 hides
+     *  the suffix. */
+    vehiclesEnRoute: number,
   ): void;
 }
 
@@ -406,6 +411,7 @@ export function mountHud(parentEl: HTMLElement): HudHandle {
     spec: IslandSpec,
     ncState: NetworkConsciousnessState,
     saveAgeSec: number | null,
+    vehiclesEnRoute: number,
   ): void {
     const need = xpForLevel(state.level + 1);
     titleNode.textContent = 'Home Island';
@@ -455,13 +461,15 @@ export function mountHud(parentEl: HTMLElement): HudHandle {
     // milestone → "{N} at T3+ · NC tier {milestone} · +X%" in ACCENT.
     // The buff percentage rounds to 0 places (1.05 → "+5%") — matches the
     // §9.6 placeholders exactly.
+    // Step-12: append "+N en route" when settlement vehicles are in flight.
+    const enRouteSuffix = vehiclesEnRoute > 0 ? ` · +${vehiclesEnRoute} en route` : '';
     if (ncState.tier3PlusCount === 0) {
-      networkValue.textContent = '—';
-      networkValue.style.color = '#4d5566';
+      networkValue.textContent = enRouteSuffix === '' ? '—' : `—${enRouteSuffix}`;
+      networkValue.style.color = vehiclesEnRoute > 0 ? '#7dd3e8' : '#4d5566';
     } else {
       const buffPct = Math.round((ncState.globalProductionBuff - 1) * 100);
       networkValue.textContent =
-        `${ncState.tier3PlusCount} at T3+ · NC tier ${ncState.milestone} · +${buffPct}%`;
+        `${ncState.tier3PlusCount} at T3+ · NC tier ${ncState.milestone} · +${buffPct}%${enRouteSuffix}`;
       networkValue.style.color = '#7dd3e8';
     }
 

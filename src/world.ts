@@ -82,8 +82,10 @@ export interface IslandSpec {
   /** Ellipse half-axes in tiles. */
   readonly majorRadius: number;
   readonly minorRadius: number;
-  /** Whether the island is populated (origin of vision). Implies discovered. */
-  readonly populated: boolean;
+  /** Whether the island is populated (origin of vision). Implies discovered.
+   *  Mutable in step 12: settlement-vehicle arrivals flip this from false →
+   *  true on the target island. See `tickVehicles` in `settlement.ts`. */
+  populated: boolean;
   /** Whether the player knows this island exists at all. Populated → discovered
    *  by definition (the classification function short-circuits on populated).
    *  Mutable in step 6: drone returns flip this from false→true on revealed
@@ -337,6 +339,11 @@ export interface WorldState {
    *  module dependency points `routes.ts → world.ts`; the type-only import
    *  keeps the back-edge cycle-free. */
   routes: Route[];
+  /** Mutable: §12 settlement vehicles in flight (ships + helicopters). Each
+   *  vehicle is consumed on arrival — list grows on dispatch, shrinks on
+   *  tick when arrival fires. Same type-only-import discipline as drones
+   *  and routes; the runtime dependency is `settlement.ts → world.ts`. */
+  vehicles: import('./settlement.js').SettlementVehicle[];
 }
 
 /**
@@ -356,7 +363,7 @@ export function makeInitialWorld(_nowMs: number): WorldState {
     ...s,
     buildings: [...s.buildings],
   }));
-  return { islands, drones: [], routes: [] };
+  return { islands, drones: [], routes: [], vehicles: [] };
 }
 
 // ---------------------------------------------------------------------------
