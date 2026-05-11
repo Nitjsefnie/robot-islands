@@ -577,7 +577,9 @@ export function mountDronesUi(parentEl: HTMLElement, deps: DroneUiDeps): DroneUi
     const wpx = pos.x * TILE_PX;
     const wpy = pos.y * TILE_PX;
 
-    // Trail (drawn under the dot)
+    // Trail (drawn under the marker). Reduced alpha + tighter footprint so
+    // the triangle reads as primary; the trail is supporting context, not
+    // a competing element.
     const tr = ensureTrail(d);
     if (tr.points.length === 0 || nowMs - (tr.points[tr.points.length - 1]?.t ?? 0) >= TRAIL_SAMPLE_MS) {
       tr.points.push({ x: wpx, y: wpy, t: nowMs });
@@ -587,17 +589,41 @@ export function mountDronesUi(parentEl: HTMLElement, deps: DroneUiDeps): DroneUi
     const n = tr.points.length;
     for (let i = 0; i < n; i++) {
       const p = tr.points[i]!;
-      // Older points more transparent — alpha ramps from ~0.1 (oldest) to
-      // ~0.55 (most recent), each dot 2×2 px in world space.
-      const alpha = 0.1 + (0.45 * (i + 1)) / n;
-      trailG.rect(p.x - 1, p.y - 1, 2, 2).fill({ color: VISION_BLUE, alpha });
+      // Older points more transparent — alpha ramps from ~0.05 (oldest)
+      // to ~0.30 (most recent). Half the previous footprint to keep the
+      // trail subordinate to the marker.
+      const alpha = 0.05 + (0.25 * (i + 1)) / n;
+      trailG.circle(p.x, p.y, 1).fill({ color: VISION_BLUE, alpha });
     }
     c.addChild(trailG);
 
-    // Drone dot — 4×4 cyan pixel with a 2×2 white-cyan core.
+    // Drone marker — a small heading-aligned triangle. 12px world-pixel
+    // long-axis (≈ half a tile). The triangle points along (dirX, dirY),
+    // which the dispatch layer normalised at launch time.
+    //
+    // Geometry: tip at (+L, 0) along the heading, base at (−L/2, ±L/2).
+    // We build the polygon in local (heading-aligned) coords, rotate by
+    // the heading angle, and translate to (wpx, wpy).
+    const L = 12; // long-axis length in world pixels
+    const w = 8;  // base width
+    const ang = Math.atan2(d.dirY, d.dirX);
+    const cos = Math.cos(ang);
+    const sin = Math.sin(ang);
+    // Rotated, translated polygon points.
+    const rot = (lx: number, ly: number): [number, number] => [
+      wpx + lx * cos - ly * sin,
+      wpy + lx * sin + ly * cos,
+    ];
+    const tip = rot(L * 0.6, 0);
+    const baseL = rot(-L * 0.4, -w / 2);
+    const baseR = rot(-L * 0.4, w / 2);
     const dotG = new Graphics();
-    dotG.rect(wpx - 2, wpy - 2, 4, 4).fill({ color: VISION_BLUE, alpha: 1 });
-    dotG.rect(wpx - 1, wpy - 1, 2, 2).fill({ color: 0xffffff, alpha: 0.9 });
+    // Soft halo behind the triangle so it pops on any ocean tier.
+    dotG.circle(wpx, wpy, 8).fill({ color: VISION_BLUE, alpha: 0.18 });
+    // Filled body + stroked outline for definition.
+    dotG.poly([tip[0], tip[1], baseL[0], baseL[1], baseR[0], baseR[1]])
+      .fill({ color: VISION_BLUE, alpha: 0.9 })
+      .stroke({ width: 1, color: 0xffffff, alpha: 0.7 });
     c.addChild(dotG);
 
     return c;

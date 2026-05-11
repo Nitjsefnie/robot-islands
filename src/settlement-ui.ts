@@ -599,28 +599,52 @@ export function mountSettlementUi(parentEl: HTMLElement, deps: SettlementUiDeps)
     if (!pos) return c;
     const wpx = pos.x * TILE_PX;
     const wpy = pos.y * TILE_PX;
+    // Heading: vehicles fly straight-line from origin to target, so the
+    // heading is constant per vehicle and computable from the spec
+    // endpoints. (Vehicle storage doesn't carry dirX/dirY like Drone.)
+    const from = deps.world.islands.find((s) => s.id === v.from);
+    const to = deps.world.islands.find((s) => s.id === v.target);
+    const dx = to && from ? to.cx - from.cx : 1;
+    const dy = to && from ? to.cy - from.cy : 0;
+    const ang = Math.atan2(dy, dx);
+    const cos = Math.cos(ang);
+    const sin = Math.sin(ang);
+    const rot = (lx: number, ly: number): [number, number] => [
+      wpx + lx * cos - ly * sin,
+      wpy + lx * sin + ly * cos,
+    ];
     const g = new Graphics();
-    // Settlement vehicles are bigger than drone dots — they carry kits +
-    // foundations of a colony, so the icon should weight more. Ship = ◆
-    // diamond shape (6×6 rotated rect); helicopter = ▲ triangle.
+
+    // Halo behind every vehicle marker — sells the "I am a unit" affordance
+    // even when the body is small relative to a zoomed-out view. Slightly
+    // bigger than the drone halo since vehicles carry weight.
+    g.circle(wpx, wpy, 11).fill({ color: VISION_BLUE, alpha: 0.18 });
+
     if (v.kind === 'ship') {
-      g.poly([wpx, wpy - 4, wpx + 4, wpy, wpx, wpy + 4, wpx - 4, wpy]).fill({
-        color: VISION_BLUE,
-        alpha: 1,
-      });
-      g.poly([wpx, wpy - 2, wpx + 2, wpy, wpx, wpy + 2, wpx - 2, wpy]).fill({
-        color: 0xffffff,
-        alpha: 0.9,
-      });
+      // Ship: chevron pointing along heading. Two angled lines forming a
+      // wedge + a center pip for the bow.
+      const L = 14;
+      const w = 8;
+      const tip = rot(L * 0.55, 0);
+      const stern = rot(-L * 0.45, 0);
+      const left = rot(-L * 0.1, -w / 2);
+      const right = rot(-L * 0.1, w / 2);
+      // Body — filled wedge (tip, left flare, stern, right flare).
+      g.poly([tip[0], tip[1], left[0], left[1], stern[0], stern[1], right[0], right[1]])
+        .fill({ color: VISION_BLUE, alpha: 0.9 })
+        .stroke({ width: 1, color: 0xffffff, alpha: 0.7 });
     } else {
-      g.poly([wpx, wpy - 5, wpx + 4, wpy + 3, wpx - 4, wpy + 3]).fill({
-        color: VISION_BLUE,
-        alpha: 1,
-      });
-      g.poly([wpx, wpy - 2, wpx + 2, wpy + 2, wpx - 2, wpy + 2]).fill({
-        color: 0xffffff,
-        alpha: 0.9,
-      });
+      // Helicopter: rotor-disk (circle) + a small chevron showing heading.
+      // The disk reads as "spinning rotor" which is visually distinct from
+      // the ship's tapered wedge.
+      g.circle(wpx, wpy, 6).fill({ color: VISION_BLUE, alpha: 0.55 });
+      g.circle(wpx, wpy, 6).stroke({ width: 1, color: 0xffffff, alpha: 0.7 });
+      // Small heading wedge on top of the disk so direction is readable.
+      const tip = rot(7, 0);
+      const baseL = rot(-2, -3);
+      const baseR = rot(-2, 3);
+      g.poly([tip[0], tip[1], baseL[0], baseL[1], baseR[0], baseR[1]])
+        .fill({ color: 0xffffff, alpha: 0.9 });
     }
     c.addChild(g);
     return c;

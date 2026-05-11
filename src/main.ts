@@ -95,7 +95,10 @@ async function main(): Promise<void> {
   await app.init({
     background: '#0a0e14',
     resizeTo: window,
-    antialias: false,
+    // Visual polish: AA on for softer tile/building edges. Antialiased
+    // PixiJS Graphics also smooths the small triangle markers used for
+    // drones/vehicles and the building drop-shadow alphas.
+    antialias: true,
     autoDensity: true,
     resolution: window.devicePixelRatio || 1,
   });

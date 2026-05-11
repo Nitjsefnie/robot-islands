@@ -184,6 +184,13 @@ export interface BuildingDef {
    *  (Logger → tree, Quarry → stone, Well → water) are documented in their
    *  def comments with `requiredTile` unset until those buildings ship. */
   readonly requiredTile?: ReadonlyArray<TerrainKind>;
+  /** Visual polish: a 1-2 character glyph stamped centred on the building
+   *  footprint at render time (see `renderBuildings`). Chosen from the
+   *  monospace-friendly Unicode block so the schematic reads at a glance
+   *  without a sprite pipeline (mine = ⛏, smelter = △, solar = ☀, etc.).
+   *  Every def MUST declare a glyph — the catalog completeness test in
+   *  `building-defs.test.ts` enforces this. */
+  readonly glyph: string;
 }
 
 /** Read-only catalog. Keys = BuildingDefId; every defId MUST have an entry. */
@@ -210,6 +217,7 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     stroke: 0x222222,
     power: { consumes: 40 },
     requiredTile: ['ore', 'coal'],
+    glyph: '⛏',
   },
   workshop: {
     id: 'workshop',
@@ -221,6 +229,7 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0xe07b3a,
     stroke: 0x6b2f00,
     power: { consumes: 60 },
+    glyph: '⚙',
   },
   solar: {
     id: 'solar',
@@ -232,6 +241,7 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0xf2c84b,
     stroke: 0x6a4a00,
     power: { produces: 50 },
+    glyph: '☀',
   },
   coal_gen: {
     id: 'coal_gen',
@@ -243,6 +253,7 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0xd97a18,
     stroke: 0x4a2400,
     power: { produces: 100 },
+    glyph: '⚡',
   },
   dock: {
     id: 'dock',
@@ -253,6 +264,7 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     height: 2,
     fill: 0x3a7bd5,
     stroke: 0x0a2a55,
+    glyph: '⚓',
   },
   // §8.8 lists Drone Pad as T2. Step 6 hardcoded it on the home island
   // (T1) so the drone demo works without a level grind; preserved here as
@@ -267,6 +279,7 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     height: 1,
     fill: 0x4a6b78,
     stroke: 0x14222a,
+    glyph: '⤴',
   },
   logger: {
     id: 'logger',
@@ -280,6 +293,7 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     // §8.1: requires a `tree` tile. Placement isn't built (step 2.5) so the
     // tile requirement is unenforced for step 9 — Logger placed on forest-ne
     // produces wood without a `tree` adjacency check.
+    glyph: '⌬',
   },
   smelter: {
     id: 'smelter',
@@ -291,6 +305,7 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0x7a5050,
     stroke: 0x3a1a1a,
     power: { consumes: 50 },
+    glyph: '△',
   },
   crate: {
     id: 'crate',
@@ -304,6 +319,7 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     // §8.4: spec says +100 cap on one player-CHOSEN resource. For step 9
     // we simplify to +100 to ALL resources (player choice UI = deferred).
     storageCap: 100,
+    glyph: '▦',
   },
   silo: {
     id: 'silo',
@@ -317,6 +333,7 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     // §8.4: spec says +2000 cap, dry-goods-only. Categorised routing is
     // deferred for step 9; we apply uniformly to all resources.
     storageCap: 2000,
+    glyph: '▦',
   },
   biomass_plant: {
     id: 'biomass_plant',
@@ -328,6 +345,7 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0x3e7a36,
     stroke: 0x1a3a16,
     power: { produces: 80 },
+    glyph: '❀',
   },
   // §12.3: Foundation Kit Assembler. A T1 manufacturing building dedicated
   // to crafting the Standard Foundation Kit consumed by §12 settlement
@@ -346,6 +364,7 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0xb88a5a,
     stroke: 0x4a3520,
     power: { consumes: 70 },
+    glyph: '⚙',
   },
   // §8.8 / §12.2: Shipyard — T1 logistics building that launches §12 cargo
   // ships for settlement (and, later, T1 cargo routes). Spec requires
@@ -362,6 +381,7 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0x3a7bd5,
     stroke: 0x0a2a55,
     power: { consumes: 80 },
+    glyph: '⚓',
   },
   // §8.8 / §12.2: Helipad — T2 logistics building that launches §12
   // helicopters for settlement. Faster than ships, no coastal requirement.
@@ -375,6 +395,7 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0x6a8a9a,
     stroke: 0x1f3340,
     power: { consumes: 60 },
+    glyph: 'H',
   },
   // -------------------------------------------------------------------------
   // T2 (levels 5-15)
@@ -389,6 +410,7 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0x6a5a48,
     stroke: 0x2a2014,
     power: { consumes: 60 },
+    glyph: '▲',
   },
   blast_furnace: {
     id: 'blast_furnace',
@@ -404,6 +426,7 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     // Geothermal Vent, etc.). The heat-adjacency system is not yet built
     // (deferred — heat propagation lands with step 11/12). For step 9 the
     // Blast Furnace runs unconditionally given inputs + power.
+    glyph: '△',
   },
   steel_mill: {
     id: 'steel_mill',
@@ -418,6 +441,7 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     // §7.1: spec's "Pig iron + Scrap → Steel" includes Scrap as a co-input.
     // Scrap as a substitute/byproduct (§6.7) is deferred. Step 9 recipe is
     // Pig Iron → Steel.
+    glyph: '△',
   },
   assembler: {
     id: 'assembler',
@@ -429,6 +453,7 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0xff8c2a,
     stroke: 0x6e3500,
     power: { consumes: 80 },
+    glyph: '⚙',
   },
   tank: {
     id: 'tank',
@@ -442,6 +467,7 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     storageCap: 2000,
     // §8.4: liquids/gases-only. Categorised routing deferred — Tank
     // applies uniformly to all resources for step 9.
+    glyph: '▦',
   },
   // -------------------------------------------------------------------------
   // T3 (levels 15-30)
@@ -456,6 +482,7 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0x4a8ae0,
     stroke: 0x1a3a78,
     power: { consumes: 200 },
+    glyph: '△',
   },
   // §8.9: Platform Constructor (a.k.a. Foundry of Lands). T3 special building
   // — gates artificial-island construction (§2.5). Step 11 only checks for the
@@ -472,6 +499,7 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0x6a4a8c, // dusky violet — "foundry"-coded
     stroke: 0x2a1a40,
     power: { consumes: 200 },
+    glyph: '⬢',
   },
   // -------------------------------------------------------------------------
   // T4 (levels 30-50) — endgame chain per §6.5 / §8.5 / §9.5
@@ -490,6 +518,7 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0x4a90c8, // cool electric blue
     stroke: 0x1a3050,
     power: { produces: 5000 },
+    glyph: '⚡',
   },
   // §9.5: Pyroforge — Volcanic-unique. Only producer of Exotic Alloy in the
   // world. §5.2 heat-source adjacency deferred — runs without an adjacent
@@ -505,6 +534,7 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     stroke: 0x2a0800,
     power: { consumes: 800 },
     requiredBiomes: ['volcanic'],
+    glyph: '◉',
   },
   // §9.5: Cryogenic Compute Center — Arctic-unique. Only producer of AI
   // Cores. Arctic ambient cold should halve compute-recipe power draw (§9.5
@@ -521,6 +551,7 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     stroke: 0x205060,
     power: { consumes: 1200 },
     requiredBiomes: ['arctic'],
+    glyph: '◈',
   },
   // §8.6: Particle Accelerator — T4 production of Quantum Chips (and, in
   // a later step, Antimatter Capsule via a separate recipe per §7.11). Not
@@ -536,6 +567,7 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0x8060c0, // deep violet
     stroke: 0x301050,
     power: { consumes: 1500 },
+    glyph: '◈',
   },
   // §8.8 / §11.5: Launch Tower — T4 omnidirectional drone-pulse launch
   // site. The pulse mechanic itself (3-cell-radius single-disk reveal) is
@@ -551,6 +583,7 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0x8a8a40, // dull sand-gold
     stroke: 0x303010,
     power: { consumes: 400 },
+    glyph: '▲',
   },
   // -------------------------------------------------------------------------
   // T5 (levels 50+, AI Core required) — Transcendent per §13 / step 13
@@ -572,6 +605,7 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0x3a0a4a, // deep void violet
     stroke: 0x100020,
     power: { produces: 8000 },
+    glyph: '⚡',
   },
   // §8.3: Reality Forge — T5 manufacturing. Consumes T4 components +
   // Casimir energy to produce Reality Anchor (a T5 component per §6.6).
@@ -587,6 +621,7 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0x6020a0, // amethyst violet
     stroke: 0x100040,
     power: { consumes: 3000 },
+    glyph: '✺',
   },
   // §8.4: Singularity Battery — "effectively infinite electrical power
   // storage" per spec. Categorised here as `power` per the task brief: the
@@ -605,6 +640,7 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     stroke: 0x0a0a30,
     power: { consumes: 100 },
     storageCap: 10000,
+    glyph: '▦',
   },
   // §8.9 / §13.3: Time Lock — banks offline-time stockpile per island and
   // spends to accelerate any chosen island's tick rate at 3×. Time-banking
@@ -621,6 +657,7 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0xc080e0, // pale aurora violet
     stroke: 0x400060,
     power: { consumes: 1500 },
+    glyph: '✺',
   },
   // §8.9 / §13.3: Genesis Chamber — free-creation of T1-T4 resources from
   // electrical power alone (placeholder cycle 5 min, tier-scaling power
@@ -637,6 +674,7 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0xa0e0a0, // ethereal green
     stroke: 0x205020,
     power: { consumes: 2500 },
+    glyph: '✺',
   },
   // §8.9 / §13.3: Universe Editor — reassigns an island's biome and
   // regenerates terrain. Biome reassignment per §13.3 DEFERRED to step 14;
@@ -653,6 +691,7 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0xff80a0, // rose-pink
     stroke: 0x500020,
     power: { consumes: 4000 },
+    glyph: '✺',
   },
   // §8.9 / §13.3: Lattice Node — one per networked T5 island; activates
   // Omniscient Lattice (unified inventory + cross-island adjacency) when
@@ -669,6 +708,7 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0x80f0c0, // mint-cyan
     stroke: 0x205040,
     power: { consumes: 800 },
+    glyph: '✺',
   },
   // -------------------------------------------------------------------------
   // Step-18 recipe-graph closure (§7.1-§7.12)
@@ -691,6 +731,7 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     stroke: 0x403828,
     power: { consumes: 30 },
     // §8.1: requires `stone` tile. Tile gating DEFERRED.
+    glyph: '▣',
   },
   sand_pit: {
     id: 'sand_pit',
@@ -703,6 +744,7 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     stroke: 0x6a5028,
     power: { consumes: 20 },
     // §8.1: requires `sand` tile. Tile gating DEFERRED.
+    glyph: '▣',
   },
   well: {
     id: 'well',
@@ -715,6 +757,7 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     stroke: 0x1a3a60,
     power: { consumes: 10 },
     // §8.1: requires `water` tile (freshwater). Tile gating DEFERRED.
+    glyph: '◌',
   },
   coastal_pump: {
     id: 'coastal_pump',
@@ -728,6 +771,7 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     power: { consumes: 15 },
     // §8.1 / §3.2: spec restricts to Coast biome / `water` tile.
     // Biome+tile gating DEFERRED.
+    glyph: '⛽',
   },
   quartz_mine: {
     id: 'quartz_mine',
@@ -740,6 +784,7 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     stroke: 0x484858,
     power: { consumes: 30 },
     // §8.1: spec calls for a `quartz` outcrop tile. Tile gating DEFERRED.
+    glyph: '⛏',
   },
 
   // T1 manufacturing / chemistry.
@@ -753,6 +798,7 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0x8a5a30, // sawn-wood ochre
     stroke: 0x3a2010,
     power: { consumes: 40 },
+    glyph: '⌬',
   },
   glassworks: {
     id: 'glassworks',
@@ -766,6 +812,7 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     power: { consumes: 80 },
     // §5.2: spec requires an adjacent heat source. Heat-adjacency system
     // DEFERRED — Glassworks runs unconditionally given inputs + power.
+    glyph: '▲',
   },
   evaporator: {
     id: 'evaporator',
@@ -777,6 +824,7 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0xf0e0a0, // salt-pan tan
     stroke: 0x605030,
     power: { consumes: 25 },
+    glyph: '◇',
   },
   electrolyzer: {
     id: 'electrolyzer',
@@ -788,6 +836,7 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0xa0c0e8, // electrolyte blue
     stroke: 0x303a60,
     power: { consumes: 100 },
+    glyph: '◇',
   },
   biofuel_plant: {
     id: 'biofuel_plant',
@@ -799,6 +848,7 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0x408a30, // bioreactor green
     stroke: 0x1a3a10,
     power: { consumes: 60 },
+    glyph: '❀',
   },
 
   // T2 extraction.
@@ -813,6 +863,7 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     stroke: 0x080404,
     power: { consumes: 80 },
     // §8.1: requires `oil_well` terrain tile. Tile gating DEFERRED.
+    glyph: '⛽',
   },
   gas_extractor: {
     id: 'gas_extractor',
@@ -825,6 +876,7 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     stroke: 0x2a2810,
     power: { consumes: 70 },
     // §8.1: requires `gas_seep` terrain tile. Tile gating DEFERRED.
+    glyph: '◇',
   },
 
   // T2 petrochemical / refining.
@@ -838,6 +890,7 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0x6a4a20, // refinery brown
     stroke: 0x2a1a08,
     power: { consumes: 200 },
+    glyph: '◇',
   },
   chlor_alkali_plant: {
     id: 'chlor_alkali_plant',
@@ -849,6 +902,7 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0x80d050, // chlorine-green
     stroke: 0x305018,
     power: { consumes: 150 },
+    glyph: '◇',
   },
   lubricant_refinery: {
     id: 'lubricant_refinery',
@@ -860,6 +914,7 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0x4a3018, // viscous-oil brown
     stroke: 0x1a1008,
     power: { consumes: 120 },
+    glyph: '◇',
   },
   diesel_refinery: {
     id: 'diesel_refinery',
@@ -871,6 +926,7 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0x504030, // diesel-tan brown
     stroke: 0x201810,
     power: { consumes: 180 },
+    glyph: '◇',
   },
   metal_rolling_mill: {
     id: 'metal_rolling_mill',
@@ -882,6 +938,7 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0x8090a0, // steel-roll grey
     stroke: 0x2a3848,
     power: { consumes: 200 },
+    glyph: '⚙',
   },
 
   // T3 chemistry / electronics / extraction.
@@ -895,6 +952,7 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0x686878, // metallic-silicon grey
     stroke: 0x202028,
     power: { consumes: 250 },
+    glyph: '◈',
   },
   air_separator: {
     id: 'air_separator',
@@ -906,6 +964,7 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0xc8e8f0, // pale-cyan condenser
     stroke: 0x405058,
     power: { consumes: 300 },
+    glyph: '❄',
   },
   cryo_lab: {
     id: 'cryo_lab',
@@ -917,6 +976,7 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0x80c0e8, // cryo-pale-blue
     stroke: 0x204060,
     power: { consumes: 400 },
+    glyph: '❄',
   },
   cryo_compressor: {
     id: 'cryo_compressor',
@@ -928,6 +988,7 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0x6080b0, // compressed-fluid blue
     stroke: 0x182840,
     power: { consumes: 500 },
+    glyph: '❄',
   },
   kerosene_refinery: {
     id: 'kerosene_refinery',
@@ -939,6 +1000,7 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0x9080a0, // aviation-fuel purple-grey
     stroke: 0x302840,
     power: { consumes: 350 },
+    glyph: '◇',
   },
   lithography_lab: {
     id: 'lithography_lab',
@@ -950,6 +1012,7 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0x40a0c0, // wafer-fab cyan
     stroke: 0x103040,
     power: { consumes: 600 },
+    glyph: '◈',
   },
   drilling_rig: {
     id: 'drilling_rig',
@@ -964,6 +1027,7 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     // §8.1 catalog: spec calls for `helium_vent` / deep-extraction tile.
     // Tile gating DEFERRED — the rig closes the helium_3 producer gap
     // without a terrain prerequisite.
+    glyph: '⛏',
   },
 
   // T5 raw extractors (§8.10). Power draws are placeholder "60-100 kW"
@@ -980,6 +1044,7 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0x80a0e0, // aetheric pale-blue
     stroke: 0x203060,
     power: { consumes: 60000 },
+    glyph: '✦',
   },
   spacetime_resonator: {
     id: 'spacetime_resonator',
@@ -991,6 +1056,7 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0xa080e0, // tachyon violet
     stroke: 0x301040,
     power: { consumes: 100000 },
+    glyph: '✦',
   },
   eldritch_sieve: {
     id: 'eldritch_sieve',
@@ -1002,6 +1068,7 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0x402040, // dark-matter near-black
     stroke: 0x100008,
     power: { consumes: 80000 },
+    glyph: '✦',
   },
 
   // T5 refining (§7.12). One def per refining recipe — same rationale
@@ -1016,6 +1083,7 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0xe06030, // plasma-orange
     stroke: 0x401008,
     power: { consumes: 4000 },
+    glyph: '✺',
   },
   eldritch_refiner: {
     id: 'eldritch_refiner',
@@ -1027,6 +1095,7 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0x603060, // eldritch-violet
     stroke: 0x201020,
     power: { consumes: 5000 },
+    glyph: '✺',
   },
   phase_refiner: {
     id: 'phase_refiner',
@@ -1038,6 +1107,7 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0x4060a0, // phase-blue
     stroke: 0x10204a,
     power: { consumes: 5000 },
+    glyph: '✺',
   },
 };
 

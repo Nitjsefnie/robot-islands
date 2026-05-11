@@ -11,10 +11,10 @@
 // `rotation: 0|1|2|3` but unused for step 9 (placement is deferred to
 // step 2.5, so every demo instance ships rotation: 0).
 
-import { Container, Graphics } from 'pixi.js';
+import { Container, Graphics, Text } from 'pixi.js';
 
 import { BUILDING_DEFS, type BuildingDefId } from './building-defs.js';
-import { TILE_PX } from './island.js';
+import { TILE_PX, desaturate, lighten } from './island.js';
 
 /** Per-instance placement. `id` is unique across the world; `defId` points
  *  into BUILDING_DEFS. (x, y) is the top-left tile of the footprint —
@@ -81,6 +81,34 @@ export const HOME_ISLAND_BUILDINGS: PlacedBuilding[] = [
 ];
 
 /**
+ * Visual polish constants. The "weathered industrial schematic" direction
+ * means buildings sit on the terrain with weight (drop shadow) and read as
+ * dimensional rather than flat (bevel + glyph).
+ *
+ *   - DESAT_AMOUNT: 0.30 pulls 30% toward grayscale. Keeps each building
+ *     identifiable by hue but stops the workshop's saturated orange / dock's
+ *     candy-blue from screaming.
+ *   - SHADOW_*: 2px down-right offset, dark fill at 0.4 alpha. Sells the
+ *     "raised plate" feel without a real lighting pass.
+ *   - BEVEL_*: 1px inner-top highlight + 1px inner-bottom shadow give a
+ *     subtle stamped-metal look. Alphas tuned to read at zoom 1.0 without
+ *     swamping the glyph.
+ *   - GLYPH_SCALE: glyph height = TILE_PX × footprint-min × this. 0.5 lands
+ *     ~24px on a 2×2 building and ~48px on a 4×4 — readable at default zoom.
+ *   - GLYPH_LIGHTEN: 70% blend toward white. Glyph reads as light-on-dark on
+ *     every fill, including the cyan / pink / pale-mint pastels in the T5
+ *     band. (Bitwise tricks vary wildly across fills; a fixed blend is
+ *     consistent.)
+ */
+const DESAT_AMOUNT = 0.30;
+const SHADOW_OFFSET = 2;
+const SHADOW_ALPHA = 0.40;
+const BEVEL_ALPHA = 0.28;
+const GLYPH_SCALE = 0.5;
+const GLYPH_LIGHTEN = 0.70;
+const GLYPH_ALPHA = 0.85;
+
+/**
  * Render PlacedBuildings into a fresh container. Each instance's screen
  * rectangle is computed from its def's width/height + fill/stroke (so a
  * single rendering function handles every building kind uniformly).
@@ -89,6 +117,17 @@ export const HOME_ISLAND_BUILDINGS: PlacedBuilding[] = [
  * centre of tile (0,0), so a footprint origin shifts by -TILE_PX/2 in each
  * axis. The inset leaves a thin gap so the underlying terrain colour is
  * still visible around the building edge.
+ *
+ * Visual polish (z-order, back to front per building):
+ *   1. Drop shadow — dark rect at +2px offset, alpha 0.4.
+ *   2. Main fill — desaturated catalog fill, with stroke.
+ *   3. Bevel — 1px inner-top highlight + 1px inner-bottom shadow.
+ *   4. Glyph — centred Unicode mark, lightened against the fill.
+ *
+ * All buildings share one Graphics for shapes (cheap to flush) and one
+ * Container child for glyph Texts (Text needs its own object). The caller
+ * destroys the Container via `destroy({ children: true })`, which cascades
+ * to the Text instances and frees their textures.
  */
 export function renderBuildings(buildings: ReadonlyArray<PlacedBuilding>): Container {
   const layer = new Container();
@@ -97,16 +136,73 @@ export function renderBuildings(buildings: ReadonlyArray<PlacedBuilding>): Conta
   const half = TILE_PX / 2;
   const inset = 2;
   const g = new Graphics();
+  const glyphLayer = new Container();
+  glyphLayer.label = 'building-glyphs';
+
   for (const b of buildings) {
     const def = BUILDING_DEFS[b.defId];
     const px = b.x * TILE_PX - half + inset;
     const py = b.y * TILE_PX - half + inset;
     const w = def.width * TILE_PX - inset * 2;
     const h = def.height * TILE_PX - inset * 2;
+
+    // 1) Drop shadow — same shape, offset down-right, dark fill at low
+    // alpha. Drawn first so everything else stacks on top.
+    g.rect(px + SHADOW_OFFSET, py + SHADOW_OFFSET, w, h).fill({
+      color: 0x000000,
+      alpha: SHADOW_ALPHA,
+    });
+
+    // 2) Main fill — desaturated to read as weathered/aged. Stroke uses
+    // the def's full-saturation stroke colour for definition.
+    const fillCol = desaturate(def.fill, DESAT_AMOUNT);
     g.rect(px, py, w, h)
-      .fill(def.fill)
+      .fill(fillCol)
       .stroke({ width: 2, color: def.stroke, alignment: 1 });
+
+    // 3) Bevel — 1px inner-top lighter line + 1px inner-bottom darker
+    // line. Drawn 1px inside the stroke so the building reads as a
+    // stamped metal plate.
+    const beveled = lighten(fillCol, 0.30);
+    // Inner top edge (highlight).
+    g.moveTo(px + 1, py + 1).lineTo(px + w - 1, py + 1)
+      .stroke({ width: 1, color: beveled, alpha: BEVEL_ALPHA });
+    // Inner left edge (highlight).
+    g.moveTo(px + 1, py + 1).lineTo(px + 1, py + h - 1)
+      .stroke({ width: 1, color: beveled, alpha: BEVEL_ALPHA });
+    // Inner bottom edge (shadow).
+    g.moveTo(px + 1, py + h - 1).lineTo(px + w - 1, py + h - 1)
+      .stroke({ width: 1, color: 0x000000, alpha: BEVEL_ALPHA });
+    // Inner right edge (shadow).
+    g.moveTo(px + w - 1, py + 1).lineTo(px + w - 1, py + h - 1)
+      .stroke({ width: 1, color: 0x000000, alpha: BEVEL_ALPHA });
+
+    // 4) Glyph — centred Text. Size scales with footprint dimension so a
+    // 4×4 building gets a beefier mark than a 1×1. Lightened against the
+    // fill for contrast; alpha holds it back from competing with the
+    // hover/select overlays.
+    const minSide = Math.min(def.width, def.height);
+    const fontSize = Math.round(minSide * TILE_PX * GLYPH_SCALE);
+    const glyphColor = lighten(fillCol, GLYPH_LIGHTEN);
+    const t = new Text({
+      text: def.glyph,
+      style: {
+        fontFamily: 'ui-monospace, monospace',
+        fontSize,
+        // PIXI 8 Text.style.fill accepts a hex number directly.
+        fill: glyphColor,
+      },
+    });
+    t.alpha = GLYPH_ALPHA;
+    t.anchor.set(0.5);
+    // Centre on the footprint. Note px/py already include the inset; the
+    // footprint centre is at (px + w/2, py + h/2). Subtle 1px down nudge
+    // optically balances the bevel highlight.
+    t.position.set(px + w / 2, py + h / 2);
+    glyphLayer.addChild(t);
   }
+
   layer.addChild(g);
+  layer.addChild(glyphLayer);
   return layer;
 }

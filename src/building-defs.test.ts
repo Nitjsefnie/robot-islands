@@ -139,6 +139,18 @@ describe('BUILDING_DEFS catalog', () => {
     }
   });
 
+  it('every def declares a non-empty glyph (visual polish)', () => {
+    // Visual-polish contract: `renderBuildings` stamps a centred glyph on
+    // every footprint so the schematic reads at a glance. A missing glyph
+    // would render as an empty Text node — silently invisible. Catch that
+    // at the catalog level.
+    for (const id of KNOWN_DEF_IDS) {
+      const def = BUILDING_DEFS[id];
+      expect(def.glyph, `missing glyph for ${id}`).toBeDefined();
+      expect(def.glyph.length, `glyph for ${id} is empty`).toBeGreaterThan(0);
+    }
+  });
+
   it('storage defs declare storageCap; others do not', () => {
     expect(BUILDING_DEFS.crate.storageCap).toBe(100);
     expect(BUILDING_DEFS.silo.storageCap).toBe(2000);

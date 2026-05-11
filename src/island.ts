@@ -141,6 +141,120 @@ export function defaultTerrainAt(x: number, y: number): TerrainKind {
   return 'grass';
 }
 
+// ---------------------------------------------------------------------------
+// Pure color helpers — used by tile-jitter + glyph-tinting + building palette
+// desaturation. No PixiJS or DOM. Hex inputs/outputs in PIXI's 0xRRGGBB form.
+// ---------------------------------------------------------------------------
+
+/** Extract (r, g, b) channels from a 0xRRGGBB integer. */
+function rgbOf(hex: number): { r: number; g: number; b: number } {
+  return {
+    r: (hex >>> 16) & 0xff,
+    g: (hex >>> 8) & 0xff,
+    b: hex & 0xff,
+  };
+}
+
+/** Pack (r, g, b) channels (each 0..255, clamped) back to 0xRRGGBB. */
+function packRgb(r: number, g: number, b: number): number {
+  const rc = Math.max(0, Math.min(255, Math.round(r)));
+  const gc = Math.max(0, Math.min(255, Math.round(g)));
+  const bc = Math.max(0, Math.min(255, Math.round(b)));
+  return (rc << 16) | (gc << 8) | bc;
+}
+
+/**
+ * Deterministic FNV-1a-style hash of (x, y) → uniform [0, 1). Pure function.
+ * Same input always returns same output across runs.
+ *
+ * Used for per-tile brightness jitter so terrain reads as organic rather
+ * than as a perfectly uniform Excel-grid. Cheaper than the per-island
+ * `tileHash01` in biomes.ts because there's no islandId — every island
+ * uses the SAME jitter pattern, which gives a consistent texture across
+ * the world without leaking gameplay info through the visuals.
+ */
+export function tileHash01(x: number, y: number): number {
+  let h = 2166136261 >>> 0;
+  // Mix x and y bytes into the hash. Use bit-shifted bytes so negative
+  // tiles (the home island spans negative coords) still produce
+  // well-distributed outputs.
+  const xx = x | 0;
+  const yy = y | 0;
+  const bytes = [xx & 0xff, (xx >>> 8) & 0xff, (xx >>> 16) & 0xff, (xx >>> 24) & 0xff,
+                 yy & 0xff, (yy >>> 8) & 0xff, (yy >>> 16) & 0xff, (yy >>> 24) & 0xff];
+  for (const b of bytes) {
+    h ^= b;
+    h = Math.imul(h, 16777619);
+  }
+  return ((h >>> 0) % 1_000_003) / 1_000_003;
+}
+
+/**
+ * Compute a tile's brightness-jittered fill colour. Pure function: same
+ * (x, y, baseColor) always returns the same tinted hex.
+ *
+ * The jitter is ±5% lightness, applied by linearly blending the base
+ * colour toward white (for positive jitter) or black (for negative).
+ * Stays in RGB space — no HSL conversion needed for a small lightness
+ * shift, and the result is visually indistinguishable for these small
+ * deltas.
+ *
+ * Used in `renderIslandTiles` to break up the per-terrain flat fills
+ * so the tile grid doesn't read as Excel cells.
+ */
+export function tileBrightnessJitter(x: number, y: number, baseColor: number): number {
+  const h = tileHash01(x, y); // [0, 1)
+  // Map [0, 1) → ±0.05. Negative half darkens, positive half lightens.
+  const jitter = -0.05 + h * 0.10;
+  const { r, g, b } = rgbOf(baseColor);
+  if (jitter >= 0) {
+    // Blend toward white by jitter weight.
+    const a = jitter; // [0, 0.05]
+    return packRgb(r + (255 - r) * a, g + (255 - g) * a, b + (255 - b) * a);
+  }
+  // Blend toward black.
+  const a = -jitter; // [0, 0.05]
+  return packRgb(r * (1 - a), g * (1 - a), b * (1 - a));
+}
+
+/**
+ * Desaturate a colour by `amount` (0..1). Pure function: same input always
+ * returns the same output.
+ *
+ * Reduces chroma without changing perceived lightness much — uses the
+ * Rec. 601 luma coefficients to compute a grayscale target and
+ * interpolates each channel toward it. `amount = 0` is identity, `amount
+ * = 1` is full grayscale.
+ *
+ * Used to soften the building catalog's full-saturation fills so the
+ * world reads as a weathered engineering schematic rather than a candy-
+ * coloured RTS overlay.
+ */
+export function desaturate(hex: number, amount: number): number {
+  const a = Math.max(0, Math.min(1, amount));
+  const { r, g, b } = rgbOf(hex);
+  const luma = 0.299 * r + 0.587 * g + 0.114 * b;
+  return packRgb(
+    r + (luma - r) * a,
+    g + (luma - g) * a,
+    b + (luma - b) * a,
+  );
+}
+
+/**
+ * Lighten a colour by linearly blending toward white by `amount` (0..1).
+ * Used to tint building glyphs slightly above their fill for readability.
+ */
+export function lighten(hex: number, amount: number): number {
+  const a = Math.max(0, Math.min(1, amount));
+  const { r, g, b } = rgbOf(hex);
+  return packRgb(
+    r + (255 - r) * a,
+    g + (255 - g) * a,
+    b + (255 - b) * a,
+  );
+}
+
 /**
  * Render the tile grid into a fresh container. The container is positioned so
  * that world (0, 0) is the *center* of the centre tile (tile (0, 0)); the caller
@@ -151,6 +265,17 @@ export function defaultTerrainAt(x: number, y: number): TerrainKind {
  * so that tile (0, 0) sits in the square [-TILE_PX/2, TILE_PX/2)² around the
  * origin. With this convention, placing the container at the canvas centre
  * visually centres a symmetric island regardless of viewport size.
+ *
+ * Visual polish:
+ *   - Per-tile brightness jitter via `tileBrightnessJitter` breaks up the
+ *     flat per-terrain fills (±5% deterministic noise).
+ *   - The 1px black grid stroke that previously sat on top of every tile
+ *     is dropped — with AA on and the jitter texture, the grid reads as
+ *     debug-overlay noise rather than as terrain detail.
+ *   - An island silhouette outline is drawn along the boundary tiles
+ *     (each tile gets a 2px dark stroke on every side whose neighbour
+ *     tile is NOT in the island set), so the island reads as a body
+ *     "sitting on" the ocean rather than dissolving into it.
  */
 export function renderIslandTiles(tiles: ReadonlyArray<Tile>): Container {
   const layer = new Container();
@@ -158,18 +283,49 @@ export function renderIslandTiles(tiles: ReadonlyArray<Tile>): Container {
 
   const half = TILE_PX / 2;
   const g = new Graphics();
+
+  // Per-tile jittered fills. One rect per tile, jitter is deterministic so
+  // a second render of the same island matches pixel-for-pixel (helpful
+  // when the player re-discovers an island after the layer rebuild).
   for (const t of tiles) {
     const px = t.x * TILE_PX - half;
     const py = t.y * TILE_PX - half;
-    g.rect(px, py, TILE_PX, TILE_PX).fill(TERRAIN_COLOR[t.terrain]);
+    const baseColor = TERRAIN_COLOR[t.terrain];
+    const tinted = tileBrightnessJitter(t.x, t.y, baseColor);
+    g.rect(px, py, TILE_PX, TILE_PX).fill(tinted);
   }
 
-  // Subtle tile grid lines on top of fills, drawn per-tile so only in-island
-  // tiles get a border (the boundary outline emerges naturally from this).
+  // Island silhouette: dark 2px stroke on every tile edge whose neighbour
+  // is outside the island. Builds a string-keyed set first so the
+  // neighbour test is O(1) per tile.
+  const tileSet = new Set<string>();
+  for (const t of tiles) tileSet.add(`${t.x},${t.y}`);
+  const has = (x: number, y: number): boolean => tileSet.has(`${x},${y}`);
+  const SILHOUETTE = 0x000000;
+  const SILHOUETTE_ALPHA = 0.5;
   for (const t of tiles) {
     const px = t.x * TILE_PX - half;
     const py = t.y * TILE_PX - half;
-    g.rect(px, py, TILE_PX, TILE_PX).stroke({ width: 1, color: 0x000000, alpha: 0.18 });
+    // Top edge — neighbour at (x, y-1).
+    if (!has(t.x, t.y - 1)) {
+      g.moveTo(px, py).lineTo(px + TILE_PX, py)
+        .stroke({ width: 2, color: SILHOUETTE, alpha: SILHOUETTE_ALPHA, alignment: 0.5 });
+    }
+    // Bottom edge — neighbour at (x, y+1).
+    if (!has(t.x, t.y + 1)) {
+      g.moveTo(px, py + TILE_PX).lineTo(px + TILE_PX, py + TILE_PX)
+        .stroke({ width: 2, color: SILHOUETTE, alpha: SILHOUETTE_ALPHA, alignment: 0.5 });
+    }
+    // Left edge — neighbour at (x-1, y).
+    if (!has(t.x - 1, t.y)) {
+      g.moveTo(px, py).lineTo(px, py + TILE_PX)
+        .stroke({ width: 2, color: SILHOUETTE, alpha: SILHOUETTE_ALPHA, alignment: 0.5 });
+    }
+    // Right edge — neighbour at (x+1, y).
+    if (!has(t.x + 1, t.y)) {
+      g.moveTo(px + TILE_PX, py).lineTo(px + TILE_PX, py + TILE_PX)
+        .stroke({ width: 2, color: SILHOUETTE, alpha: SILHOUETTE_ALPHA, alignment: 0.5 });
+    }
   }
 
   layer.addChild(g);
