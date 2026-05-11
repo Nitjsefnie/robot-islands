@@ -3,6 +3,7 @@
 
 import { describe, expect, it } from 'vitest';
 
+import { computeVisionSources, type VisionSource } from './lighthouse.js';
 import {
   DEMO_ISLANDS,
   findPopulatedIslandAt,
@@ -30,13 +31,28 @@ function makeSpec(over: Partial<IslandSpec>): IslandSpec {
   };
 }
 
+/** Helper: build the VisionSource[] for a single populated source spec.
+ *  Mirrors what `main.ts` does each frame — convenient for `islandRenderState`
+ *  callers that want to assert against a known fixture without rebuilding the
+ *  full demo layout. */
+function sourcesFor(specs: ReadonlyArray<IslandSpec>): VisionSource[] {
+  return computeVisionSources(specs);
+}
+
 describe('islandRenderState', () => {
-  // Plains-like source (14, 14) at origin. Vision ellipse = (14 + 50, 14 + 50)
-  // = (64, 64) circle — same shape as the legacy 80-tile fixed radius shrunk
-  // down to the source's own footprint + 50 padding.
-  const sources: ReadonlyArray<
-    Pick<IslandSpec, 'cx' | 'cy' | 'majorRadius' | 'minorRadius'>
-  > = [{ cx: 0, cy: 0, majorRadius: 14, minorRadius: 14 }];
+  // Plains-like source (14, 14) at origin. Padding 10 → baseline ellipse
+  // (24, 24). Lighthouse-vision redesign: this is now small enough that
+  // forest-ne (40, -10) classifies as `discovered` without a Lighthouse.
+  const sourceSpec = makeSpec({
+    id: 'src',
+    cx: 0,
+    cy: 0,
+    majorRadius: 14,
+    minorRadius: 14,
+    populated: true,
+    discovered: true,
+  });
+  const sources: ReadonlyArray<VisionSource> = sourcesFor([sourceSpec]);
 
   it('classifies a populated island as visible (regardless of `discovered`)', () => {
     const s = makeSpec({ populated: true, discovered: false, cx: 200, cy: 200 });
@@ -45,21 +61,21 @@ describe('islandRenderState', () => {
     expect(islandRenderState(s, sources)).toBe('visible');
   });
 
-  it('classifies a discovered island inside vision ellipse as visible', () => {
-    // forest-ne-ish: (40, -10) against a (14,14) source → vision a,b = (64,64).
-    // 40²/64² + 10²/64² ≈ 0.42 ≤ 1 → visible.
-    const s = makeSpec({ populated: false, discovered: true, cx: 40, cy: -10 });
+  it('classifies a discovered island inside the baseline ellipse as visible', () => {
+    // A point at (10, 10) against a (14,14) source → baseline (24, 24).
+    // 10²/24² + 10²/24² ≈ 0.347 ≤ 1 → visible.
+    const s = makeSpec({ populated: false, discovered: true, cx: 10, cy: 10 });
     expect(islandRenderState(s, sources)).toBe('visible');
   });
 
   it('classifies a discovered island outside vision ellipse as discovered', () => {
-    // desert-far-ish: (80, 60). 80²/64² + 60²/64² ≈ 2.44 > 1 → discovered.
-    const s = makeSpec({ populated: false, discovered: true, cx: 80, cy: 60 });
+    // forest-ne-ish: (40, -10). 40²/24² + 10²/24² ≈ 2.95 > 1 → discovered.
+    const s = makeSpec({ populated: false, discovered: true, cx: 40, cy: -10 });
     expect(islandRenderState(s, sources)).toBe('discovered');
   });
 
   it('classifies an undiscovered island as unknown', () => {
-    const s = makeSpec({ populated: false, discovered: false, cx: 40, cy: -10 });
+    const s = makeSpec({ populated: false, discovered: false, cx: 10, cy: 10 });
     // Even though it's inside the vision ellipse, undiscovered short-circuits
     // to unknown — the player just doesn't know it's there.
     expect(islandRenderState(s, sources)).toBe('unknown');
@@ -75,46 +91,60 @@ describe('islandRenderState', () => {
   });
 
   it('treats the vision-ellipse boundary as inclusive', () => {
-    // Source (14, 14) → vision semi-axis 64 on the major axis. (64, 0) sits
-    // exactly on the ellipse boundary → 64²/64² + 0 = 1 ≤ 1 → visible.
-    const s = makeSpec({ populated: false, discovered: true, cx: 64, cy: 0 });
+    // Source (14, 14) → vision semi-axis 24 on the major axis. (24, 0) sits
+    // exactly on the ellipse boundary → 24²/24² + 0 = 1 ≤ 1 → visible.
+    const s = makeSpec({ populated: false, discovered: true, cx: 24, cy: 0 });
     expect(islandRenderState(s, sources)).toBe('visible');
   });
 
   it('uses asymmetric semi-axes for oval (Coast-like) sources — major-axis boundary visible', () => {
-    // Coast-like (14, 7) source at origin → vision ellipse semi-axes (64, 57).
-    // Test point on the major axis at the boundary: (64, 0) → 1.0 ≤ 1 → visible.
-    const ovalSources: ReadonlyArray<
-      Pick<IslandSpec, 'cx' | 'cy' | 'majorRadius' | 'minorRadius'>
-    > = [{ cx: 0, cy: 0, majorRadius: 14, minorRadius: 7 }];
+    // Coast-like (14, 7) source at origin → vision ellipse semi-axes (24, 17).
+    // Test point on the major axis at the boundary: (24, 0) → 1.0 ≤ 1 → visible.
+    const ovalSrc = makeSpec({
+      id: 'oval',
+      cx: 0,
+      cy: 0,
+      majorRadius: 14,
+      minorRadius: 7,
+      populated: true,
+      discovered: true,
+    });
+    const ovalSources = sourcesFor([ovalSrc]);
     const onMajorBoundary = makeSpec({
       populated: false,
       discovered: true,
-      cx: 64,
+      cx: 24,
       cy: 0,
     });
     expect(islandRenderState(onMajorBoundary, ovalSources)).toBe('visible');
   });
 
   it('uses asymmetric semi-axes for oval (Coast-like) sources — minor-axis boundary visible, just outside discovered', () => {
-    // Same (14, 7) source → vision (64, 57). Test point on minor axis at
-    // boundary: (0, 57) → 57²/57² = 1 → visible. Test point just past it,
-    // (0, 60): 60²/57² ≈ 1.108 > 1 → outside vision; with `discovered: true`
+    // Same (14, 7) source → vision (24, 17). Test point on minor axis at
+    // boundary: (0, 17) → 17²/17² = 1 → visible. Test point just past it,
+    // (0, 20): 20²/17² ≈ 1.384 > 1 → outside vision; with `discovered: true`
     // that classifies as 'discovered'.
-    const ovalSources: ReadonlyArray<
-      Pick<IslandSpec, 'cx' | 'cy' | 'majorRadius' | 'minorRadius'>
-    > = [{ cx: 0, cy: 0, majorRadius: 14, minorRadius: 7 }];
+    const ovalSrc = makeSpec({
+      id: 'oval',
+      cx: 0,
+      cy: 0,
+      majorRadius: 14,
+      minorRadius: 7,
+      populated: true,
+      discovered: true,
+    });
+    const ovalSources = sourcesFor([ovalSrc]);
     const onMinorBoundary = makeSpec({
       populated: false,
       discovered: true,
       cx: 0,
-      cy: 57,
+      cy: 17,
     });
     const justOutsideMinor = makeSpec({
       populated: false,
       discovered: true,
       cx: 0,
-      cy: 60,
+      cy: 20,
     });
     expect(islandRenderState(onMinorBoundary, ovalSources)).toBe('visible');
     expect(islandRenderState(justOutsideMinor, ovalSources)).toBe('discovered');
@@ -124,34 +154,70 @@ describe('islandRenderState', () => {
       populated: false,
       discovered: false,
       cx: 0,
-      cy: 60,
+      cy: 20,
     });
     expect(islandRenderState(undiscovered, ovalSources)).toBe('unknown');
   });
 
   it('exposes VISION_PADDING_TILES at the canonical value', () => {
-    // Locked-in spec constant: 50 tiles past the island's own ellipse edge.
-    // Test asserts the value so a future refactor that re-tunes it has to
-    // update this test consciously rather than letting a silent drift land.
-    expect(VISION_PADDING_TILES).toBe(50);
+    // Locked-in Lighthouse-vision constant: 10 tiles past the island's own
+    // ellipse edge for the baseline halo. Distant scouting requires
+    // Lighthouse infrastructure. Test asserts the value so a future
+    // refactor that re-tunes it has to update this test consciously rather
+    // than letting a silent drift land.
+    expect(VISION_PADDING_TILES).toBe(10);
   });
 
-  it('matches the demo layout: home visible, forest-ne visible, desert-far discovered, coast-unknown unknown', () => {
+  it('matches the demo layout: home visible, forest-ne visible (populated), desert-far discovered, coast-unknown unknown', () => {
     const populated = DEMO_ISLANDS.filter((s) => s.populated);
+    const visionSources = computeVisionSources(populated);
     const byId = new Map(DEMO_ISLANDS.map((s) => [s.id, s] as const));
     const get = (id: string): IslandSpec => {
       const s = byId.get(id);
       if (!s) throw new Error(`demo missing ${id}`);
       return s;
     };
-    // home (14,14) Plains at origin → vision (64,64) circle.
-    // forest-ne (40,-10) → 40²/64² + 10²/64² ≈ 0.42 → visible.
-    // desert-far (80,60) → 80²/64² + 60²/64² ≈ 2.44 → discovered.
-    // coast-unknown (180,0) → discovered=false → unknown short-circuit.
-    expect(islandRenderState(get('home'), populated)).toBe('visible');
-    expect(islandRenderState(get('forest-ne'), populated)).toBe('visible');
-    expect(islandRenderState(get('desert-far'), populated)).toBe('discovered');
-    expect(islandRenderState(get('coast-unknown'), populated)).toBe('unknown');
+    // home (14,14) Plains at origin → baseline (24,24) ellipse.
+    // forest-ne is hardcoded populated → 'visible' via the populated
+    //   short-circuit, regardless of distance to home.
+    // desert-far (80,60) → outside both home's (24,24) AND forest-ne's
+    //   (20,20) baselines, but discovered → 'discovered'.
+    // coast-unknown (180,0) → discovered=false → 'unknown'.
+    expect(islandRenderState(get('home'), visionSources)).toBe('visible');
+    expect(islandRenderState(get('forest-ne'), visionSources)).toBe('visible');
+    expect(islandRenderState(get('desert-far'), visionSources)).toBe('discovered');
+    expect(islandRenderState(get('coast-unknown'), visionSources)).toBe('unknown');
+  });
+
+  it('Lighthouse extends vision: a T2 Lighthouse on the source covers an island ~41 tiles away', () => {
+    // Forest-ne-style fixture: at (40, -10), 41.2 tiles from home. Without
+    // a Lighthouse this sits well outside home's (24, 24) baseline (2.95
+    // ratio) → 'discovered'. With a `lighthouse_t2` on home at (0, 0)
+    // local → 80-tile circle centred at (0.5, 0.5) → 41.2 < 80 → 'visible'.
+    const homeWithLighthouse = makeSpec({
+      id: 'home',
+      cx: 0,
+      cy: 0,
+      majorRadius: 14,
+      minorRadius: 14,
+      populated: true,
+      discovered: true,
+      buildings: [{ id: 'lh-2', defId: 'lighthouse_t2', x: 0, y: 0 }],
+    });
+    const sourcesWithLh = computeVisionSources([homeWithLighthouse]);
+    const target = makeSpec({
+      populated: false,
+      discovered: true,
+      cx: 40,
+      cy: -10,
+    });
+    expect(islandRenderState(target, sourcesWithLh)).toBe('visible');
+    // Sanity: the same target without the Lighthouse classifies as
+    // 'discovered' under the new 10-tile baseline.
+    const sourcesBaselineOnly = computeVisionSources([
+      { ...homeWithLighthouse, buildings: [] },
+    ]);
+    expect(islandRenderState(target, sourcesBaselineOnly)).toBe('discovered');
   });
 });
 

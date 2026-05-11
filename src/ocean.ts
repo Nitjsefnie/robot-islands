@@ -28,39 +28,23 @@
 import { Container, Graphics, Sprite, Texture } from 'pixi.js';
 
 import { TILE_PX } from './island.js';
+import type { VisionSource } from './lighthouse.js';
 import {
   DISCOVERED_BLUE,
   DISCOVERY_RADIUS_TILES,
-  VISION_PADDING_TILES,
   UNKNOWN_BLUE,
   VISION_BLUE,
 } from './world.js';
 
+/** Shape consumed by the discovery-aura layer. Only the medium-blue per-
+ *  discovered-island halo reads from this; the vision tier is rendered from
+ *  the separate `VisionSource[]` list (post-Lighthouse redesign). */
 export interface OceanIsland {
   /** Centre of the island in world-tile coordinates. */
   readonly cx: number;
   readonly cy: number;
-  /** Ellipse semi-axes in tiles. Needed alongside cx/cy because the vision
-   *  halo is now a per-island ellipse — `(major + VISION_PADDING_TILES,
-   *  minor + VISION_PADDING_TILES)` — not a fixed-radius circle. The
-   *  discovery aura stays a circle of `DISCOVERY_RADIUS_TILES` so it
-   *  ignores these fields. */
-  readonly majorRadius: number;
-  readonly minorRadius: number;
   /** Whether the player has discovered this island. (Populated → discovered.) */
   readonly discovered: boolean;
-  /** Whether the island is populated (origin of vision). */
-  readonly populated: boolean;
-  /** §3.6: extra constituent ellipses accumulated from prior merges. The
-   *  renderer emits one vision sprite per constituent (primary + each extra)
-   *  so merged islands' vision halo covers the union footprint. Undefined
-   *  on single-ellipse islands — pre-merge behaviour is unchanged. */
-  readonly extraEllipses?: ReadonlyArray<{
-    readonly major: number;
-    readonly minor: number;
-    readonly offsetX: number;
-    readonly offsetY: number;
-  }>;
 }
 
 /** Width of the soft fade band at the rim, in pixels. The inner
@@ -177,10 +161,20 @@ function makeEllipseGradientSprite(
 /**
  * Build the layered ocean container.
  *
- * @param islands       All known islands with discovered/populated flags.
- * @param halfSizeTiles Half-extent of the unknown rectangle, in tiles.
- *                      Pass the same value used for the cell-grid overlay so
- *                      the ocean covers the full reachable area.
+ * @param islands        All known islands with their discovered flag — drives
+ *                       the steel-blue per-discovered-island aura. Populated
+ *                       counts as discovered (per data model); the vision
+ *                       sprites paint over those so we don't filter them.
+ * @param visionSources  The world's vision sources — baseline padded ellipses
+ *                       AND Lighthouse circles, pre-computed by
+ *                       `lighthouse.ts → computeVisionSources`. One gradient
+ *                       sprite is emitted per source; overpaint in
+ *                       overlapping regions is harmless (soft edge fade) and
+ *                       yields the union vision area without computing the
+ *                       union silhouette explicitly.
+ * @param halfSizeTiles  Half-extent of the unknown rectangle, in tiles.
+ *                       Pass the same value used for the cell-grid overlay
+ *                       so the ocean covers the full reachable area.
  * @returns A `Container` whose children draw, in this order, the unknown
  *          rectangle, then the discovery sprites, then the vision sprites.
  *          Add it as the first (bottom) child of your world container so
@@ -188,6 +182,7 @@ function makeEllipseGradientSprite(
  */
 export function renderOcean(
   islands: ReadonlyArray<OceanIsland>,
+  visionSources: ReadonlyArray<VisionSource>,
   halfSizeTiles: number,
 ): Container {
   const layer = new Container();
@@ -213,41 +208,26 @@ export function renderOcean(
     );
   }
 
-  // Tier A — vision sprites. One per populated island AND one per
-  // §3.6 extra constituent. Each is shaped as an axis-aligned ellipse with
-  // semi-axes `(major + VISION_PADDING_TILES, minor + VISION_PADDING_TILES)`
-  // so the halo hugs the island's own footprint instead of always being a
-  // fixed-radius circle. Circular biomes (e.g. Plains 14×14 → 64×64) stay
-  // visually circular; oval Coast (14×7 → 64×57) renders as a clearly
-  // oval halo. Merged islands stack one sprite per constituent — overpaint
-  // in overlapping regions is harmless (sprites composite via the soft
-  // edge fade) and yields the union vision area without computing the
-  // union silhouette explicitly.
-  for (const isl of islands) {
-    if (!isl.populated) continue;
-    const vMajorTiles = isl.majorRadius + VISION_PADDING_TILES;
-    const vMinorTiles = isl.minorRadius + VISION_PADDING_TILES;
-    layer.addChild(
-      makeEllipseGradientSprite(
-        isl.cx,
-        isl.cy,
-        vMajorTiles,
-        vMinorTiles,
-        VISION_BLUE,
-      ),
-    );
-    if (isl.extraEllipses) {
-      for (const e of isl.extraEllipses) {
-        layer.addChild(
-          makeEllipseGradientSprite(
-            isl.cx + e.offsetX,
-            isl.cy + e.offsetY,
-            e.major + VISION_PADDING_TILES,
-            e.minor + VISION_PADDING_TILES,
-            VISION_BLUE,
-          ),
-        );
-      }
+  // Tier A — vision sprites. One per VisionSource. Baseline ellipses bake
+  // an elliptical gradient (axis-aligned); Lighthouse circles bake a true
+  // circle. Overpaint where sources overlap is harmless — the soft edge
+  // fade keeps tier boundaries crisp visually while the union semantics
+  // are exact.
+  for (const src of visionSources) {
+    if (src.kind === 'ellipse') {
+      layer.addChild(
+        makeEllipseGradientSprite(
+          src.cx + src.offsetX,
+          src.cy + src.offsetY,
+          src.major,
+          src.minor,
+          VISION_BLUE,
+        ),
+      );
+    } else {
+      layer.addChild(
+        makeGradientSprite(src.cx, src.cy, src.radius, VISION_BLUE),
+      );
     }
   }
 

@@ -99,6 +99,13 @@ const KNOWN_DEF_IDS: ReadonlyArray<BuildingDefId> = [
   'coal_furnace',
   'geothermal_vent',
   'plasma_heater',
+  // Lighthouse vision tiers (§15.x — Lighthouse vision)
+  'lighthouse_t1',
+  'lighthouse_t2',
+  'lighthouse_t3',
+  'lighthouse_t4',
+  'lighthouse_t5',
+  'lighthouse_t6',
 ];
 
 // Helper: build a minimal IslandSpec for the canPlaceOnIsland tests. The

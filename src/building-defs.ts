@@ -178,7 +178,17 @@ export type BuildingDefId =
   // flag is set on the existing T4 power def below.)
   | 'coal_furnace'
   | 'geothermal_vent'
-  | 'plasma_heater';
+  | 'plasma_heater'
+  // Vision-extending Lighthouse buildings (§15.x — Lighthouse vision). Six
+  // tiers spanning T1-T6; vision radius (in tiles) lives in
+  // `lighthouse.ts → LIGHTHOUSE_VISION_RADII`. T1 is zero-power (cheap
+  // signal beacon); T2+ consumes power so each tier has an upkeep.
+  | 'lighthouse_t1'
+  | 'lighthouse_t2'
+  | 'lighthouse_t3'
+  | 'lighthouse_t4'
+  | 'lighthouse_t5'
+  | 'lighthouse_t6';
 
 /**
  * §4.5 buff-adjacency entry: per matching 4-neighbor, multiply the building's
@@ -1495,6 +1505,96 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     stroke: 0x10204a,
     power: { consumes: 5000 },
     glyph: '✺',
+  },
+  // -------------------------------------------------------------------------
+  // Lighthouse vision (§15.x). Six tiers extending the baseline 10-tile
+  // padding ellipse. Vision radius (in tiles) lives in lighthouse.ts →
+  // LIGHTHOUSE_VISION_RADII; the economy doesn't read it. Recipes / build
+  // costs are deferred — placement is free pre-§14, and once §14 costs land
+  // the table below moves into `def.placementCost`:
+  //
+  //   T1: 20 stone + 5 wood                    // Lighthouse placeholder — tune in Appendix A
+  //   T2: 50 stone + 10 steel + 2 glass_panel  // Lighthouse placeholder — tune in Appendix A
+  //   T3: 100 steel + 20 microchip             // Lighthouse placeholder — tune in Appendix A
+  //   T4: 200 steel + 50 microchip + 10 fiber_optic   // Lighthouse placeholder — tune in Appendix A
+  //   T5: 500 reality_anchor + T5 components   // Lighthouse placeholder — tune in Appendix A
+  //   T6: 1000 antimatter-tier components,     // Lighthouse placeholder — tune in Appendix A
+  //       ascendant-gated.
+  //
+  // No recipes (passive vision beacons). T1 is zero-power; T2-T6 consume
+  // increasing power so each tier carries an upkeep.
+  lighthouse_t1: {
+    id: 'lighthouse_t1',
+    displayName: 'Lighthouse T1',
+    category: 'special',
+    tier: 1,
+    width: 1,
+    height: 1,
+    fill: 0xd4c898, // pale sand
+    stroke: 0x484028,
+    // Zero-power signal beacon. No `power` declaration so the economy
+    // skips it on both produce and consume sides.
+    glyph: '⛯',
+  },
+  lighthouse_t2: {
+    id: 'lighthouse_t2',
+    displayName: 'Lighthouse T2',
+    category: 'special',
+    tier: 2,
+    width: 1,
+    height: 1,
+    fill: 0xd0d0d0, // weathered concrete
+    stroke: 0x404040,
+    power: { consumes: 10 },
+    glyph: '⛯',
+  },
+  lighthouse_t3: {
+    id: 'lighthouse_t3',
+    displayName: 'Lighthouse T3',
+    category: 'special',
+    tier: 3,
+    width: 1,
+    height: 1,
+    fill: 0xb0c8e0, // pale steel
+    stroke: 0x304058,
+    power: { consumes: 25 },
+    glyph: '⛯',
+  },
+  lighthouse_t4: {
+    id: 'lighthouse_t4',
+    displayName: 'Lighthouse T4',
+    category: 'special',
+    tier: 4,
+    width: 1,
+    height: 1,
+    fill: 0x90b8d0, // sky-instrument
+    stroke: 0x203040,
+    power: { consumes: 60 },
+    glyph: '⛯',
+  },
+  lighthouse_t5: {
+    id: 'lighthouse_t5',
+    displayName: 'Lighthouse T5',
+    category: 'special',
+    tier: 5,
+    width: 1,
+    height: 1,
+    fill: 0xc080e0, // transcendent violet
+    stroke: 0x400060,
+    power: { consumes: 150 },
+    glyph: '⛯',
+  },
+  lighthouse_t6: {
+    id: 'lighthouse_t6',
+    displayName: 'Lighthouse T6',
+    category: 'special',
+    tier: 6,
+    width: 1,
+    height: 1,
+    fill: 0xe0c060, // ascendant gold
+    stroke: 0x504010,
+    power: { consumes: 400 },
+    glyph: '⛯',
   },
 };
 

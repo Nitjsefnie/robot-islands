@@ -42,13 +42,18 @@ import { generateWorld } from './world-gen.js';
 /** Stratification cell side length, in tiles. SPEC §2.1 calls this R. */
 export const CELL_SIZE_TILES = 16;
 /** Padding (in tiles) extending past each island's ellipse edge to form the
- *  vision area. A populated island's vision footprint is an axis-aligned
- *  ellipse with semi-axes `(majorRadius + VISION_PADDING_TILES,
+ *  baseline vision area. A populated island's baseline vision footprint is an
+ *  axis-aligned ellipse with semi-axes `(majorRadius + VISION_PADDING_TILES,
  *  minorRadius + VISION_PADDING_TILES)` centered on the island. Replaces the
  *  earlier fixed-radius circle (80 from center) which over-reached for big
- *  circular biomes and under-conveyed "scanned-around-the-coast" for
- *  oval Coast islands. */
-export const VISION_PADDING_TILES = 50;
+ *  circular biomes.
+ *
+ *  Lighthouse-vision redesign (§15.x): padding dropped from 50 → 10 — the
+ *  baseline now reads as "you can see the immediate waters off your own
+ *  coast" rather than auto-granting 50 tiles of free intel on every settle.
+ *  Distant scouting now requires Lighthouse infrastructure
+ *  (`lighthouse.ts → computeVisionSources`). */
+export const VISION_PADDING_TILES = 10;
 /** Discovery aura radius around any discovered island, in tiles. Placeholder:
  *  ~1.5 cells. Drives the medium-blue ocean tier in `renderOcean`. */
 export const DISCOVERY_RADIUS_TILES = 24;
@@ -378,6 +383,12 @@ export function islandTileCount(spec: IslandSpec): number {
  * can pass plain ellipse fixtures; if `extraEllipses` is present (the field
  * lives on `IslandSpec` but isn't part of the minimal `Pick`), each extra
  * contributes its own padded ellipse to the union.
+ *
+ * NOTE: The Lighthouse-vision redesign moved the renderer over to
+ * `lighthouse.ts → computeVisionSources` + `pointInVision`. This helper is
+ * deliberately kept as a stand-alone "is this point inside the baseline
+ * padded ellipse of source X?" primitive — handy for any future code that
+ * needs per-source vision checks without building a full VisionSource[].
  */
 export function pointInVisionEllipse(
   p: Pick<IslandSpec, 'cx' | 'cy' | 'majorRadius' | 'minorRadius'> & {
@@ -412,27 +423,57 @@ export function pointInVisionEllipse(
  *
  *   1. populated                                 → 'visible'
  *   2. !discovered                               → 'unknown'
- *   3. inside any populated island's vision      → 'visible'
+ *   3. ANY constituent centre is inside some VisionSource → 'visible'
  *   4. otherwise                                 → 'discovered'
  *
- * Vision is per-source elliptical, defined by `pointInVisionEllipse` —
- * `(majorRadius + VISION_PADDING_TILES, minorRadius + VISION_PADDING_TILES)`
- * around each populated source.
+ * Vision is the UNION of `VisionSource` entries pre-computed by
+ * `lighthouse.ts → computeVisionSources`: baseline padded ellipses (one per
+ * populated constituent) plus Lighthouse circles. For merged islands the
+ * test checks every constituent centre — the island reads as visible if any
+ * of its constituents sits inside any source.
  */
 export function islandRenderState(
   spec: IslandSpec,
-  populated: ReadonlyArray<
-    Pick<IslandSpec, 'cx' | 'cy' | 'majorRadius' | 'minorRadius'> & {
-      readonly extraEllipses?: IslandSpec['extraEllipses'];
-    }
-  >,
+  sources: ReadonlyArray<import('./lighthouse.js').VisionSource>,
 ): IslandRenderState {
   if (spec.populated) return 'visible';
   if (!spec.discovered) return 'unknown';
-  for (const p of populated) {
-    if (pointInVisionEllipse(p, spec.cx, spec.cy)) return 'visible';
+  // §3.6 merged-island handling: an island is visible if ANY of its
+  // constituent centres lies inside any vision source. For a single-ellipse
+  // island this collapses to the natural "is the centre in vision?" check.
+  for (const c of islandConstituents(spec)) {
+    if (
+      pointInVisionTest(sources, spec.cx + c.offsetX, spec.cy + c.offsetY)
+    ) {
+      return 'visible';
+    }
   }
   return 'discovered';
+}
+
+/** Inline copy of `pointInVision` (lighthouse.ts) so `islandRenderState`
+ *  doesn't pull in a runtime import that creates a circular dependency with
+ *  `world.ts`. Kept tightly synced — both implementations are trivial and
+ *  the test suite exercises both via the lighthouse + world test files. */
+function pointInVisionTest(
+  sources: ReadonlyArray<import('./lighthouse.js').VisionSource>,
+  x: number,
+  y: number,
+): boolean {
+  for (const src of sources) {
+    if (src.kind === 'ellipse') {
+      const dx = x - (src.cx + src.offsetX);
+      const dy = y - (src.cy + src.offsetY);
+      if ((dx * dx) / (src.major * src.major) + (dy * dy) / (src.minor * src.minor) <= 1) {
+        return true;
+      }
+    } else {
+      const dx = x - src.cx;
+      const dy = y - src.cy;
+      if (dx * dx + dy * dy <= src.radius * src.radius) return true;
+    }
+  }
+  return false;
 }
 
 /**

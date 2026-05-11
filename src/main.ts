@@ -47,6 +47,7 @@ import {
   makeRegistry,
 } from './input.js';
 import { TILE_PX } from './island.js';
+import { computeVisionSources } from './lighthouse.js';
 import { renderOcean } from './ocean.js';
 import { loadWorld, saveWorld } from './persistence.js';
 import { mountSettingsUi } from './settings-ui.js';
@@ -140,20 +141,20 @@ async function main(): Promise<void> {
   const gridLayer = renderCellGrid(WORLD_HALF_SIZE_TILES);
   world.addChild(gridLayer);
 
-  /** Helpers — bake an ocean layer from current world state. */
+  /** Helpers — bake an ocean layer from current world state. The vision
+   *  layer reads the world's `VisionSource[]` (baseline padded ellipses +
+   *  Lighthouse circles), pre-computed from the same populated set the
+   *  island classifier uses. */
   function renderOceanFromState(ws: WorldState, halfSize: number): Container {
+    const populated = ws.islands.filter((s) => s.populated);
+    const visionSources = computeVisionSources(populated);
     return renderOcean(
       ws.islands.map((s) => ({
         cx: s.cx,
         cy: s.cy,
-        majorRadius: s.majorRadius,
-        minorRadius: s.minorRadius,
         discovered: s.discovered,
-        populated: s.populated,
-        // §3.6: forward each constituent so merged islands' vision halo
-        // covers the union, not just the primary footprint.
-        extraEllipses: s.extraEllipses,
       })),
+      visionSources,
       halfSize,
     );
   }
@@ -161,8 +162,9 @@ async function main(): Promise<void> {
     const layer = new Container();
     layer.label = 'islands';
     const populated = ws.islands.filter((s) => s.populated);
+    const visionSources = computeVisionSources(populated);
     for (const spec of ws.islands) {
-      const state = islandRenderState(spec, populated);
+      const state = islandRenderState(spec, visionSources);
       const c = renderIsland(spec, state);
       if (c) layer.addChild(c);
     }

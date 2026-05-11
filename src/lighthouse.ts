@@ -1,0 +1,143 @@
+// Lighthouse-based vision (§15.x — vision redesign).
+//
+// Pure layer: no PixiJS, no DOM. Builds the world's vision source set from
+// the populated-island catalog plus any Lighthouse buildings sitting on them.
+// Two source shapes:
+//
+//   - 'ellipse' — the baseline per-island vision halo. Every populated
+//     constituent contributes one ellipse at `(major + 10, minor + 10)`.
+//     Small footprint padding ("you can see the immediate waters off your
+//     own coast"); distant scouting requires Lighthouse infrastructure.
+//   - 'circle' — a per-Lighthouse vision disc. The radius is a function of
+//     the lighthouse's tier (`LIGHTHOUSE_VISION_RADII[defId]`) and the
+//     centre is the Lighthouse's world-tile position.
+//
+// `pointInVision` is the union test: a point is in vision iff it lies inside
+// any source.
+
+import { BUILDING_DEFS } from './building-defs.js';
+import {
+  VISION_PADDING_TILES,
+  islandConstituents,
+  type IslandSpec,
+} from './world.js';
+
+/** Lighthouse defId → vision radius in tiles. Single source of truth.
+ *  T1-T4 carry tuned placeholder values; T5/T6 are flagged.
+ *
+ *  Lighthouse placeholder — tune in Appendix A. */
+export const LIGHTHOUSE_VISION_RADII: Readonly<Record<string, number>> = {
+  lighthouse_t1: 50,
+  lighthouse_t2: 80,
+  lighthouse_t3: 120,
+  lighthouse_t4: 160,
+  lighthouse_t5: 220,
+  lighthouse_t6: 300,
+};
+
+/** A vision-emitting source in world-tile coordinates.
+ *
+ *  `ellipse` is the baseline padded per-island vision halo:
+ *  axis-aligned, semi-axes `(major, minor)`, centred at `(cx + offsetX,
+ *  cy + offsetY)` where `(cx, cy)` is the island centre and `(offsetX,
+ *  offsetY)` is the constituent offset (0,0 for a single-ellipse island).
+ *
+ *  `circle` is a per-Lighthouse vision disc: centred at the Lighthouse's
+ *  world-tile position, with the tier-dependent radius from
+ *  `LIGHTHOUSE_VISION_RADII`. */
+export type VisionSource =
+  | {
+      readonly kind: 'ellipse';
+      readonly cx: number;
+      readonly cy: number;
+      readonly major: number;
+      readonly minor: number;
+      readonly offsetX: number;
+      readonly offsetY: number;
+    }
+  | {
+      readonly kind: 'circle';
+      readonly cx: number;
+      readonly cy: number;
+      readonly radius: number;
+    };
+
+/**
+ * Build the full set of vision sources for the current world. Walks every
+ * populated island and emits:
+ *   1. One baseline padded ellipse per constituent (primary + each
+ *      `extraEllipses` entry, per §3.6 merge semantics).
+ *   2. One circle source per Lighthouse building placed on the island,
+ *      using the tier-dependent radius from `LIGHTHOUSE_VISION_RADII`.
+ *
+ * A Lighthouse's world position is computed as the centre of its footprint:
+ * `(spec.cx + offsetX + building.x + width / 2,
+ *   spec.cy + offsetY + building.y + height / 2)`.
+ *
+ * For merged islands every building still lives in the absorber's local
+ * frame — `performMerge` shifts coordinates at absorption time — so the
+ * primary constituent (offset 0,0) is the correct attribution for the
+ * Lighthouse position. The walk over `extraEllipses` here only emits
+ * baseline ellipses, NOT extra building loops; the spec's `buildings`
+ * array is already shared across the whole merged identity.
+ *
+ * Pure — no PixiJS, no DOM, no mutations. Caller-owns the returned array.
+ */
+export function computeVisionSources(
+  populated: ReadonlyArray<IslandSpec>,
+): VisionSource[] {
+  const out: VisionSource[] = [];
+  for (const spec of populated) {
+    // 1) Baseline padded ellipse per constituent. Primary at offset (0,0),
+    //    each `extraEllipses` entry contributes its own ellipse.
+    for (const c of islandConstituents(spec)) {
+      out.push({
+        kind: 'ellipse',
+        cx: spec.cx,
+        cy: spec.cy,
+        major: c.major + VISION_PADDING_TILES,
+        minor: c.minor + VISION_PADDING_TILES,
+        offsetX: c.offsetX,
+        offsetY: c.offsetY,
+      });
+    }
+    // 2) Lighthouse circles. Walk the spec's `buildings` array; defId
+    //    lookup via LIGHTHOUSE_VISION_RADII gates Lighthouse vs other
+    //    defs. The merge-time coordinate shift means every building's
+    //    (x, y) is already in the absorber's local frame.
+    for (const b of spec.buildings) {
+      const radius = LIGHTHOUSE_VISION_RADII[b.defId];
+      if (radius === undefined) continue;
+      const def = BUILDING_DEFS[b.defId];
+      out.push({
+        kind: 'circle',
+        cx: spec.cx + b.x + def.width / 2,
+        cy: spec.cy + b.y + def.height / 2,
+        radius,
+      });
+    }
+  }
+  return out;
+}
+
+/** Is point (x, y) in world-tile coords inside any vision source? Pure. */
+export function pointInVision(
+  sources: ReadonlyArray<VisionSource>,
+  x: number,
+  y: number,
+): boolean {
+  for (const src of sources) {
+    if (src.kind === 'ellipse') {
+      const dx = x - (src.cx + src.offsetX);
+      const dy = y - (src.cy + src.offsetY);
+      if ((dx * dx) / (src.major * src.major) + (dy * dy) / (src.minor * src.minor) <= 1) {
+        return true;
+      }
+    } else {
+      const dx = x - src.cx;
+      const dy = y - src.cy;
+      if (dx * dx + dy * dy <= src.radius * src.radius) return true;
+    }
+  }
+  return false;
+}
