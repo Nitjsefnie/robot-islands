@@ -41,8 +41,14 @@ import { generateWorld } from './world-gen.js';
 
 /** Stratification cell side length, in tiles. SPEC §2.1 calls this R. */
 export const CELL_SIZE_TILES = 16;
-/** Vision radius from a populated island, in tiles. Placeholder: 5 cells. */
-export const VISION_RADIUS_TILES = 5 * CELL_SIZE_TILES;
+/** Padding (in tiles) extending past each island's ellipse edge to form the
+ *  vision area. A populated island's vision footprint is an axis-aligned
+ *  ellipse with semi-axes `(majorRadius + VISION_PADDING_TILES,
+ *  minorRadius + VISION_PADDING_TILES)` centered on the island. Replaces the
+ *  earlier fixed-radius circle (80 from center) which over-reached for big
+ *  circular biomes and under-conveyed "scanned-around-the-coast" for
+ *  oval Coast islands. */
+export const VISION_PADDING_TILES = 50;
 /** Discovery aura radius around any discovered island, in tiles. Placeholder:
  *  ~1.5 cells. Drives the medium-blue ocean tier in `renderOcean`. */
 export const DISCOVERY_RADIUS_TILES = 24;
@@ -158,6 +164,28 @@ export function findPopulatedIslandAt(
 }
 
 /**
+ * World-axis-aligned vision ellipse for a populated source island. Centered
+ * at `(p.cx, p.cy)` with semi-axes
+ * `(p.majorRadius + VISION_PADDING_TILES, p.minorRadius + VISION_PADDING_TILES)`.
+ * A test point `(px, py)` is in vision iff
+ * `((px-p.cx)²)/a² + ((py-p.cy)²)/b² ≤ 1`.
+ *
+ * Boundary is inclusive to match the test convention from the legacy fixed-
+ * radius vision function.
+ */
+export function pointInVisionEllipse(
+  p: Pick<IslandSpec, 'cx' | 'cy' | 'majorRadius' | 'minorRadius'>,
+  px: number,
+  py: number,
+): boolean {
+  const a = p.majorRadius + VISION_PADDING_TILES;
+  const b = p.minorRadius + VISION_PADDING_TILES;
+  const dx = px - p.cx;
+  const dy = py - p.cy;
+  return (dx * dx) / (a * a) + (dy * dy) / (b * b) <= 1;
+}
+
+/**
  * Classify a single island into one of three render states.
  *
  * Logic (the population short-circuit means we don't have to set
@@ -168,17 +196,19 @@ export function findPopulatedIslandAt(
  *   2. !discovered                               → 'unknown'
  *   3. inside any populated island's vision      → 'visible'
  *   4. otherwise                                 → 'discovered'
+ *
+ * Vision is per-source elliptical, defined by `pointInVisionEllipse` —
+ * `(majorRadius + VISION_PADDING_TILES, minorRadius + VISION_PADDING_TILES)`
+ * around each populated source.
  */
 export function islandRenderState(
   spec: IslandSpec,
-  populatedCentres: ReadonlyArray<{ cx: number; cy: number }>,
-  radiusTiles: number,
+  populated: ReadonlyArray<Pick<IslandSpec, 'cx' | 'cy' | 'majorRadius' | 'minorRadius'>>,
 ): IslandRenderState {
   if (spec.populated) return 'visible';
   if (!spec.discovered) return 'unknown';
-  const r2 = radiusTiles * radiusTiles;
-  for (const p of populatedCentres) {
-    if (distSqTiles(spec.cx, spec.cy, p.cx, p.cy) <= r2) return 'visible';
+  for (const p of populated) {
+    if (pointInVisionEllipse(p, spec.cx, spec.cy)) return 'visible';
   }
   return 'discovered';
 }

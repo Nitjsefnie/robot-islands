@@ -68,7 +68,6 @@ import {
   makeInitialWorld,
   renderIsland,
   tileToWorldPx,
-  VISION_RADIUS_TILES,
   type IslandSpec,
   type WorldState,
 } from './world.js';
@@ -145,6 +144,8 @@ async function main(): Promise<void> {
       ws.islands.map((s) => ({
         cx: s.cx,
         cy: s.cy,
+        majorRadius: s.majorRadius,
+        minorRadius: s.minorRadius,
         discovered: s.discovered,
         populated: s.populated,
       })),
@@ -155,9 +156,8 @@ async function main(): Promise<void> {
     const layer = new Container();
     layer.label = 'islands';
     const populated = ws.islands.filter((s) => s.populated);
-    const populatedCentres = populated.map((s) => ({ cx: s.cx, cy: s.cy }));
     for (const spec of ws.islands) {
-      const state = islandRenderState(spec, populatedCentres, VISION_RADIUS_TILES);
+      const state = islandRenderState(spec, populated);
       const c = renderIsland(spec, state);
       if (c) layer.addChild(c);
     }

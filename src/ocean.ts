@@ -31,15 +31,22 @@ import { TILE_PX } from './island.js';
 import {
   DISCOVERED_BLUE,
   DISCOVERY_RADIUS_TILES,
+  VISION_PADDING_TILES,
   UNKNOWN_BLUE,
   VISION_BLUE,
-  VISION_RADIUS_TILES,
 } from './world.js';
 
 export interface OceanIsland {
   /** Centre of the island in world-tile coordinates. */
   readonly cx: number;
   readonly cy: number;
+  /** Ellipse semi-axes in tiles. Needed alongside cx/cy because the vision
+   *  halo is now a per-island ellipse — `(major + VISION_PADDING_TILES,
+   *  minor + VISION_PADDING_TILES)` — not a fixed-radius circle. The
+   *  discovery aura stays a circle of `DISCOVERY_RADIUS_TILES` so it
+   *  ignores these fields. */
+  readonly majorRadius: number;
+  readonly minorRadius: number;
   /** Whether the player has discovered this island. (Populated → discovered.) */
   readonly discovered: boolean;
   /** Whether the island is populated (origin of vision). */
@@ -110,7 +117,9 @@ function buildRadialGradientTexture(
   return Texture.from(canvas);
 }
 
-/** Helper: build a centred sprite from a freshly-baked gradient texture. */
+/** Helper: build a centred sprite from a freshly-baked CIRCULAR gradient
+ *  texture. Used by the discovery aura (which stays a true circle).
+ */
 function makeGradientSprite(
   centreXTiles: number,
   centreYTiles: number,
@@ -122,6 +131,36 @@ function makeGradientSprite(
   const s = new Sprite(tex);
   s.anchor.set(0.5);
   s.position.set(centreXTiles * TILE_PX, centreYTiles * TILE_PX);
+  return s;
+}
+
+/** Helper: build a centred sprite shaped as an axis-aligned ellipse with
+ *  semi-axes `(majorTiles, minorTiles)`. The underlying texture is a circular
+ *  radial gradient sized for the LARGER axis, then non-uniformly scaled so
+ *  the shorter axis squashes the circle into an ellipse. Circular biomes
+ *  (`major === minor`) stay perfectly circular (scale 1, 1).
+ *
+ *  Trade-off: `EDGE_FADE_PX` is in screen pixels of the baked texture, so it
+ *  also gets squashed by the non-uniform scale on the shorter axis. For
+ *  shapes like Coast (14, 7) → vision (64, 57) the minor-axis fade band
+ *  reads as ~21px instead of 24px — within AA-band tolerance, no visible
+ *  staircase. Worth accepting versus the cost of baking a dedicated
+ *  ellipse-shaped gradient texture per source island.
+ */
+function makeEllipseGradientSprite(
+  centreXTiles: number,
+  centreYTiles: number,
+  majorTiles: number,
+  minorTiles: number,
+  colorHex: number,
+): Sprite {
+  const maxAxisTiles = Math.max(majorTiles, minorTiles);
+  const radiusPx = maxAxisTiles * TILE_PX;
+  const tex = buildRadialGradientTexture(radiusPx, EDGE_FADE_PX, colorHex);
+  const s = new Sprite(tex);
+  s.anchor.set(0.5);
+  s.position.set(centreXTiles * TILE_PX, centreYTiles * TILE_PX);
+  s.scale.set(majorTiles / maxAxisTiles, minorTiles / maxAxisTiles);
   return s;
 }
 
@@ -164,13 +203,25 @@ export function renderOcean(
     );
   }
 
-  // Tier A — vision sprites. One per populated island. Largest radius, so
-  // they reach across to include nearby discovered islands like 'forest-ne'
-  // (which sits at distance ~41 inside an 80-tile vision radius).
+  // Tier A — vision sprites. One per populated island. Each is shaped as an
+  // axis-aligned ellipse with semi-axes
+  // `(majorRadius + VISION_PADDING_TILES, minorRadius + VISION_PADDING_TILES)`
+  // so the halo hugs the island's own footprint instead of always being a
+  // fixed-radius circle. Circular biomes (e.g. Plains 14×14 → 64×64) stay
+  // visually circular; oval Coast (14×7 → 64×57) renders as a clearly
+  // oval halo.
   for (const isl of islands) {
     if (!isl.populated) continue;
+    const vMajorTiles = isl.majorRadius + VISION_PADDING_TILES;
+    const vMinorTiles = isl.minorRadius + VISION_PADDING_TILES;
     layer.addChild(
-      makeGradientSprite(isl.cx, isl.cy, VISION_RADIUS_TILES, VISION_BLUE),
+      makeEllipseGradientSprite(
+        isl.cx,
+        isl.cy,
+        vMajorTiles,
+        vMinorTiles,
+        VISION_BLUE,
+      ),
     );
   }
 
