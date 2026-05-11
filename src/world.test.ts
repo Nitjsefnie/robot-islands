@@ -291,25 +291,41 @@ describe('makeInitialWorld — §3.7 fresh-game contract', () => {
     expect(w.vehicles).toEqual([]);
   });
 
-  it("home's initial IslandState carries EMPTY inventory (§3.7 'no starter resources, no Foundation Kit')", () => {
-    // §3.7 contract — the inventory check is THE load-bearing assertion,
-    // not just buildings. Pre-cleanup `startingInventory()` seeded
-    // `coal: 200`, `biofuel: 100`, `foundation_kit: 3`; this test pins
-    // the cleanup so any future regression that re-introduces a starter
-    // resource fails loudly. Mirrors the main.ts fresh-game path:
-    // `makeInitialIslandState(home, perfNow)` — that's the exact value
-    // that lands in the running game.
+  it("home's initial IslandState carries a §14 starter bootstrap kit (not empty — see startingInventory)", () => {
+    // §3.7 originally specified "Empty inventory: no starter resources, no
+    // Foundation Kit." That all-zero rule held pre-§14 when placement was
+    // free — the player just placed Solar + Mine + Workshop and production
+    // filled inventory before any material gate kicked in. §14 added
+    // placement costs (every T1 building needs stone + wood), which makes
+    // the all-zero starter unplayable: with no Mine, no extraction, the
+    // player can't bootstrap. The starter bundle below INTENTIONALLY
+    // contradicts §3.7's literal "empty" rule (see `startingInventory` in
+    // world.ts for the justification).
+    //
+    // Pins the §14 starter contract so a future regression to all-zero
+    // (or to a heavier seed) fails loudly. The kit gives enough for the
+    // first ~3-4 T1 buildings (Mine + Coal Gen + Antenna T1 + spare):
+    //   stone: 60, wood: 40, foundation_kit: 1
     const w = makeInitialWorld(0);
     const home = w.islands.find((s) => s.id === 'home')!;
     const state = makeInitialIslandState(home, 0);
-    for (const r of ALL_RESOURCES) {
-      expect(state.inventory[r], `inventory.${r} should be 0`).toBe(0);
-    }
-    // Spot-check the three resources the pre-§3.7 seed overrode — these
-    // are the canonical regression sentinels.
+    // The starter bundle resources land at the §14-tuned figures.
+    expect(state.inventory.stone).toBe(60);
+    expect(state.inventory.wood).toBe(40);
+    expect(state.inventory.foundation_kit).toBe(1);
+    // Every other resource stays at 0 — the kit is INTENTIONALLY minimal,
+    // not a "skip the early game" seed. Pre-§3.7 regression sentinels
+    // (coal/biofuel) still pin to 0 to catch any drift back to the
+    // heavily-seeded pre-cleanup state.
     expect(state.inventory.coal).toBe(0);
     expect(state.inventory.biofuel).toBe(0);
-    expect(state.inventory.foundation_kit).toBe(0);
+    expect(state.inventory.iron_ore).toBe(0);
+    expect(state.inventory.iron_ingot).toBe(0);
+    // Every NON-starter resource is 0.
+    for (const r of ALL_RESOURCES) {
+      if (r === 'stone' || r === 'wood' || r === 'foundation_kit') continue;
+      expect(state.inventory[r], `inventory.${r} should be 0`).toBe(0);
+    }
   });
 
   it("home's initial IslandState starts at level 1, XP 0, no skill points, no specialization", () => {

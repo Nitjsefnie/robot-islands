@@ -28,12 +28,15 @@ import { BUILDING_DEFS, type BuildingDefId } from './building-defs.js';
 import type { IslandState } from './economy.js';
 import { TILE_PX } from './island.js';
 import {
+  affordabilityShortfall,
   footprintTiles,
   placeBuilding,
+  placementCostFor,
   validatePlacement,
   type PlacementReason,
   type Rotation,
 } from './placement.js';
+import type { ResourceId } from './recipes.js';
 import { VISION_BLUE, tileToWorldPx, type IslandSpec } from './world.js';
 
 // Color tokens — match the drone-reticle "ok = cyan / warn = amber" pattern.
@@ -95,7 +98,25 @@ const REASON_LABEL: Readonly<Record<PlacementReason, string>> = {
   'def-not-unlocked': 'LOCKED',
   'biome-locked': 'BIOME MISMATCH',
   'tile-requirement-not-met': 'TILE MISMATCH',
+  'insufficient-resources': 'INSUFFICIENT RESOURCES',
 };
+
+/** Pretty-print a §14 shortfall record as "NEED 5 STONE, 3 WOOD" for the
+ *  validation status line / disabled-place-button label. Falls back to the
+ *  generic INSUFFICIENT RESOURCES label when the record is empty
+ *  (defensive — the validator only emits `insufficient-resources` with a
+ *  non-empty missing record). */
+function formatMissing(
+  missing: Partial<Record<ResourceId, number>>,
+): string {
+  const parts: string[] = [];
+  for (const [r, n] of Object.entries(missing) as Array<[ResourceId, number]>) {
+    if (n <= 0) continue;
+    parts.push(`${n} ${r.toUpperCase().replace(/_/g, ' ')}`);
+  }
+  if (parts.length === 0) return REASON_LABEL['insufficient-resources'];
+  return `NEED ${parts.join(', ')}`;
+}
 
 // ---------------------------------------------------------------------------
 // Stable id generator — sessions-local
@@ -208,10 +229,46 @@ export function mountPlacementUi(deps: PlacementUiDeps): PlacementUiHandle {
     // Status label in screen space. Positioned offset from cursor so it
     // doesn't sit underneath it (cursor pointer would obscure the first
     // glyph on most platforms).
+    //
+    // The label has three pieces:
+    //   1. Building name + footprint (always shown).
+    //   2. Validation tail (only on failure). On `insufficient-resources`
+    //      the tail expands to "NEED 5 STONE, 3 WOOD" via `formatMissing`
+    //      so the player learns exactly what's short without consulting
+    //      the cost row.
+    //   3. Cost row (always shown) — listing every cost entry in
+    //      "20 STONE, 10 WOOD" form. The cost row colours its entries
+    //      red when short and the OK colour when affordable, summarising
+    //      the §14 affordability snapshot at a glance even when the
+    //      cursor is over a valid tile.
     const labelMain = `${def.displayName.toUpperCase()} ${def.width}×${def.height}`;
-    const labelTail = v.ok ? '' : `  ·  ${REASON_LABEL[v.reason ?? 'out-of-bounds']}`;
-    labelText.text = labelMain + labelTail;
-    labelText.style.fill = color;
+    const labelTail = v.ok
+      ? ''
+      : v.reason === 'insufficient-resources' && v.missing
+        ? `  ·  ${formatMissing(v.missing)}`
+        : `  ·  ${REASON_LABEL[v.reason ?? 'out-of-bounds']}`;
+    // §14 cost row — always rendered, summarising the basket regardless of
+    // current cursor state. Computed from inventory vs def cost; per-entry
+    // sufficiency is the input for the cost-row colour decision.
+    const cost = placementCostFor(def);
+    const shortfall = affordabilityShortfall(targetState.inventory, cost);
+    const costEntries: Array<[ResourceId, number]> = Object.entries(
+      cost,
+    ) as Array<[ResourceId, number]>;
+    const costStr =
+      costEntries.length === 0
+        ? ''
+        : costEntries
+            .map(([r, n]) => `${n} ${r.toUpperCase().replace(/_/g, ' ')}`)
+            .join(', ');
+    const costShort = Object.keys(shortfall).length > 0;
+    labelText.text =
+      labelMain + labelTail + (costStr ? `\nCOST: ${costStr}` : '');
+    // Cost-row colour: red when ANY cost entry is short on inventory, OK
+    // colour otherwise. The validation tail's own colour (which drives the
+    // main `color` var) is independent — geometry failures still paint the
+    // outline amber even when the cost is affordable.
+    labelText.style.fill = costShort ? WARN_COLOR : color;
     // Lay out the background rectangle behind the text for legibility — same
     // panel-bg colour as the side docks but with no border.
     const padX = 6;
@@ -282,7 +339,11 @@ export function mountPlacementUi(deps: PlacementUiDeps): PlacementUiHandle {
       rotation,
     );
     if (!v.ok) return { ok: false, reason: v.reason };
-    placeBuilding(
+    // §14: `placeBuilding` re-checks the cost gate between validate and
+    // commit (defensive: another sibling production tick could have
+    // consumed inventory in the gap). On the rare race, fall through to
+    // the same `insufficient-resources` reason the validator emits.
+    const result = placeBuilding(
       targetSpec,
       targetState,
       activeDefId,
@@ -291,6 +352,7 @@ export function mountPlacementUi(deps: PlacementUiDeps): PlacementUiHandle {
       rotation,
       nextPlacedId,
     );
+    if (!result.ok) return { ok: false, reason: result.reason };
     cancel();
     deps.onPlaced();
     return { ok: true };

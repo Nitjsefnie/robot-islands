@@ -28,7 +28,7 @@
 // is pure: takes a spec + state + def id + anchor + rotation, returns a
 // validation verdict, optionally appends a new PlacedBuilding.
 
-import { BUILDING_DEFS, buildingUnlocked, canPlaceOnIsland, type BuildingDefId } from './building-defs.js';
+import { BUILDING_DEFS, buildingUnlocked, canPlaceOnIsland, type BuildingDef, type BuildingDefId } from './building-defs.js';
 import type { PlacedBuilding } from './buildings.js';
 import type { IslandState } from './economy.js';
 import { tileInscribedInEllipse } from './island.js';
@@ -130,17 +130,56 @@ export function rotatedDims(
  *  rotated footprint that isn't inscribed in the island ellipse (§3.4).
  *  `tile-requirement-not-met` fires when `def.requiredTile` is set and at
  *  least one footprint tile's TerrainKind isn't in the allowed set — §4.3
- *  ("All terrain-tile requirements are satisfied"). */
+ *  ("All terrain-tile requirements are satisfied"). §14 adds
+ *  `insufficient-resources` for the placement-cost gate. */
 export type PlacementReason =
   | 'out-of-bounds'
   | 'overlap'
   | 'def-not-unlocked'
   | 'biome-locked'
-  | 'tile-requirement-not-met';
+  | 'tile-requirement-not-met'
+  | 'insufficient-resources';
 
 export interface PlacementValidation {
   readonly ok: boolean;
   readonly reason?: PlacementReason;
+  /** When `reason === 'insufficient-resources'`, lists shortfall per
+   *  resource (needed − have, > 0 entries only). Undefined otherwise. */
+  readonly missing?: Partial<Record<ResourceId, number>>;
+}
+
+// ---------------------------------------------------------------------------
+// §14 placement-cost helpers
+// ---------------------------------------------------------------------------
+
+/** Pure: given a def, return its placement-cost basket (empty record if the
+ *  def has no `placementCost`). Wraps the optional field so callers can
+ *  iterate `Object.entries` without an `??` everywhere. */
+export function placementCostFor(
+  def: BuildingDef,
+): Partial<Record<ResourceId, number>> {
+  return def.placementCost ?? {};
+}
+
+/** Pure: compute the shortfall per resource for a placement cost against the
+ *  player's current inventory. Returns the empty record when the player can
+ *  afford the placement (every cost entry covered).
+ *
+ *  Used by `validatePlacement` for the §14 gate and by `placement-ui.ts`
+ *  for the cost-row red/green colouring and the "NEED N STONE" disabled-
+ *  button label. Keeping it as a single helper means the UI and the
+ *  validator can't drift on what "afford" means. */
+export function affordabilityShortfall(
+  inventory: Readonly<Record<ResourceId, number>>,
+  cost: Partial<Record<ResourceId, number>>,
+): Partial<Record<ResourceId, number>> {
+  const missing: Partial<Record<ResourceId, number>> = {};
+  for (const [r, needed] of Object.entries(cost) as Array<[ResourceId, number]>) {
+    if (needed <= 0) continue;
+    const have = inventory[r] ?? 0;
+    if (have < needed) missing[r] = needed - have;
+  }
+  return missing;
 }
 
 /**
@@ -160,6 +199,12 @@ export interface PlacementValidation {
  *   5. tile-requirement-not-met (§4.3 — placement reaches a real tile in the
  *      island but its TerrainKind isn't acceptable for this def. Geometry-
  *      adjacent: the player can move the cursor to a tile that matches.)
+ *   6. insufficient-resources (§14 — every other gate passed but the
+ *      player's inventory is below `def.placementCost`. Returned LAST so
+ *      that an out-of-bounds cursor still surfaces the geometry error
+ *      instead of mis-blaming inventory. `missing` carries the shortfall
+ *      per resource so the UI can label "NEED 5 STONE" without
+ *      recomputing the basket.)
  *
  * The 1-2 split also has a defense-in-depth angle: `buildings-ui.ts` already
  * soft-disables biome-locked rows, but a future entry point (drag-drop?
@@ -236,31 +281,67 @@ export function validatePlacement(
       }
     }
   }
+  // §14 placement-cost gate. Computed LAST so the geometry/biome/tier
+  // reasons take priority — if the cursor is out of bounds, "out of bounds"
+  // is more actionable to surface than "you also can't afford this".
+  const cost = placementCostFor(def);
+  const missing = affordabilityShortfall(state.inventory, cost);
+  if (Object.keys(missing).length > 0) {
+    return { ok: false, reason: 'insufficient-resources', missing };
+  }
   return { ok: true };
 }
 
+/** Result of a `placeBuilding` call. On success carries the freshly-minted
+ *  `PlacedBuilding` so the caller can immediately read its id / coords /
+ *  maintenance stamps. On failure the only currently-reachable reason is
+ *  `'insufficient-resources'` (every other §4.3 / §9.5 / tier gate is
+ *  validated up-front by `validatePlacement` and the placement-UI never
+ *  invokes `placeBuilding` past `validatePlacement.ok`); the `missing`
+ *  record describes the per-resource shortfall so callers (UI label) can
+ *  surface "NEED 5 STONE" without recomputing the basket. */
+export type PlaceBuildingResult =
+  | { readonly ok: true; readonly placed: PlacedBuilding }
+  | {
+      readonly ok: false;
+      readonly reason: 'insufficient-resources';
+      readonly missing: Partial<Record<ResourceId, number>>;
+    };
+
 /**
- * Append a new PlacedBuilding to the island. The caller MUST have first
- * verified `validatePlacement(...).ok` — this function does not re-check.
+ * Append a new PlacedBuilding to the island, after paying the §14 placement
+ * cost from `state.inventory`. The caller MUST have first verified
+ * `validatePlacement(...).ok` for the geometry / tier / biome / tile gates
+ * — this function does not re-check those. It DOES re-check the §14 cost
+ * gate (cheap, prevents state corruption from a race between validate and
+ * place).
  *
- * Mutates:
+ * §14 cost deduction:
+ *   - Reads `def.placementCost` (empty / undefined → free placement).
+ *   - If the player's inventory is short on any cost resource, returns
+ *     `{ok: false, reason: 'insufficient-resources', missing}` WITHOUT
+ *     mutating `spec.buildings`, inventory, or storage caps.
+ *   - On the success path the cost is deducted from `state.inventory`
+ *     BEFORE the building is committed, so a mid-flight failure cannot
+ *     leave a "paid but no building" hole.
+ *
+ * Mutations on the success path:
+ *   - `state.inventory[r] -= cost[r]` for every entry in `def.placementCost`.
  *   - `spec.buildings` — push the new instance. `IslandState.buildings` is
  *     a live reference to the same array (see `makeInitialIslandState`),
  *     so the economy loop sees the new building on the next tick.
- *   - `state.storageCaps` — if the def carries a `storageCap`, bump every
- *     resource's nominal cap by that amount. Mirrors `aggregateStorageCaps`
- *     used at init; the field's `readonly` modifier on the IslandState
- *     interface protects the record reference, not its key values.
+ *   - `state.storageCaps` — if the def carries a `storage` block, bump every
+ *     resource's nominal cap by the contribution. Mirrors
+ *     `aggregateStorageCaps` used at init; the field's `readonly` modifier
+ *     on the IslandState interface protects the record reference, not its
+ *     key values.
  *
  * `idGenerator` returns a fresh unique id for the new instance. The caller
  * picks the id-shape (artificial-island.ts uses `art-N`; placement-ui uses
  * `placed-N`). The function takes a generator rather than an id directly so
- * the caller can lazily mint only when a placement actually commits.
- *
- * Cost deduction (§14): DEFERRED. Placement is free in step 2.5 — no
- * material cost is consumed here. Real costs land alongside the §14
- * resource-cost curves; this function will then read `def.placementCost`
- * (when it exists) and call `state.inventory[r] -= cost` per material.
+ * the caller can lazily mint only when a placement actually commits — and,
+ * since the cost gate is checked BEFORE mint, a rejected placement still
+ * does not consume an id-counter slot.
  */
 export function placeBuilding(
   spec: IslandSpec,
@@ -277,8 +358,26 @@ export function placeBuilding(
    *  forward. Tests can inject a specific value when they want to assert
    *  maintenance-cycle math. */
   nowMs: number = state.lastTick,
-): PlacedBuilding {
+): PlaceBuildingResult {
   const def = BUILDING_DEFS[defId];
+  // §14 placement-cost gate. Re-checked here even though validatePlacement
+  // also gates: between the validator returning ok and the player clicking
+  // commit, a sibling production tick could have consumed inventory. The
+  // re-check is cheap (small basket, integer compares) and prevents a
+  // race that would otherwise let the player place at -N stone.
+  const cost = placementCostFor(def);
+  const missing = affordabilityShortfall(state.inventory, cost);
+  if (Object.keys(missing).length > 0) {
+    return { ok: false, reason: 'insufficient-resources', missing };
+  }
+  // Deduct cost BEFORE committing the building so any subsequent error
+  // path can't leave inventory paid + no building. (No fallible operations
+  // sit between this and the push — but writing it this way makes the
+  // invariant explicit and survives later refactors.)
+  for (const [r, n] of Object.entries(cost) as Array<[ResourceId, number]>) {
+    if (n <= 0) continue;
+    state.inventory[r] = (state.inventory[r] ?? 0) - n;
+  }
   // §4.6: generic-storage instances (Crate, Warehouse) carry a per-instance
   // cargoLabel naming which resource they hold. The placement modal label
   // picker isn't built yet, so we seed a sensible default; the inspector
@@ -317,7 +416,7 @@ export function placeBuilding(
       }
     }
   }
-  return placed;
+  return { ok: true, placed };
 }
 
 // ---------------------------------------------------------------------------
@@ -361,27 +460,44 @@ export function buildingAtTile(
   return null;
 }
 
-/** Result of a demolition attempt. `scrapReturned` is the credit applied
- *  to `state.inventory.scrap` after clamping to the resource's cap. On the
- *  `not-found` branch `scrapReturned` is 0 and `reason` is populated. */
+/** Result of a demolition attempt. `scrapReturned` is the §6.7 footprint-
+ *  area scrap credit applied to `state.inventory.scrap` after clamping to
+ *  the resource's cap. `refunded` is the §14 50%-of-placement-cost return
+ *  applied per-resource (each entry clamped to its respective cap, so the
+ *  reported number reflects what actually landed in inventory). On the
+ *  `not-found` branch both fields are zero/empty and `reason` is populated. */
 export interface DemolishResult {
   readonly ok: boolean;
   readonly scrapReturned: number;
+  /** §14: per-resource refund (50% of placementCost, floor). Each entry is
+   *  the amount that actually landed in `state.inventory` after clamping to
+   *  the resource cap. Empty record on the failure branch or when the
+   *  demolished building had no placementCost (e.g. legacy save). */
+  readonly refunded: Partial<Record<ResourceId, number>>;
   readonly reason?: 'not-found';
 }
 
 /**
- * Remove a placed building and credit the player with Scrap per §6.7
- * ("Demolishing any T1+ placed building produces Scrap proportional to its
- * build cost"). The §6.7 ingredient-mirror formula is DEFERRED until
- * placement-time material costs land (§14); the step-2.5 placeholder
- * formula scales with footprint area:
+ * Remove a placed building and credit the player with two compensations:
  *
- *   scrap = footprint-tile-count × 3
+ *   1. §6.7 Scrap, scaled with footprint area (placeholder while the
+ *      §6.7 ingredient-mirror "Scrap proportional to build cost" formula
+ *      is DEFERRED — task #22 picks that up using the recipe ingredients
+ *      and is separate from this §14 placement-cost refund).
  *
- * That keeps a 1×1 Solar (3 scrap), 2×2 Mine (12), 3×3 Blast Furnace (27),
- * and 4×4 Fusion Core (48) on a sane progression curve while the proper
- * cost-based formula is unbuilt.
+ *         scrap = footprint-tile-count × 3
+ *
+ *      Keeps a 1×1 Solar (3 scrap), 2×2 Mine (12), 3×3 Blast Furnace (27),
+ *      and 4×4 Fusion Core (48) on a sane progression curve.
+ *
+ *   2. §14 placement-cost refund: 50% of `def.placementCost`, floored
+ *      per-resource. A 30-stone Mine demolition refunds 15 stone; a
+ *      15-wood Mine refunds 7 wood. Each refund entry is clamped to its
+ *      resource cap (the §4.6 "excess is lost" rule applies to refunds
+ *      the same way it applies to recipe production). Buildings without
+ *      a `placementCost` (defensively — every shipped def carries one
+ *      post-§14) demolish without a placement-cost refund but still earn
+ *      the Scrap credit.
  *
  * Mutations on the `{ ok: true }` path:
  *   - Removes the building from `spec.buildings` (state.buildings is the
@@ -393,8 +509,14 @@ export interface DemolishResult {
  *     same caps. Per §4.6 last paragraph ("If current inventory of any
  *     affected resource now exceeds the reduced cap, the excess is lost —
  *     inventory clamps down to the new cap"), we then clamp `inventory[r]`
- *     to the new cap on every affected resource.
+ *     to the new cap on every affected resource. The storage strip runs
+ *     BEFORE the §14 refund credit so refunds land into the post-demolish
+ *     caps, not the pre-demolish caps (matters when demolishing a Crate
+ *     whose own placement cost would have been refundable into the same
+ *     resource it stored).
  *   - Credits `state.inventory.scrap`, clamped to the post-demolish scrap cap.
+ *   - Credits each §14 refund resource to `state.inventory[r]`, clamped to
+ *     the post-demolish cap on that resource.
  *
  * Returns `{ ok: false, reason: 'not-found' }` when the id isn't present —
  * a defensive guard so a stale UI handle (e.g., demolition button held
@@ -407,12 +529,15 @@ export function demolishBuilding(
   buildingId: string,
 ): DemolishResult {
   const idx = spec.buildings.findIndex((b) => b.id === buildingId);
-  if (idx < 0) return { ok: false, scrapReturned: 0, reason: 'not-found' };
+  if (idx < 0) {
+    return { ok: false, scrapReturned: 0, refunded: {}, reason: 'not-found' };
+  }
   const b = spec.buildings[idx]!;
   const def = BUILDING_DEFS[b.defId];
   // Footprint-area × 3 placeholder per §6.7 (proper recipe-cost mirror
-  // deferred until §14 placement costs ship). `footprintTiles` returns the
-  // axis-aligned tile coverage — count its length.
+  // deferred to task #22 — task #22 uses recipe ingredients not
+  // placementCost, so this credit is independent of the §14 refund below).
+  // `footprintTiles` returns the axis-aligned tile coverage — count its length.
   const tiles = footprintTiles(
     def.width,
     def.height,
@@ -456,5 +581,28 @@ export function demolishBuilding(
     const next = Math.min(scrapCap, have + scrapReturned);
     state.inventory.scrap = next;
   }
-  return { ok: true, scrapReturned };
+  // §14 50% placement-cost refund, floored per-resource. Each line is
+  // clamped to the resource's post-demolish cap (so a refund into a full
+  // stone stockpile lands the available headroom and the rest is lost,
+  // mirroring §4.6's "excess is lost" rule for production overflow). The
+  // `refunded` record reports the ACTUAL credit, not the raw 50% — useful
+  // for the UI to surface "12 stone clamped to cap, 6 wood refunded".
+  // Buildings without a placementCost (defensive forward-compat for legacy
+  // saves) refund nothing here; the Scrap credit above still fires.
+  const refunded: Partial<Record<ResourceId, number>> = {};
+  const cost = placementCostFor(def);
+  for (const [r, n] of Object.entries(cost) as Array<[ResourceId, number]>) {
+    if (n <= 0) continue;
+    const half = Math.floor(n / 2);
+    if (half <= 0) continue;
+    const have = state.inventory[r] ?? 0;
+    const cap = state.storageCaps[r] ?? 0;
+    const next = Math.min(cap, have + half);
+    const credited = next - have;
+    if (credited > 0) {
+      state.inventory[r] = next;
+      refunded[r] = credited;
+    }
+  }
+  return { ok: true, scrapReturned, refunded };
 }

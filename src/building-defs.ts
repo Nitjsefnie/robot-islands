@@ -45,6 +45,7 @@
 // `recipes.ts` keys its RECIPES table by `BuildingDefId`.
 
 import type { TerrainKind } from './island.js';
+import type { ResourceId } from './recipes.js';
 import { tierForLevel } from './skilltree.js';
 import type { StorageCategory } from './storage-categories.js';
 // Type-only imports avoid a runtime cycle with world.ts (which imports
@@ -321,6 +322,21 @@ export interface BuildingDef {
    *  empty = no adjacency buff (default). Resolution: `computeBuffStack`
    *  in `adjacency.ts`, called from `computeRates`. */
   readonly adjacencyBuffs?: ReadonlyArray<AdjacencyBuff>;
+  /** §14 placement-time material cost. Multi-resource basket charged at
+   *  `placeBuilding` time; demolition refunds 50% (floor) of each entry
+   *  in addition to the §6.7 scrap credit. Tier-shaped baskets:
+   *   - T1: stone + wood
+   *   - T2: + iron_ingot
+   *   - T3: + steel + microchip
+   *   - T4: + steel + microchip + glass
+   *   - T5: + reality_anchor + (T5 components like gear / wire / microchip)
+   *   - T6: + antimatter_propellant + reality_anchor + steel
+   *  Per-def adjustments scale with footprint area and complexity. Values
+   *  are §14 placeholders — tune in Appendix A. Buildings without a cost
+   *  (undefined) place for free; this exists as a defensive
+   *  forward-compatibility hook (no shipped def currently leaves it
+   *  undefined). */
+  readonly placementCost?: Partial<Record<ResourceId, number>>;
 }
 
 /** Read-only catalog. Keys = BuildingDefId; every defId MUST have an entry. */
@@ -347,6 +363,8 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     stroke: 0x222222,
     power: { consumes: 40 },
     requiredTile: ['ore', 'coal'],
+    // §14 placeholder — tune in Appendix A.
+    placementCost: { stone: 30, wood: 15 },
     glyph: '⛏',
     // §4.5 placeholder — tune in Appendix A. Mild clustering bonus rewards
     // packing mines onto adjacent ore/coal veins.
@@ -364,6 +382,8 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0xe07b3a,
     stroke: 0x6b2f00,
     power: { consumes: 60 },
+    // §14 placeholder — tune in Appendix A.
+    placementCost: { stone: 40, wood: 20 },
     glyph: '⚙',
     // §4.5 placeholder — tune in Appendix A. Manufacturing co-location bonus:
     // small per-match rate boost up to three adjacent Workshops.
@@ -383,6 +403,8 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     // §2.7: solar-driven producer — output modulates by day-night cycle.
     // Day 1.0×, Dawn/Dusk 0.5×, Night 0.0×.
     power: { produces: 50, solar: true },
+    // §14 placeholder — tune in Appendix A.
+    placementCost: { stone: 20, wood: 10 },
     glyph: '☀',
   },
   coal_gen: {
@@ -395,6 +417,8 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0xd97a18,
     stroke: 0x4a2400,
     power: { produces: 100 },
+    // §14 placeholder — tune in Appendix A.
+    placementCost: { stone: 50, wood: 25 },
     glyph: '⚡',
   },
   dock: {
@@ -406,6 +430,8 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     height: 2,
     fill: 0x3a7bd5,
     stroke: 0x0a2a55,
+    // §14 placeholder — tune in Appendix A.
+    placementCost: { stone: 30, wood: 20 },
     glyph: '⚓',
   },
   // §8.8 lists Drone Pad as T2. Step 6 hardcoded it on the home island
@@ -421,6 +447,8 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     height: 1,
     fill: 0x4a6b78,
     stroke: 0x14222a,
+    // §14 placeholder — tune in Appendix A.
+    placementCost: { stone: 25, wood: 15 },
     glyph: '⤴',
   },
   logger: {
@@ -435,6 +463,8 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     // §8.1: requires a `tree` tile. Placement isn't built (step 2.5) so the
     // tile requirement is unenforced for step 9 — Logger placed on forest-ne
     // produces wood without a `tree` adjacency check.
+    // §14 placeholder — tune in Appendix A.
+    placementCost: { stone: 15, wood: 5 },
     glyph: '⌬',
   },
   smelter: {
@@ -447,6 +477,8 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0x7a5050,
     stroke: 0x3a1a1a,
     power: { consumes: 50 },
+    // §14 placeholder — tune in Appendix A.
+    placementCost: { stone: 50, wood: 20 },
     glyph: '△',
     // §4.5 placeholder — tune in Appendix A. Paired smelters share heat
     // efficiencies; gentle clustering bonus rewards a two-smelter line.
@@ -467,6 +499,8 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     // Generic storage — each PlacedBuilding picks its `cargoLabel` and only
     // that resource's cap is raised.
     storage: { category: 'generic', capacity: 100 },
+    // §14 placeholder — tune in Appendix A.
+    placementCost: { stone: 15, wood: 8 },
     glyph: '▦',
   },
   silo: {
@@ -481,6 +515,8 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     // §4.6 / §8.4: +2000 cap, dry-goods category only. Bumps every resource
     // whose RESOURCE_STORAGE_CATEGORY === 'dry_goods'.
     storage: { category: 'dry_goods', capacity: 2000 },
+    // §14 placeholder — tune in Appendix A.
+    placementCost: { stone: 40, wood: 15 },
     glyph: '▦',
   },
   biomass_plant: {
@@ -493,6 +529,8 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0x3e7a36,
     stroke: 0x1a3a16,
     power: { produces: 80 },
+    // §14 placeholder — tune in Appendix A.
+    placementCost: { stone: 50, wood: 25 },
     glyph: '❀',
   },
   // §5.2 / §8.6: Coal Furnace — T1 fuel-burning heat source. Burns
@@ -512,6 +550,8 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0x4a2820, // dark ember
     stroke: 0x1a0a08,
     heatSource: { freeOrCoal: 'coal', coalPerCycle: 1 },
+    // §14 placeholder — tune in Appendix A.
+    placementCost: { stone: 30, wood: 10 },
     glyph: '♨',
   },
   // §5.2 / §8.6 / §3.5: Geothermal Vent — Volcanic-only T1 free heat source.
@@ -530,6 +570,8 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     power: { produces: 200 },
     requiredBiomes: ['volcanic'],
     heatSource: { freeOrCoal: 'free' },
+    // §14 placeholder — tune in Appendix A.
+    placementCost: { stone: 60, wood: 20 },
     glyph: '♨',
   },
   // §12.3: Foundation Kit Assembler. A T1 manufacturing building dedicated
@@ -549,6 +591,8 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0xb88a5a,
     stroke: 0x4a3520,
     power: { consumes: 70 },
+    // §14 placeholder — tune in Appendix A.
+    placementCost: { stone: 40, wood: 20 },
     glyph: '⚙',
   },
   // §8.8 / §12.2: Shipyard — T1 logistics building that launches §12 cargo
@@ -566,6 +610,9 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0x3a7bd5,
     stroke: 0x0a2a55,
     power: { consumes: 80 },
+    // §14 placeholder — tune in Appendix A. 3×3 footprint scales the
+    // base T1 cost up versus the 2×2 baseline.
+    placementCost: { stone: 60, wood: 40 },
     glyph: '⚓',
   },
   // §8.8 / §12.2: Helipad — T2 logistics building that launches §12
@@ -580,6 +627,8 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0x6a8a9a,
     stroke: 0x1f3340,
     power: { consumes: 60 },
+    // §14 placeholder — tune in Appendix A.
+    placementCost: { stone: 80, iron_ingot: 30, wood: 15 },
     glyph: 'H',
   },
   // -------------------------------------------------------------------------
@@ -600,6 +649,8 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     // Fusion Core to operate. Per §7.1 the coke-making chain is heat-driven
     // ("Coal → Coke (Coke Oven)") in addition to the §8.2 catalog tagging.
     requiresHeat: true,
+    // §14 placeholder — tune in Appendix A.
+    placementCost: { stone: 80, iron_ingot: 30, wood: 10 },
     glyph: '▲',
   },
   blast_furnace: {
@@ -617,6 +668,8 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     // effective rate on `resolveHeatAssignments`; without heat it stalls and
     // contributes 0 to P_consumed.
     requiresHeat: true,
+    // §14 placeholder — tune in Appendix A. 3×3 footprint bumps base T2.
+    placementCost: { stone: 150, iron_ingot: 50, wood: 20 },
     glyph: '△',
   },
   steel_mill: {
@@ -632,6 +685,8 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     // §7.1: spec's "Pig iron + Scrap → Steel" includes Scrap as a co-input.
     // Scrap as a substitute/byproduct (§6.7) is deferred. Step 9 recipe is
     // Pig Iron → Steel.
+    // §14 placeholder — tune in Appendix A.
+    placementCost: { stone: 150, iron_ingot: 60, wood: 20 },
     glyph: '△',
   },
   assembler: {
@@ -644,6 +699,8 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0xff8c2a,
     stroke: 0x6e3500,
     power: { consumes: 80 },
+    // §14 placeholder — tune in Appendix A.
+    placementCost: { stone: 80, iron_ingot: 30, wood: 10 },
     glyph: '⚙',
   },
   tank: {
@@ -657,6 +714,8 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     stroke: 0x0a1a3a,
     // §4.6 / §8.4: +2000 cap, liquids/gases category only.
     storage: { category: 'liquid_gas', capacity: 2000 },
+    // §14 placeholder — tune in Appendix A.
+    placementCost: { stone: 80, iron_ingot: 30, wood: 10 },
     glyph: '▦',
   },
   // §4.6 / §8.4: Cold Storage — T2 specialized storage for temperature-
@@ -673,6 +732,8 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0x8090a0,
     stroke: 0x2a3848,
     storage: { category: 'temp_sensitive', capacity: 1500 },
+    // §14 placeholder — tune in Appendix A.
+    placementCost: { stone: 90, iron_ingot: 35, wood: 10 },
     glyph: '▦',
   },
   // §4.6 / §8.4: Component Warehouse — T2 specialized storage for
@@ -688,6 +749,8 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0x806840,
     stroke: 0x3a2810,
     storage: { category: 'components', capacity: 2000 },
+    // §14 placeholder — tune in Appendix A.
+    placementCost: { stone: 80, iron_ingot: 30, wood: 10 },
     glyph: '▦',
   },
   // §3.4 / §8.9: Land Reclamation Hub — T2 trigger building (3×3 per §8.9
@@ -708,6 +771,8 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     height: 3,
     fill: 0x5a8a6a, // verdant reclamation green
     stroke: 0x1a3020,
+    // §14 placeholder — tune in Appendix A. 3×3 footprint bumps T2 base.
+    placementCost: { stone: 150, iron_ingot: 50, wood: 30 },
     glyph: '⊕',
   },
   // -------------------------------------------------------------------------
@@ -728,6 +793,8 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     stroke: 0x401040,
     power: { consumes: 200 },
     heatSource: { freeOrCoal: 'free' },
+    // §14 placeholder — tune in Appendix A.
+    placementCost: { steel: 120, microchip: 40, stone: 30 },
     glyph: '♨',
   },
   electric_arc_furnace: {
@@ -743,6 +810,8 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     // §5.2: T3 arc furnaces still rely on adjacent heat per the spec's
     // smelting-category convention. Gated like Blast Furnace / Pyroforge.
     requiresHeat: true,
+    // §14 placeholder — tune in Appendix A.
+    placementCost: { steel: 100, microchip: 50, stone: 20 },
     glyph: '△',
   },
   // §4.6 / §8.4: Vault — T3 specialized storage for rare/valuable resources
@@ -759,6 +828,8 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0x504860,
     stroke: 0x1a1830,
     storage: { category: 'rare', capacity: 5000 },
+    // §14 placeholder — tune in Appendix A.
+    placementCost: { steel: 150, microchip: 50, stone: 30 },
     glyph: '▦',
   },
   // §8.9: Platform Constructor (a.k.a. Foundry of Lands). T3 special building
@@ -776,6 +847,8 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0x6a4a8c, // dusky violet — "foundry"-coded
     stroke: 0x2a1a40,
     power: { consumes: 200 },
+    // §14 placeholder — tune in Appendix A. 4×4 footprint bumps T3 base.
+    placementCost: { steel: 200, microchip: 80, stone: 40 },
     glyph: '⬢',
   },
   // -------------------------------------------------------------------------
@@ -797,6 +870,8 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     stroke: 0x1a3050,
     power: { produces: 5000 },
     heatSource: { freeOrCoal: 'free' },
+    // §14 placeholder — tune in Appendix A.
+    placementCost: { steel: 400, microchip: 150, glass: 50 },
     glyph: '⚡',
   },
   // §9.5: Pyroforge — Volcanic-unique. Only producer of Exotic Alloy in the
@@ -815,6 +890,8 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     power: { consumes: 800 },
     requiredBiomes: ['volcanic'],
     requiresHeat: true,
+    // §14 placeholder — tune in Appendix A.
+    placementCost: { steel: 300, microchip: 100, glass: 30 },
     glyph: '◉',
   },
   // §9.5: Cryogenic Compute Center — Arctic-unique. Only producer of AI
@@ -832,6 +909,8 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     stroke: 0x205060,
     power: { consumes: 1200 },
     requiredBiomes: ['arctic'],
+    // §14 placeholder — tune in Appendix A.
+    placementCost: { steel: 400, microchip: 150, glass: 50 },
     glyph: '◈',
   },
   // §8.6: Particle Accelerator — T4 production of Quantum Chips (and, in
@@ -848,6 +927,8 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0x8060c0, // deep violet
     stroke: 0x301050,
     power: { consumes: 1500 },
+    // §14 placeholder — tune in Appendix A.
+    placementCost: { steel: 400, microchip: 150, glass: 50 },
     glyph: '◈',
   },
   // §8.8 / §11.5: Launch Tower — T4 omnidirectional drone-pulse launch
@@ -864,6 +945,8 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0x8a8a40, // dull sand-gold
     stroke: 0x303010,
     power: { consumes: 400 },
+    // §14 placeholder — tune in Appendix A.
+    placementCost: { steel: 300, microchip: 100, glass: 30 },
     glyph: '▲',
   },
   // -------------------------------------------------------------------------
@@ -886,6 +969,8 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0x3a0a4a, // deep void violet
     stroke: 0x100020,
     power: { produces: 8000 },
+    // §14 placeholder — tune in Appendix A.
+    placementCost: { reality_anchor: 50, steel: 100, microchip: 50 },
     glyph: '⚡',
   },
   // §8.3: Reality Forge — T5 manufacturing. Consumes T4 components +
@@ -902,6 +987,8 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0x6020a0, // amethyst violet
     stroke: 0x100040,
     power: { consumes: 3000 },
+    // §14 placeholder — tune in Appendix A. 4×4 footprint bumps T5 base.
+    placementCost: { reality_anchor: 100, steel: 200, microchip: 100 },
     glyph: '✺',
   },
   // §8.4: Singularity Battery — "effectively infinite electrical power
@@ -922,6 +1009,8 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0x202060, // deep ultramarine
     stroke: 0x0a0a30,
     power: { consumes: 100 },
+    // §14 placeholder — tune in Appendix A.
+    placementCost: { reality_anchor: 50, steel: 100, microchip: 50 },
     glyph: '▦',
   },
   // §8.9 / §13.3: Time Lock — banks offline-time stockpile per island and
@@ -939,6 +1028,8 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0xc080e0, // pale aurora violet
     stroke: 0x400060,
     power: { consumes: 1500 },
+    // §14 placeholder — tune in Appendix A.
+    placementCost: { reality_anchor: 75, steel: 150, microchip: 75 },
     glyph: '✺',
   },
   // §8.9 / §13.3: Genesis Chamber — free-creation of T1-T4 resources from
@@ -956,6 +1047,8 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0xa0e0a0, // ethereal green
     stroke: 0x205020,
     power: { consumes: 2500 },
+    // §14 placeholder — tune in Appendix A. 4×4 footprint bumps T5 base.
+    placementCost: { reality_anchor: 100, steel: 200, microchip: 100 },
     glyph: '✺',
   },
   // §8.9 / §13.3: Universe Editor — reassigns an island's biome and
@@ -973,6 +1066,8 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0xff80a0, // rose-pink
     stroke: 0x500020,
     power: { consumes: 4000 },
+    // §14 placeholder — tune in Appendix A.
+    placementCost: { reality_anchor: 75, steel: 150, microchip: 75 },
     glyph: '✺',
   },
   // §8.9 / §13.3: Lattice Node — one per networked T5 island; activates
@@ -990,6 +1085,8 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0x80f0c0, // mint-cyan
     stroke: 0x205040,
     power: { consumes: 800 },
+    // §14 placeholder — tune in Appendix A.
+    placementCost: { reality_anchor: 50, steel: 100, microchip: 50 },
     glyph: '✺',
   },
   // §13.4 / §14.1: Ascendant Assembly — T5 building dedicated to crafting
@@ -1011,6 +1108,8 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0xe0c060, // ascendant gold
     stroke: 0x504010,
     power: { consumes: 4000 },
+    // §14 placeholder — tune in Appendix A. 4×4 footprint bumps T5 base.
+    placementCost: { reality_anchor: 100, steel: 200, microchip: 100 },
     glyph: '✺',
   },
   // -------------------------------------------------------------------------
@@ -1047,6 +1146,8 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0x202060, // deep cosmic blue
     stroke: 0x080018,
     power: { consumes: 3000 },
+    // §14 placeholder — tune in Appendix A.
+    placementCost: { antimatter_propellant: 100, steel: 200, reality_anchor: 100 },
     glyph: '▲',
   },
   // §11.7 / §14.10: Antimatter Refinery — produces Antimatter Propellant
@@ -1064,6 +1165,8 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0xc060e0, // electric violet
     stroke: 0x300040,
     power: { consumes: 5000 },
+    // §14 placeholder — tune in Appendix A.
+    placementCost: { antimatter_propellant: 75, steel: 150, reality_anchor: 75 },
     glyph: '✦',
   },
   // §14.3 / §14.10: Scanner Sat Assembly — produces Scanner Sat payloads
@@ -1082,6 +1185,8 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0x80a0c0, // pale instrument blue
     stroke: 0x20303a,
     power: { consumes: 2000 },
+    // §14 placeholder — tune in Appendix A.
+    placementCost: { antimatter_propellant: 75, steel: 150, reality_anchor: 75 },
     glyph: '◇',
   },
   // §14.3 / §14.10: Comm Sat Assembly — produces Comm Sat payloads for
@@ -1099,6 +1204,8 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0xa0c080, // pale antenna green
     stroke: 0x303a20,
     power: { consumes: 2000 },
+    // §14 placeholder — tune in Appendix A.
+    placementCost: { antimatter_propellant: 75, steel: 150, reality_anchor: 75 },
     glyph: '◇',
   },
   // §14.7 / §14.10: Orbital Insertion Assembly — produces Orbital
@@ -1118,6 +1225,8 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0xc0a060, // bronze
     stroke: 0x403014,
     power: { consumes: 1500 },
+    // §14 placeholder — tune in Appendix A.
+    placementCost: { antimatter_propellant: 75, steel: 150, reality_anchor: 75 },
     glyph: '⚙',
   },
   // -------------------------------------------------------------------------
@@ -1141,6 +1250,8 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     stroke: 0x403828,
     power: { consumes: 30 },
     // §8.1: requires `stone` tile. Tile gating DEFERRED.
+    // §14 placeholder — tune in Appendix A.
+    placementCost: { stone: 25, wood: 15 },
     glyph: '▣',
   },
   sand_pit: {
@@ -1154,6 +1265,8 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     stroke: 0x6a5028,
     power: { consumes: 20 },
     // §8.1: requires `sand` tile. Tile gating DEFERRED.
+    // §14 placeholder — tune in Appendix A.
+    placementCost: { stone: 25, wood: 15 },
     glyph: '▣',
   },
   well: {
@@ -1167,6 +1280,8 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     stroke: 0x1a3a60,
     power: { consumes: 10 },
     // §8.1: requires `water` tile (freshwater). Tile gating DEFERRED.
+    // §14 placeholder — tune in Appendix A.
+    placementCost: { stone: 10, wood: 5 },
     glyph: '◌',
   },
   coastal_pump: {
@@ -1181,6 +1296,8 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     power: { consumes: 15 },
     // §8.1 / §3.2: spec restricts to Coast biome / `water` tile.
     // Biome+tile gating DEFERRED.
+    // §14 placeholder — tune in Appendix A.
+    placementCost: { stone: 15, wood: 5 },
     glyph: '⛽',
   },
   quartz_mine: {
@@ -1194,6 +1311,8 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     stroke: 0x484858,
     power: { consumes: 30 },
     // §8.1: spec calls for a `quartz` outcrop tile. Tile gating DEFERRED.
+    // §14 placeholder — tune in Appendix A.
+    placementCost: { stone: 30, wood: 15 },
     glyph: '⛏',
   },
 
@@ -1208,6 +1327,8 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0x8a5a30, // sawn-wood ochre
     stroke: 0x3a2010,
     power: { consumes: 40 },
+    // §14 placeholder — tune in Appendix A.
+    placementCost: { stone: 30, wood: 30 },
     glyph: '⌬',
   },
   glassworks: {
@@ -1223,6 +1344,8 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     // §5.2 mentions Glassworks heat dependence; this step's scope is the
     // iron/steel chain. Glassworks runs without an adjacent heat source for
     // now — `requiresHeat` left unset intentionally.
+    // §14 placeholder — tune in Appendix A.
+    placementCost: { stone: 50, wood: 20 },
     glyph: '▲',
   },
   evaporator: {
@@ -1235,6 +1358,8 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0xf0e0a0, // salt-pan tan
     stroke: 0x605030,
     power: { consumes: 25 },
+    // §14 placeholder — tune in Appendix A.
+    placementCost: { stone: 15, wood: 8 },
     glyph: '◇',
   },
   electrolyzer: {
@@ -1247,6 +1372,8 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0xa0c0e8, // electrolyte blue
     stroke: 0x303a60,
     power: { consumes: 100 },
+    // §14 placeholder — tune in Appendix A.
+    placementCost: { stone: 25, wood: 10 },
     glyph: '◇',
   },
   biofuel_plant: {
@@ -1259,6 +1386,8 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0x408a30, // bioreactor green
     stroke: 0x1a3a10,
     power: { consumes: 60 },
+    // §14 placeholder — tune in Appendix A.
+    placementCost: { stone: 40, wood: 20 },
     glyph: '❀',
   },
 
@@ -1274,6 +1403,8 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     stroke: 0x080404,
     power: { consumes: 80 },
     // §8.1: requires `oil_well` terrain tile. Tile gating DEFERRED.
+    // §14 placeholder — tune in Appendix A.
+    placementCost: { stone: 80, iron_ingot: 30, wood: 10 },
     glyph: '⛽',
   },
   gas_extractor: {
@@ -1287,6 +1418,8 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     stroke: 0x2a2810,
     power: { consumes: 70 },
     // §8.1: requires `gas_seep` terrain tile. Tile gating DEFERRED.
+    // §14 placeholder — tune in Appendix A.
+    placementCost: { stone: 80, iron_ingot: 30, wood: 10 },
     glyph: '◇',
   },
 
@@ -1301,6 +1434,8 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0x6a4a20, // refinery brown
     stroke: 0x2a1a08,
     power: { consumes: 200 },
+    // §14 placeholder — tune in Appendix A.
+    placementCost: { stone: 150, iron_ingot: 50, wood: 20 },
     glyph: '◇',
   },
   chlor_alkali_plant: {
@@ -1313,6 +1448,8 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0x80d050, // chlorine-green
     stroke: 0x305018,
     power: { consumes: 150 },
+    // §14 placeholder — tune in Appendix A.
+    placementCost: { stone: 80, iron_ingot: 30, wood: 10 },
     glyph: '◇',
   },
   lubricant_refinery: {
@@ -1325,6 +1462,8 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0x4a3018, // viscous-oil brown
     stroke: 0x1a1008,
     power: { consumes: 120 },
+    // §14 placeholder — tune in Appendix A.
+    placementCost: { stone: 80, iron_ingot: 30, wood: 10 },
     glyph: '◇',
   },
   diesel_refinery: {
@@ -1337,6 +1476,8 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0x504030, // diesel-tan brown
     stroke: 0x201810,
     power: { consumes: 180 },
+    // §14 placeholder — tune in Appendix A.
+    placementCost: { stone: 80, iron_ingot: 30, wood: 10 },
     glyph: '◇',
   },
   metal_rolling_mill: {
@@ -1349,6 +1490,8 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0x8090a0, // steel-roll grey
     stroke: 0x2a3848,
     power: { consumes: 200 },
+    // §14 placeholder — tune in Appendix A.
+    placementCost: { stone: 100, iron_ingot: 40, wood: 15 },
     glyph: '⚙',
   },
 
@@ -1363,6 +1506,8 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0x686878, // metallic-silicon grey
     stroke: 0x202028,
     power: { consumes: 250 },
+    // §14 placeholder — tune in Appendix A.
+    placementCost: { steel: 100, microchip: 50, stone: 20 },
     glyph: '◈',
   },
   air_separator: {
@@ -1375,6 +1520,8 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0xc8e8f0, // pale-cyan condenser
     stroke: 0x405058,
     power: { consumes: 300 },
+    // §14 placeholder — tune in Appendix A.
+    placementCost: { steel: 150, microchip: 60, stone: 30 },
     glyph: '❄',
   },
   cryo_lab: {
@@ -1387,6 +1534,8 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0x80c0e8, // cryo-pale-blue
     stroke: 0x204060,
     power: { consumes: 400 },
+    // §14 placeholder — tune in Appendix A.
+    placementCost: { steel: 150, microchip: 60, stone: 30 },
     glyph: '❄',
   },
   cryo_compressor: {
@@ -1399,6 +1548,8 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0x6080b0, // compressed-fluid blue
     stroke: 0x182840,
     power: { consumes: 500 },
+    // §14 placeholder — tune in Appendix A.
+    placementCost: { steel: 150, microchip: 60, stone: 30 },
     glyph: '❄',
   },
   kerosene_refinery: {
@@ -1411,6 +1562,8 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0x9080a0, // aviation-fuel purple-grey
     stroke: 0x302840,
     power: { consumes: 350 },
+    // §14 placeholder — tune in Appendix A.
+    placementCost: { steel: 150, microchip: 50, stone: 30 },
     glyph: '◇',
   },
   lithography_lab: {
@@ -1423,6 +1576,8 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0x40a0c0, // wafer-fab cyan
     stroke: 0x103040,
     power: { consumes: 600 },
+    // §14 placeholder — tune in Appendix A. 4×4 footprint bumps T3 base.
+    placementCost: { steel: 200, microchip: 100, stone: 40 },
     glyph: '◈',
   },
   drilling_rig: {
@@ -1438,6 +1593,8 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     // §8.1 catalog: spec calls for `helium_vent` / deep-extraction tile.
     // Tile gating DEFERRED — the rig closes the helium_3 producer gap
     // without a terrain prerequisite.
+    // §14 placeholder — tune in Appendix A.
+    placementCost: { steel: 150, microchip: 50, stone: 30 },
     glyph: '⛏',
   },
 
@@ -1455,6 +1612,8 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0x80a0e0, // aetheric pale-blue
     stroke: 0x203060,
     power: { consumes: 60000 },
+    // §14 placeholder — tune in Appendix A.
+    placementCost: { reality_anchor: 75, steel: 150, microchip: 75 },
     glyph: '✦',
   },
   spacetime_resonator: {
@@ -1467,6 +1626,8 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0xa080e0, // tachyon violet
     stroke: 0x301040,
     power: { consumes: 100000 },
+    // §14 placeholder — tune in Appendix A.
+    placementCost: { reality_anchor: 75, steel: 150, microchip: 75 },
     glyph: '✦',
   },
   eldritch_sieve: {
@@ -1479,6 +1640,8 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0x402040, // dark-matter near-black
     stroke: 0x100008,
     power: { consumes: 80000 },
+    // §14 placeholder — tune in Appendix A.
+    placementCost: { reality_anchor: 75, steel: 150, microchip: 75 },
     glyph: '✦',
   },
 
@@ -1494,6 +1657,8 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0xe06030, // plasma-orange
     stroke: 0x401008,
     power: { consumes: 4000 },
+    // §14 placeholder — tune in Appendix A.
+    placementCost: { reality_anchor: 75, steel: 150, microchip: 75 },
     glyph: '✺',
   },
   eldritch_refiner: {
@@ -1506,6 +1671,8 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0x603060, // eldritch-violet
     stroke: 0x201020,
     power: { consumes: 5000 },
+    // §14 placeholder — tune in Appendix A.
+    placementCost: { reality_anchor: 75, steel: 150, microchip: 75 },
     glyph: '✺',
   },
   phase_refiner: {
@@ -1518,6 +1685,8 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0x4060a0, // phase-blue
     stroke: 0x10204a,
     power: { consumes: 5000 },
+    // §14 placeholder — tune in Appendix A.
+    placementCost: { reality_anchor: 75, steel: 150, microchip: 75 },
     glyph: '✺',
   },
   // -------------------------------------------------------------------------
@@ -1548,6 +1717,8 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     stroke: 0x484028,
     // Zero-power signal beacon. No `power` declaration so the economy
     // skips it on both produce and consume sides.
+    // Lighthouse placeholder — tune in Appendix A.
+    placementCost: { stone: 20, wood: 5 },
     glyph: '⛯',
   },
   lighthouse_t2: {
@@ -1560,6 +1731,8 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0xd0d0d0, // weathered concrete
     stroke: 0x404040,
     power: { consumes: 10 },
+    // Lighthouse placeholder — tune in Appendix A.
+    placementCost: { stone: 50, iron_ingot: 10, glass: 2 },
     glyph: '⛯',
   },
   lighthouse_t3: {
@@ -1572,6 +1745,8 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0xb0c8e0, // pale steel
     stroke: 0x304058,
     power: { consumes: 25 },
+    // Lighthouse placeholder — tune in Appendix A.
+    placementCost: { steel: 100, microchip: 20 },
     glyph: '⛯',
   },
   lighthouse_t4: {
@@ -1584,6 +1759,8 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0x90b8d0, // sky-instrument
     stroke: 0x203040,
     power: { consumes: 60 },
+    // Lighthouse placeholder — tune in Appendix A.
+    placementCost: { steel: 200, microchip: 50, glass: 10 },
     glyph: '⛯',
   },
   lighthouse_t5: {
@@ -1596,6 +1773,8 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0xc080e0, // transcendent violet
     stroke: 0x400060,
     power: { consumes: 150 },
+    // Lighthouse placeholder — tune in Appendix A.
+    placementCost: { reality_anchor: 30, steel: 50, microchip: 25 },
     glyph: '⛯',
   },
   lighthouse_t6: {
@@ -1608,6 +1787,8 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0xe0c060, // ascendant gold
     stroke: 0x504010,
     power: { consumes: 400 },
+    // Lighthouse placeholder — tune in Appendix A.
+    placementCost: { antimatter_propellant: 30, steel: 50, reality_anchor: 30 },
     glyph: '⛯',
   },
   // -------------------------------------------------------------------------
@@ -1634,6 +1815,7 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0xa0b0c0, // pale telemetry blue
     stroke: 0x303848,
     // Zero-power basic beacon. Antenna placeholder — tune in Appendix A.
+    placementCost: { stone: 15, wood: 5 },
     glyph: '⟁',
   },
   antenna_t2: {
@@ -1647,6 +1829,7 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     stroke: 0x203048,
     // Antenna placeholder — tune in Appendix A.
     power: { consumes: 5 },
+    placementCost: { stone: 50, iron_ingot: 15 },
     glyph: '⟁',
   },
   antenna_t3: {
@@ -1660,6 +1843,7 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     stroke: 0x102038,
     // Antenna placeholder — tune in Appendix A.
     power: { consumes: 25 },
+    placementCost: { steel: 100, microchip: 25 },
     glyph: '⟁',
   },
   antenna_t4: {
@@ -1673,6 +1857,7 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     stroke: 0x081830,
     // Antenna placeholder — tune in Appendix A.
     power: { consumes: 60 },
+    placementCost: { steel: 250, microchip: 80, glass: 20 },
     glyph: '⟁',
   },
   antenna_t5: {
@@ -1686,6 +1871,7 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     stroke: 0x301050,
     // Antenna placeholder — tune in Appendix A.
     power: { consumes: 150 },
+    placementCost: { reality_anchor: 40, steel: 80, microchip: 40 },
     glyph: '⟁',
   },
   antenna_t6: {
@@ -1700,6 +1886,7 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     // Antenna placeholder — tune in Appendix A. T6 antenna ALSO acts as the
     // satellite dish for §14 orbital launches (dish dual-role DEFERRED).
     power: { consumes: 400 },
+    placementCost: { antimatter_propellant: 40, steel: 80, reality_anchor: 40 },
     glyph: '⟁',
   },
 };

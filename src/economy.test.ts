@@ -1354,8 +1354,9 @@ describe('step-2.5 — placement is recognised by the live economy', () => {
     const state = makeState({
       buildings: spec.buildings,
       // Seed iron_ore + coal so the Smelter recipe has inputs from inventory
-      // (no Mine output flow-through needed for this test).
-      inventory: { ...blankInventory(), iron_ore: 100, coal: 100 },
+      // (no Mine output flow-through needed for this test). Also seed
+      // stone + wood for the §14 placement cost (Smelter: 50 stone, 20 wood).
+      inventory: { ...blankInventory(), iron_ore: 100, coal: 100, stone: 200, wood: 100 },
       storageCaps: blankCaps(10000),
       level: 5, // T1 unlocked; Smelter is T1
     });
@@ -1366,7 +1367,8 @@ describe('step-2.5 — placement is recognised by the live economy', () => {
     // Place a Smelter at island origin.
     let counter = 0;
     const gen = (): string => `int-${++counter}`;
-    placeBuilding(spec, state, 'smelter', 0, 0, 0, gen);
+    const pr = placeBuilding(spec, state, 'smelter', 0, 0, 0, gen);
+    expect(pr.ok).toBe(true);
     expect(spec.buildings).toHaveLength(1);
     expect(state.buildings).toBe(spec.buildings); // live reference
 

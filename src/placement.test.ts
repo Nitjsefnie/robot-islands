@@ -58,6 +58,19 @@ function makeSpec(overrides: Partial<IslandSpec> = {}): IslandSpec {
 function makeState(spec: IslandSpec, level: number = 1): IslandState {
   const s = makeInitialIslandState(spec, 0);
   s.level = level;
+  // §14 placement costs: seed plentiful inventory of every cost-basket
+  // resource so tests focused on geometry/rotation/overlap/storage don't
+  // also have to manage starter-bundle math. Each cost-targeted test
+  // that needs to assert a SHORTAGE explicitly zeroes the relevant
+  // resources before placing.
+  s.inventory.stone = 10000;
+  s.inventory.wood = 10000;
+  s.inventory.iron_ingot = 10000;
+  s.inventory.steel = 10000;
+  s.inventory.microchip = 10000;
+  s.inventory.glass = 10000;
+  s.inventory.reality_anchor = 10000;
+  s.inventory.antimatter_propellant = 10000;
   return s;
 }
 
@@ -280,11 +293,23 @@ describe('validatePlacement', () => {
 // ---------------------------------------------------------------------------
 // placeBuilding
 // ---------------------------------------------------------------------------
+/** Helper — asserts the `placeBuilding` result is a success and returns
+ *  the placed building. Lets the existing test body keep its terse
+ *  property-access pattern without a discriminator check on every line. */
+function expectPlaced(
+  result: ReturnType<typeof placeBuilding>,
+): PlacedBuilding {
+  if (!result.ok) {
+    throw new Error(`expected placeBuilding ok, got reason=${result.reason}`);
+  }
+  return result.placed;
+}
+
 describe('placeBuilding', () => {
   it('appends a PlacedBuilding to spec.buildings (which state.buildings shares)', () => {
     const spec = makeSpec();
     const state = makeState(spec);
-    const placed = placeBuilding(spec, state, 'mine', 0, 0, 0, () => 'p-1');
+    const placed = expectPlaced(placeBuilding(spec, state, 'mine', 0, 0, 0, () => 'p-1'));
     expect(placed).toMatchObject({ id: 'p-1', defId: 'mine', x: 0, y: 0, rotation: 0 });
     // §4.7 maintenance seeds: placedAt/maintainedAt default to state.lastTick;
     // operatingMs starts at 0. Test only asserts presence (the exact stamp
@@ -306,7 +331,7 @@ describe('placeBuilding', () => {
     const spec = makeSpec();
     const state = makeState(spec);
     const before = { ...state.storageCaps };
-    const placed = placeBuilding(spec, state, 'crate', 0, 0, 0, () => 'p-crate');
+    const placed = expectPlaced(placeBuilding(spec, state, 'crate', 0, 0, 0, () => 'p-crate'));
     expect(placed.cargoLabel).toBe('iron_ore');
     // iron_ore bumps by +100; every other resource stays at baseline.
     expect(state.storageCaps.iron_ore).toBe((before.iron_ore ?? 0) + 100);
@@ -322,7 +347,7 @@ describe('placeBuilding', () => {
     const spec = makeSpec();
     const state = makeState(spec);
     const before = { ...state.storageCaps };
-    placeBuilding(spec, state, 'silo', 0, 0, 0, () => 'p-silo');
+    expectPlaced(placeBuilding(spec, state, 'silo', 0, 0, 0, () => 'p-silo'));
     for (const r of ALL_RESOURCES as ReadonlyArray<ResourceId>) {
       const expected =
         RESOURCE_STORAGE_CATEGORY[r] === 'dry_goods'
@@ -336,7 +361,7 @@ describe('placeBuilding', () => {
     const spec = makeSpec();
     const state = makeState(spec);
     const before = { ...state.storageCaps };
-    placeBuilding(spec, state, 'tank', 0, 0, 0, () => 'p-tank');
+    expectPlaced(placeBuilding(spec, state, 'tank', 0, 0, 0, () => 'p-tank'));
     for (const r of ALL_RESOURCES as ReadonlyArray<ResourceId>) {
       const expected =
         RESOURCE_STORAGE_CATEGORY[r] === 'liquid_gas'
@@ -350,7 +375,7 @@ describe('placeBuilding', () => {
     const spec = makeSpec();
     const state = makeState(spec);
     const before = { ...state.storageCaps };
-    placeBuilding(spec, state, 'mine', 0, 0, 0, () => 'p-mine');
+    expectPlaced(placeBuilding(spec, state, 'mine', 0, 0, 0, () => 'p-mine'));
     for (const r of ALL_RESOURCES as ReadonlyArray<ResourceId>) {
       expect(state.storageCaps[r]).toBe(before[r]);
     }
@@ -364,11 +389,78 @@ describe('placeBuilding', () => {
       calls += 1;
       return `gen-${calls}`;
     };
-    const p1 = placeBuilding(spec, state, 'solar', 0, 0, 0, gen);
-    const p2 = placeBuilding(spec, state, 'solar', 2, 0, 0, gen);
+    const p1 = expectPlaced(placeBuilding(spec, state, 'solar', 0, 0, 0, gen));
+    const p2 = expectPlaced(placeBuilding(spec, state, 'solar', 2, 0, 0, gen));
     expect(p1.id).toBe('gen-1');
     expect(p2.id).toBe('gen-2');
     expect(calls).toBe(2);
+  });
+
+  // -------------------------------------------------------------------------
+  // §14 placement-cost gate
+  // -------------------------------------------------------------------------
+  it('deducts placement cost from inventory on success', () => {
+    // Mine costs 30 stone + 15 wood. Starting from a generous inventory the
+    // exact deltas should land in state.inventory.
+    const spec = makeSpec();
+    const state = makeState(spec);
+    state.inventory.stone = 100;
+    state.inventory.wood = 100;
+    expectPlaced(placeBuilding(spec, state, 'mine', 0, 0, 0, () => 'p-cost-1'));
+    expect(state.inventory.stone).toBe(70);
+    expect(state.inventory.wood).toBe(85);
+  });
+
+  it('rejects placement with insufficient-resources when inventory is short', () => {
+    // Mine costs 30 stone + 15 wood. Zero out everything → the basket fails.
+    const spec = makeSpec();
+    const state = makeState(spec);
+    state.inventory.stone = 0;
+    state.inventory.wood = 0;
+    const result = placeBuilding(spec, state, 'mine', 0, 0, 0, () => 'p-fail-1');
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.reason).toBe('insufficient-resources');
+      expect(result.missing).toEqual({ stone: 30, wood: 15 });
+    }
+    // No building was committed, no id was minted.
+    expect(spec.buildings).toHaveLength(0);
+  });
+
+  it('multi-resource cost is all-or-nothing — rejects if missing any one resource', () => {
+    // Coke Oven (T2): 80 stone + 30 iron_ingot + 10 wood. Player has stone +
+    // wood but no iron_ingot — should reject and report only the missing
+    // iron_ingot in the shortfall.
+    const spec = makeSpec();
+    const state = makeState(spec, 5);
+    state.inventory.stone = 200;
+    state.inventory.wood = 200;
+    state.inventory.iron_ingot = 0;
+    const result = placeBuilding(spec, state, 'coke_oven', 0, 0, 0, () => 'p-fail-2');
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.reason).toBe('insufficient-resources');
+      expect(result.missing).toEqual({ iron_ingot: 30 });
+    }
+    // Stone / wood NOT debited on the rejection branch.
+    expect(state.inventory.stone).toBe(200);
+    expect(state.inventory.wood).toBe(200);
+    expect(spec.buildings).toHaveLength(0);
+  });
+
+  it('validatePlacement surfaces insufficient-resources after geometry checks', () => {
+    // Mine costs 30 stone + 15 wood; with zero inventory the geometry-
+    // ok placement should fail with insufficient-resources (not
+    // out-of-bounds / overlap). Validator priority: geometry first,
+    // resources LAST.
+    const spec = makeSpec();
+    const state = makeState(spec);
+    state.inventory.stone = 0;
+    state.inventory.wood = 0;
+    const v = validatePlacement(spec, state, 'mine', 0, 0, 0);
+    expect(v.ok).toBe(false);
+    expect(v.reason).toBe('insufficient-resources');
+    expect(v.missing).toEqual({ stone: 30, wood: 15 });
   });
 });
 
@@ -486,7 +578,8 @@ describe('demolishBuilding', () => {
     for (const c of cases) {
       const spec = makeSpec();
       const state = makeState(spec, c.level);
-      placeBuilding(spec, state, c.defId, 0, 0, 0, () => `p-${c.defId}`);
+      const pr = placeBuilding(spec, state, c.defId, 0, 0, 0, () => `p-${c.defId}`);
+      expect(pr.ok).toBe(true);
       const beforeScrap = state.inventory.scrap ?? 0;
       const r = demolishBuilding(spec, state, `p-${c.defId}`);
       expect(r.ok).toBe(true);
@@ -576,5 +669,48 @@ describe('demolishBuilding', () => {
     // full earned amount.
     expect(r.scrapReturned).toBe(12);
     expect(state.inventory.scrap).toBe(5);
+  });
+
+  // -------------------------------------------------------------------------
+  // §14 50% placement-cost refund
+  // -------------------------------------------------------------------------
+  it('refunds 50% of placement cost (floored per-resource) on demolition', () => {
+    // Mine cost: 30 stone + 15 wood. Demolish should refund 15 stone + 7
+    // wood (floor(15/2)=7) on top of the scrap credit.
+    const spec = makeSpec();
+    const state = makeState(spec);
+    // Anchor inventory to known pre-place numbers so the post-demolish
+    // delta is unambiguous.
+    state.inventory.stone = 100;
+    state.inventory.wood = 100;
+    placeBuilding(spec, state, 'mine', 0, 0, 0, () => 'p-mine-refund');
+    // After place: 100 - 30 = 70 stone, 100 - 15 = 85 wood.
+    expect(state.inventory.stone).toBe(70);
+    expect(state.inventory.wood).toBe(85);
+    const r = demolishBuilding(spec, state, 'p-mine-refund');
+    expect(r.ok).toBe(true);
+    expect(r.refunded).toEqual({ stone: 15, wood: 7 });
+    // After refund: 70 + 15 = 85 stone, 85 + 7 = 92 wood.
+    expect(state.inventory.stone).toBe(85);
+    expect(state.inventory.wood).toBe(92);
+  });
+
+  it('refund clamps to resource cap (excess refund is lost like production overflow)', () => {
+    // Place a Mine (cost 30 stone + 15 wood), then artificially raise stone
+    // close to its cap so the +15 refund only partially lands.
+    const spec = makeSpec();
+    const state = makeState(spec);
+    state.inventory.stone = 100;
+    state.inventory.wood = 100;
+    placeBuilding(spec, state, 'mine', 0, 0, 0, () => 'p-mine-cap');
+    // Force stone cap low — anything past cap is lost on refund.
+    state.storageCaps.stone = 75;
+    state.inventory.stone = 70;
+    const r = demolishBuilding(spec, state, 'p-mine-cap');
+    expect(r.ok).toBe(true);
+    // Refund would be 15 stone, but cap-headroom is only 5. The reported
+    // refunded number reflects what ACTUALLY landed (5), not the raw 15.
+    expect(r.refunded.stone).toBe(5);
+    expect(state.inventory.stone).toBe(75); // clamped
   });
 });

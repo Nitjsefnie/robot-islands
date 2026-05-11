@@ -116,6 +116,35 @@ function previewScrapForBuilding(b: PlacedBuilding): number {
   return Math.floor(def.width * def.height * 3);
 }
 
+/** §14: preview the 50% placement-cost refund for the confirm dialog.
+ *  Mirrors the `floor(n / 2)` per-resource computation `demolishBuilding`
+ *  applies (the inventory-cap clamp is deferred to the actual mutation —
+ *  showing the raw refund here matches what the player earns ASSUMING
+ *  storage headroom). Empty record when the def has no placementCost. */
+function previewRefundForBuilding(b: PlacedBuilding): Partial<Record<ResourceId, number>> {
+  const def = BUILDING_DEFS[b.defId];
+  const cost = def.placementCost ?? {};
+  const out: Partial<Record<ResourceId, number>> = {};
+  for (const [r, n] of Object.entries(cost) as Array<[ResourceId, number]>) {
+    if (n <= 0) continue;
+    const half = Math.floor(n / 2);
+    if (half > 0) out[r as ResourceId] = half;
+  }
+  return out;
+}
+
+/** Format a refund preview as "+15 STONE, +7 WOOD" for the demolish
+ *  confirmation dialog and the inline button label. Empty record →
+ *  empty string. */
+function formatRefund(refund: Partial<Record<ResourceId, number>>): string {
+  const parts: string[] = [];
+  for (const [r, n] of Object.entries(refund) as Array<[ResourceId, number]>) {
+    if (n <= 0) continue;
+    parts.push(`+${n} ${r.toUpperCase().replace(/_/g, ' ')}`);
+  }
+  return parts.join(', ');
+}
+
 // ---------------------------------------------------------------------------
 // Public surface
 // ---------------------------------------------------------------------------
@@ -889,8 +918,16 @@ export function mountInspectorUi(
   demolishBtn.addEventListener('click', () => {
     if (!target) return;
     const credit = previewScrapForBuilding(target.building);
+    const refund = previewRefundForBuilding(target.building);
+    const refundStr = formatRefund(refund);
     const def = BUILDING_DEFS[target.building.defId];
-    const msg = `Demolish ${def.displayName}? Returns ${credit} scrap. This is irreversible.`;
+    // §14: surface both the scrap credit and the 50%-cost refund in the
+    // confirm prompt so the player sees the full reversal value before
+    // committing. Refunds clip to storage caps at execute-time; the
+    // dialog shows the raw refund.
+    const msg = refundStr
+      ? `Demolish ${def.displayName}? Returns ${credit} scrap and ${refundStr}. This is irreversible.`
+      : `Demolish ${def.displayName}? Returns ${credit} scrap. This is irreversible.`;
     // `window.confirm` is the simplest portable confirmation modal — see
     // task brief ("confirmation modal via `window.confirm()`"). Production
     // UX could replace this with an inline confirm step inside the panel.
