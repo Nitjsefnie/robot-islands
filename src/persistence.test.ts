@@ -415,6 +415,7 @@ describe('id counter seeding', () => {
     world.islands.push(
       {
         id: 'art-3',
+        name: 'art-3',
         biome: 'plains',
         cx: 60,
         cy: 60,
@@ -428,6 +429,7 @@ describe('id counter seeding', () => {
       },
       {
         id: 'art-7',
+        name: 'art-7',
         biome: 'desert',
         cx: 80,
         cy: -40,
@@ -454,6 +456,7 @@ describe('id counter seeding', () => {
     const world = makeInitialWorld(0);
     world.islands.push({
       id: 'desert-art-42', // matches /art-\d+/ but NOT /^art-\d+$/
+      name: 'desert-art-42',
       biome: 'desert',
       cx: 100,
       cy: 0,
@@ -768,6 +771,46 @@ describe('§9.7 Tier Reset lastResetAt persistence', () => {
     }
     const { islandStates: restored } = deserializeWorld(legacy, 0, 0);
     expect(restored.get('home')!.lastResetAt).toBe(null);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Player-mutable display name persistence (separate from immutable `id`).
+// Mirrors the lastResetAt / ascendantCoreCrafted pattern: schema version is
+// NOT bumped — `deserializeWorld` backfills `name = id` on legacy saves.
+// ---------------------------------------------------------------------------
+
+describe('IslandSpec.name persistence', () => {
+  it('round-trips a custom name through serialize → JSON → deserialize', () => {
+    const world = makeInitialWorld(0);
+    const home = world.islands.find((s) => s.id === 'home')!;
+    // Player-renamed the home island. Internal id stays 'home'; only the
+    // display name changes.
+    home.name = 'My Cozy Outpost';
+    const snap = serializeWorld(world, new Map(), 0);
+    const json = JSON.parse(JSON.stringify(snap)) as SaveSnapshot;
+    const { world: restored } = deserializeWorld(json, 0, 0);
+    const restoredHome = restored.islands.find((s) => s.id === 'home')!;
+    expect(restoredHome.name).toBe('My Cozy Outpost');
+    // Internal id must be untouched.
+    expect(restoredHome.id).toBe('home');
+  });
+
+  it('backfills name = id on a legacy save without the field', () => {
+    // Hand-crafted legacy snapshot: build a normal one, then strip `name`
+    // from each island spec before round-tripping. The deserializer must
+    // default missing `name` to the spec's `id` so every UI surface that
+    // reads `spec.name` keeps producing the legacy id-as-display-name UX.
+    const world = makeInitialWorld(0);
+    const snap = serializeWorld(world, new Map(), 0);
+    const legacy = JSON.parse(JSON.stringify(snap)) as SaveSnapshot;
+    for (const isl of legacy.world.islands) {
+      delete (isl as { name?: unknown }).name;
+    }
+    const { world: restored } = deserializeWorld(legacy, 0, 0);
+    for (const spec of restored.islands) {
+      expect(spec.name).toBe(spec.id);
+    }
   });
 });
 

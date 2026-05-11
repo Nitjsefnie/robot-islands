@@ -101,6 +101,12 @@ export type IslandRenderState = 'visible' | 'discovered' | 'unknown';
 
 export interface IslandSpec {
   readonly id: string;
+  /** Player-mutable display name. Initialized to the same string as `id`
+   *  at spec creation; the player can rename via the inspector to anything
+   *  non-empty up to 32 chars (no ascii control chars). Use this for any
+   *  UI surface that shows the island to the player; `id` remains the
+   *  internal lookup key (routes, save files, log lines, etc.). */
+  name: string;
   readonly biome: Biome;
   /** Centre of the island in world-tile coordinates. */
   readonly cx: number;
@@ -153,6 +159,41 @@ export function distSqTiles(ax: number, ay: number, bx: number, by: number): num
   const dx = ax - bx;
   const dy = ay - by;
   return dx * dx + dy * dy;
+}
+
+// ---------------------------------------------------------------------------
+// §3 player-mutable display name
+// ---------------------------------------------------------------------------
+
+/** Maximum length of a player-supplied island name. Anything longer is
+ *  rejected by `renameIsland`. Chosen to fit comfortably in the HUD title
+ *  and the inspector header without truncation. */
+export const ISLAND_NAME_MAX_LEN = 32;
+
+/** Result of a `renameIsland` call. `ok=false` carries a reason string so
+ *  the UI can surface the failure (currently the inspector input falls
+ *  back to `spec.name`/`spec.id` rather than rendering the reason, but
+ *  the field is here for symmetry with the validation API on
+ *  `validateConstruction` / `canExpandIsland`). */
+export interface RenameIslandResult {
+  readonly ok: boolean;
+  readonly reason?: 'empty' | 'too-long' | 'control-char';
+}
+
+/** Pure helper — validate `name` and (on success) mutate `spec.name`.
+ *  Trims surrounding whitespace; empty (post-trim) rejects; >32 chars
+ *  rejects; any ascii control char (`\x00-\x1F` or `\x7F`) rejects.
+ *  Mutates `spec` in place and returns `{ ok: true }` on success. Pure
+ *  with respect to the rest of the world — does not touch routes,
+ *  drones, or island state. The internal `id` is never modified. */
+export function renameIsland(spec: IslandSpec, name: string): RenameIslandResult {
+  const trimmed = name.trim();
+  if (trimmed.length === 0) return { ok: false, reason: 'empty' };
+  if (trimmed.length > ISLAND_NAME_MAX_LEN) return { ok: false, reason: 'too-long' };
+  // eslint-disable-next-line no-control-regex
+  if (/[\x00-\x1F\x7F]/.test(trimmed)) return { ok: false, reason: 'control-char' };
+  spec.name = trimmed;
+  return { ok: true };
 }
 
 /**
@@ -296,6 +337,7 @@ export function renderIsland(spec: IslandSpec, state: IslandRenderState = 'visib
 export const DEMO_ISLANDS: ReadonlyArray<IslandSpec> = [
   {
     id: 'home',
+    name: 'home',
     biome: 'plains',
     cx: 0,
     cy: 0,
@@ -320,6 +362,7 @@ export const DEMO_ISLANDS: ReadonlyArray<IslandSpec> = [
   // 10-tile-radius ellipse: (0,0) is the island centre.
   {
     id: 'forest-ne',
+    name: 'forest-ne',
     biome: 'forest',
     cx: 40,
     cy: -10,
@@ -346,6 +389,7 @@ export const DEMO_ISLANDS: ReadonlyArray<IslandSpec> = [
   },
   {
     id: 'desert-far',
+    name: 'desert-far',
     biome: 'desert',
     cx: 80,
     cy: 60,
@@ -359,6 +403,7 @@ export const DEMO_ISLANDS: ReadonlyArray<IslandSpec> = [
   },
   {
     id: 'coast-unknown',
+    name: 'coast-unknown',
     biome: 'coast',
     cx: 180,
     cy: 0,
@@ -372,6 +417,7 @@ export const DEMO_ISLANDS: ReadonlyArray<IslandSpec> = [
   },
   {
     id: 'hidden-w',
+    name: 'hidden-w',
     biome: 'plains',
     cx: -50,
     cy: 12,
@@ -385,6 +431,7 @@ export const DEMO_ISLANDS: ReadonlyArray<IslandSpec> = [
   },
   {
     id: 'hidden-s',
+    name: 'hidden-s',
     biome: 'forest',
     cx: 35,
     cy: 70,

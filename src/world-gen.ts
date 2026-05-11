@@ -120,6 +120,7 @@ export function generateWorld(opts: GenOptions): IslandSpec[] {
 
       const spec: IslandSpec = {
         id,
+        name: id,
         biome,
         cx: islandCx,
         cy: islandCy,

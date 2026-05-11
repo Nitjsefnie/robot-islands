@@ -203,6 +203,10 @@ export function constructIsland(
   position: { cx: number; cy: number },
   islandId: string,
   nowMs: number,
+  /** Optional player-supplied display name. Defaults to `islandId`. The
+   *  caller validates trim/length/control-char; this function trusts its
+   *  input (mirrors how `position` is trusted — overlap is a UI concern). */
+  displayName?: string,
 ): ConstructResult {
   const valid = validateConstruction(founderState, founderSpec, req);
   if (!valid.ok) {
@@ -221,6 +225,7 @@ export function constructIsland(
   const biome = req.biome;
   const newSpec: IslandSpec = {
     id: islandId,
+    name: displayName ?? islandId,
     biome,
     cx: position.cx,
     cy: position.cy,

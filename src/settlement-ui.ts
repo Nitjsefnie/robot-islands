@@ -737,7 +737,7 @@ export function mountSettlementUi(parentEl: HTMLElement, deps: SettlementUiDeps)
     for (const isl of populated) {
       const o = document.createElement('option');
       o.value = isl.id;
-      o.textContent = isl.id;
+      o.textContent = isl.name;
       fromSel.appendChild(o);
     }
     const activeId = deps.getActiveIslandId?.();
@@ -763,7 +763,7 @@ export function mountSettlementUi(parentEl: HTMLElement, deps: SettlementUiDeps)
       for (const isl of targets) {
         const o = document.createElement('option');
         o.value = isl.id;
-        o.textContent = isl.id;
+        o.textContent = isl.name;
         toSel.appendChild(o);
       }
       if (prevTo && targets.some((s) => s.id === prevTo)) {

@@ -43,6 +43,7 @@ function emptyCaps(): Record<ResourceId, number> {
 function makeSpec(over: Partial<IslandSpec> = {}): IslandSpec {
   const defaults: IslandSpec = {
     id: 'fixture',
+    name: 'fixture',
     biome: 'plains' as Biome,
     cx: 0,
     cy: 0,

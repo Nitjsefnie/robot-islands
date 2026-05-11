@@ -65,6 +65,7 @@ function makeIslandState(over: Partial<IslandState> = {}): IslandState {
 function makeIslandSpec(over: Partial<IslandSpec>): IslandSpec {
   return {
     id: 'spec',
+    name: 'spec',
     biome: 'plains',
     cx: 0,
     cy: 0,

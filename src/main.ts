@@ -838,6 +838,16 @@ async function main(): Promise<void> {
       rebuildWorldLayers();
       inspector.refresh();
     },
+    // Island display-name rename. The inspector already mutated
+    // `target.spec.name` via the pure `renameIsland` helper; this callback
+    // exists so main.ts can refresh any DOM surface that caches the name
+    // outside the regular ticker (HUD title repaints on its own tick, but
+    // an explicit refresh keeps the on-screen text in lockstep with the
+    // commit). `_name` is unused — present for API symmetry with the
+    // callback signature and to surface the intended value in tooling.
+    onRenameIsland: (_target: InspectorTarget, _name: string) => {
+      inspector.refresh();
+    },
   });
 
   // Step-11 Construction modal — sister to skill tree + buildings catalog.

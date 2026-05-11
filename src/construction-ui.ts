@@ -33,7 +33,13 @@ import {
 import { BIOME_DEFS } from './biomes.js';
 import type { IslandState } from './economy.js';
 import { tierForLevel } from './skilltree.js';
-import { distSqTiles, type Biome, type IslandSpec, type WorldState } from './world.js';
+import {
+  distSqTiles,
+  ISLAND_NAME_MAX_LEN,
+  type Biome,
+  type IslandSpec,
+  type WorldState,
+} from './world.js';
 
 export interface ConstructionUi {
   readonly el: HTMLDivElement;
@@ -201,6 +207,9 @@ export function mountConstructionUi(
   let minorRadius = 4;
   let posX = 100;
   let posY = 100;
+  /** Player-supplied display name for the new island, or empty string to
+   *  let the allocated `art-N` id stand in. Trimmed at submit time. */
+  let customName = '';
 
   // -------------------------------------------------------------------------
   // Scrim + panel shell
@@ -473,6 +482,33 @@ export function mountConstructionUi(
   })) posGrid.appendChild(el);
   posSection.appendChild(posGrid);
 
+  // --- Name input ----------------------------------------------------------
+  // Optional player-supplied display name. Empty falls back to the
+  // allocated `art-N` id at submit time. Placeholder text shows the
+  // to-be-allocated id so the player can preview what the default looks
+  // like (read by peeking the construction counter without incrementing).
+  const nameSection = document.createElement('div');
+  nameSection.appendChild(sectionLabel('Name (optional)'));
+  const nameInput = document.createElement('input');
+  nameInput.type = 'text';
+  nameInput.maxLength = ISLAND_NAME_MAX_LEN;
+  styled(
+    nameInput,
+    [
+      'background: #1a1f2a',
+      `color: ${FG}`,
+      `border: 1px solid ${PANEL_BORDER}`,
+      'padding: 4px 6px',
+      'font-family: ui-monospace, monospace',
+      'font-size: 12px',
+      'width: 100%',
+    ].join(';'),
+  );
+  nameInput.addEventListener('input', () => {
+    customName = nameInput.value;
+  });
+  nameSection.appendChild(nameInput);
+
   // --- Cost readout --------------------------------------------------------
   const costSection = document.createElement('div');
   costSection.appendChild(sectionLabel('Materials Required'));
@@ -513,6 +549,7 @@ export function mountConstructionUi(
   body.appendChild(biomeSection);
   body.appendChild(sizeSection);
   body.appendChild(posSection);
+  body.appendChild(nameSection);
   body.appendChild(costSection);
 
   // -------------------------------------------------------------------------
@@ -610,7 +647,7 @@ export function mountConstructionUi(
       for (const { spec, state } of eligible) {
         const opt = document.createElement('option');
         opt.value = spec.id;
-        opt.textContent = `${spec.id} (${spec.biome}, L${state.level})`;
+        opt.textContent = `${spec.name} (${spec.biome}, L${state.level})`;
         founderSelect.appendChild(opt);
       }
       // Reselect previous if still valid; otherwise prefer the currently
@@ -693,6 +730,12 @@ export function mountConstructionUi(
       majorRow.sliderEl.max = String(cap);
       minorRow.sliderEl.max = String(cap);
     }
+
+    // Name placeholder previews the to-be-allocated `art-N` id, so the
+    // player can see what the default would look like before deciding to
+    // type a custom name. `constructionCounter + 1` is the next id that
+    // `nextArtificialId` would mint — readback only, no mutation.
+    nameInput.placeholder = `art-${constructionCounter + 1}`;
   }
 
   function paintCostRow(el: HTMLSpanElement, need: number, have: number): void {
@@ -722,13 +765,37 @@ export function mountConstructionUi(
     if (!positionIsFree(options.world, posX, posY, majorRadius)) return;
     const id = nextArtificialId();
     const nowMs = performance.now();
-    const result = constructIsland(state, spec, req, { cx: posX, cy: posY }, id, nowMs);
+    // Apply the same trim/length/control-char guard as `renameIsland` so
+    // a malformed custom name silently falls back to `id` rather than
+    // landing as the spec's display name. Empty post-trim → undefined,
+    // which makes `constructIsland` default to `id`.
+    const rawName = customName.trim();
+    const displayName =
+      rawName.length > 0 &&
+      rawName.length <= ISLAND_NAME_MAX_LEN &&
+      // eslint-disable-next-line no-control-regex
+      !/[\x00-\x1F\x7F]/.test(rawName)
+        ? rawName
+        : undefined;
+    const result = constructIsland(
+      state,
+      spec,
+      req,
+      { cx: posX, cy: posY },
+      id,
+      nowMs,
+      displayName,
+    );
     options.onConstruct({
       newSpec: result.newSpec,
       newState: result.newState,
       founderId: selectedFounder,
       nowMs,
     });
+    // Reset the name field so the next construct starts empty rather than
+    // carrying the previous session's name forward.
+    customName = '';
+    nameInput.value = '';
     // Hide on success so the player sees the new island land on the map.
     hide();
   }

@@ -1225,6 +1225,7 @@ describe('step-11 — artificial-island construction integration (§2.5)', () =>
     // Founder spec: level 15 (T3), one Platform Constructor.
     const founderSpec = {
       id: 'founder',
+      name: 'founder',
       biome: 'plains' as const,
       cx: 0,
       cy: 0,
@@ -1336,6 +1337,7 @@ describe('step-2.5 — placement is recognised by the live economy', () => {
     // state.buildings is a live reference to the same array.
     const spec = {
       id: 'plains-test',
+      name: 'plains-test',
       biome: 'plains' as const,
       cx: 0,
       cy: 0,

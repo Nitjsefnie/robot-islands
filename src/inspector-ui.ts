@@ -46,7 +46,12 @@ import {
 } from './maintenance.js';
 import { ALL_RESOURCES, resolveRecipe, type Recipe, type ResourceId } from './recipes.js';
 import { RESOURCE_STORAGE_CATEGORY, type StorageCategory } from './storage-categories.js';
-import { BIOME_MAX_RADII, type IslandSpec } from './world.js';
+import {
+  BIOME_MAX_RADII,
+  ISLAND_NAME_MAX_LEN,
+  renameIsland,
+  type IslandSpec,
+} from './world.js';
 
 // ---------------------------------------------------------------------------
 // Palette — shared vocabulary with drones-ui / buildings-ui / skilltree-ui
@@ -152,6 +157,13 @@ export interface InspectorDeps {
    *  via `canExpandIsland` before surfacing the button, so the
    *  callback can assume the action is valid at click time. */
   onExpandIsland(target: InspectorTarget, axis: Axis): void;
+  /** Called after a successful rename. The inspector has already mutated
+   *  `target.spec.name` via the pure `renameIsland` helper before invoking
+   *  this. main.ts is responsible for repainting any UI surfaces that
+   *  cache the name (HUD title, inventory subtitle) — those panels re-read
+   *  on their own ticker pass, so the callback typically just bumps the
+   *  autosave dirty flag. */
+  onRenameIsland(target: InspectorTarget, name: string): void;
 }
 
 // ---------------------------------------------------------------------------
@@ -348,6 +360,84 @@ export function mountInspectorUi(
       'flex: 1 1 auto',
     ].join(';'),
   );
+
+  // -------------------------------------------------------------------------
+  // Island-name rename row — text input bound to `target.spec.name`. Sits
+  // ABOVE the building title so it's clear the field renames the island,
+  // not the building. Pure callback dispatch — the actual mutation lives in
+  // `renameIsland` (pure helper in `world.ts`); on success we notify main.ts
+  // via `deps.onRenameIsland(target, name)` so the HUD title repaints. On
+  // failure (empty / >32 chars / control char), the input value reverts to
+  // the current spec name in `paint()`.
+  // -------------------------------------------------------------------------
+  const nameRow = document.createElement('div');
+  styled(
+    nameRow,
+    [
+      'display: flex',
+      'align-items: center',
+      'gap: 6px',
+      'padding: 8px 12px 4px',
+    ].join(';'),
+  );
+  const nameLabel = document.createElement('span');
+  nameLabel.textContent = 'NAME';
+  styled(
+    nameLabel,
+    [`color: ${FG_DIM}`, 'font-size: 9.5px', 'letter-spacing: 0.14em', 'flex: 0 0 auto'].join(';'),
+  );
+  const nameInput = document.createElement('input');
+  nameInput.type = 'text';
+  nameInput.maxLength = ISLAND_NAME_MAX_LEN;
+  styled(
+    nameInput,
+    [
+      'flex: 1 1 auto',
+      `color: ${FG}`,
+      `background: ${STRIP_BG}`,
+      `border: 1px solid ${PANEL_BORDER}`,
+      'border-radius: 2px',
+      'padding: 2px 6px',
+      'font-family: ui-monospace, monospace',
+      'font-size: 11px',
+      'letter-spacing: 0.02em',
+      'min-width: 0',
+    ].join(';'),
+  );
+  function commitRename(): void {
+    if (!target) return;
+    const trimmed = nameInput.value.trim();
+    if (trimmed.length === 0) {
+      // Empty: revert input to current spec name (which is at least `id` —
+      // never empty itself), per the task brief "reject empty (revert to
+      // id if empty)". We don't write through to spec.
+      nameInput.value = target.spec.name;
+      return;
+    }
+    const res = renameIsland(target.spec, trimmed);
+    if (res.ok) {
+      deps.onRenameIsland(target, trimmed);
+    }
+    // On failure (too-long, control-char) we revert the input to the
+    // current spec name. maxLength guards too-long at typing time, but a
+    // paste of >32 chars could slip through, and control chars are not
+    // physically blocked by the input.
+    nameInput.value = target.spec.name;
+  }
+  nameInput.addEventListener('blur', commitRename);
+  nameInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      commitRename();
+      nameInput.blur();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      if (target) nameInput.value = target.spec.name;
+      nameInput.blur();
+    }
+  });
+  nameRow.appendChild(nameLabel);
+  nameRow.appendChild(nameInput);
 
   // Title row — name + tier badge
   const titleRow = document.createElement('div');
@@ -818,6 +908,7 @@ export function mountInspectorUi(
   });
   footerSection.appendChild(demolishBtn);
 
+  body.appendChild(nameRow);
   body.appendChild(titleRow);
   body.appendChild(subtitleRow);
   body.appendChild(recipeSection.wrap);
@@ -924,6 +1015,14 @@ export function mountInspectorUi(
     if (!target) return;
     const { spec, state, building } = target;
     const def = BUILDING_DEFS[building.defId as BuildingDefId];
+
+    // Repopulate the rename input UNLESS the player is currently editing
+    // (input has focus). Repainting through `value=` while focused
+    // resets the caret mid-typing, which is hostile UX. The blur/Enter
+    // handler covers the commit path; until then we leave the field alone.
+    if (document.activeElement !== nameInput) {
+      nameInput.value = spec.name;
+    }
 
     nameEl.textContent = def.displayName;
     tierBadge.textContent = `T${def.tier}`;

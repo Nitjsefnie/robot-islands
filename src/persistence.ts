@@ -249,6 +249,14 @@ export function deserializeWorld(
   const perfShift = nowPerfMs - snapshot.savedAtPerf - deltaMs;
   const islands: IslandSpec[] = snapshot.world.islands.map((s) => ({
     ...s,
+    // Forward-compat backfill: a save written before the player-mutable
+    // display-name field existed has no `name`. Default to `id` so the
+    // legacy UX (id-as-display-name) is preserved verbatim. Same SCHEMA_VERSION
+    // — mirror the `ascendantCoreCrafted` / `lastResetAt` backfill pattern.
+    name:
+      typeof (s as { name?: unknown }).name === 'string'
+        ? (s as { name: string }).name
+        : s.id,
     // Rehydrate the per-island terrainAt closure via the same factory
     // `world.ts` uses for `DEMO_ISLANDS`. Artificial islands and demo
     // islands flow through the same path because `terrainAtForBiome`

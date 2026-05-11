@@ -638,7 +638,7 @@ export function mountInventoryUi(
     if (!visible) return;
     void state;
     lastNet = net;
-    subtitleEl.textContent = `/ ${getSpec().id}`;
+    subtitleEl.textContent = `/ ${getSpec().name}`;
     paintRows();
   }
 

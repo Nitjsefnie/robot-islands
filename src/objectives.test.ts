@@ -62,6 +62,7 @@ function makeIslandState(overrides: Partial<IslandState> & { id: string }): Isla
 function makeIslandSpec(overrides: Partial<IslandSpec> & { id: string }): IslandSpec {
   return {
     id: overrides.id,
+    name: overrides.name ?? overrides.id,
     biome: overrides.biome ?? 'plains',
     cx: overrides.cx ?? 0,
     cy: overrides.cy ?? 0,

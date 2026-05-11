@@ -741,7 +741,7 @@ export function mountHud(parentEl: HTMLElement): HudHandle {
     objective: Objective | null,
   ): void {
     const need = xpForLevel(state.level + 1);
-    titleNode.textContent = state.id === 'home' ? 'Starting Island' : state.id;
+    titleNode.textContent = spec.name;
     levelText.textContent = `Level ${state.level}   XP ${fmt(state.xp)} / ${fmt(need)}`;
     levelText.style.color = '#cdd6f4';
 

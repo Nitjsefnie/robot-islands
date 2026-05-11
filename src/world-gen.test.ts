@@ -152,6 +152,7 @@ describe('generateWorld', () => {
     const existing = [
       {
         id: 'mock',
+        name: 'mock',
         biome: 'plains' as const,
         cx: 0,
         cy: 0,
@@ -164,6 +165,7 @@ describe('generateWorld', () => {
       },
       {
         id: 'mock2',
+        name: 'mock2',
         biome: 'forest' as const,
         cx: 40,
         cy: -10,

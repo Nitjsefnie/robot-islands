@@ -464,11 +464,11 @@ export function mountRoutesUi(parentEl: HTMLElement, deps: RouteUiDeps): RouteUi
     for (const isl of islands) {
       const o1 = document.createElement('option');
       o1.value = isl.id;
-      o1.textContent = isl.id;
+      o1.textContent = isl.name;
       fromSel.appendChild(o1);
       const o2 = document.createElement('option');
       o2.value = isl.id;
-      o2.textContent = isl.id;
+      o2.textContent = isl.name;
       toSel.appendChild(o2);
     }
     if (prevFrom && islands.some((s) => s.id === prevFrom)) fromSel.value = prevFrom;

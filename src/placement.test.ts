@@ -41,6 +41,7 @@ function tileSet(tiles: ReadonlyArray<{ x: number; y: number }>): Set<string> {
 function makeSpec(overrides: Partial<IslandSpec> = {}): IslandSpec {
   return {
     id: 'test',
+    name: 'test',
     biome: 'plains',
     cx: 0,
     cy: 0,

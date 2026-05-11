@@ -107,6 +107,7 @@ const KNOWN_DEF_IDS: ReadonlyArray<BuildingDefId> = [
 function fakeSpec(biome: IslandSpec['biome'], artificial = false): IslandSpec {
   return {
     id: 'test',
+    name: 'test',
     biome,
     cx: 0,
     cy: 0,

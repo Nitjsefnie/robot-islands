@@ -43,6 +43,7 @@ function blankFunnel(): Record<ResourceId, number> {
 function makeFounderSpec(buildings: PlacedBuilding[]): IslandSpec {
   return {
     id: 'founder',
+    name: 'founder',
     biome: 'plains',
     cx: 0,
     cy: 0,
@@ -405,6 +406,7 @@ describe('§9.5 — biome-locked uniques rejected on artificial islands (step 12
     // Sanity: same biome but `artificial` defaults to false → placement OK.
     const naturalVolcanic: IslandSpec = {
       id: 'nat-volc',
+      name: 'nat-volc',
       biome: 'volcanic',
       cx: 0,
       cy: 0,
@@ -426,6 +428,7 @@ describe('§9.5 — biome-locked uniques rejected on artificial islands (step 12
     // closed on biome grounds, not just the artificial flag).
     const artForest: IslandSpec = {
       id: 'art-forest',
+      name: 'art-forest',
       biome: 'forest',
       cx: 0,
       cy: 0,
