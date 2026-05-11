@@ -10,6 +10,7 @@ import {
   islandRenderState,
   ISLAND_NAME_MAX_LEN,
   renameIsland,
+  validateIslandName,
   VISION_PADDING_TILES,
   type IslandSpec,
 } from './world.js';
@@ -370,5 +371,61 @@ describe('renameIsland', () => {
     expect(renameIsland(s, 'Line\nBreak').ok).toBe(false);
     expect(renameIsland(s, 'Bell\x07Char').ok).toBe(false);
     expect(renameIsland(s, 'Del\x7FChar').ok).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// validateIslandName — pure predicate underlying `renameIsland` and the
+// construction-ui name field. Tested independently so both call sites are
+// guaranteed to share the same accept/reject behaviour.
+// ---------------------------------------------------------------------------
+
+describe('validateIslandName', () => {
+  it('accepts a normal name and returns the trimmed string', () => {
+    const r = validateIslandName('My Cozy Outpost');
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.name).toBe('My Cozy Outpost');
+  });
+
+  it('trims surrounding whitespace on the returned name', () => {
+    const r = validateIslandName('   The Forge   ');
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.name).toBe('The Forge');
+  });
+
+  it('rejects an empty string with reason "empty"', () => {
+    const r = validateIslandName('');
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toBe('empty');
+  });
+
+  it('rejects a whitespace-only string with reason "empty"', () => {
+    const r = validateIslandName('   ');
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toBe('empty');
+  });
+
+  it('accepts a name at exactly ISLAND_NAME_MAX_LEN chars', () => {
+    const exactly32 = 'a'.repeat(ISLAND_NAME_MAX_LEN);
+    const r = validateIslandName(exactly32);
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.name).toBe(exactly32);
+  });
+
+  it('rejects a name one over the cap with reason "too-long"', () => {
+    const tooLong = 'a'.repeat(ISLAND_NAME_MAX_LEN + 1);
+    const r = validateIslandName(tooLong);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toBe('too-long');
+  });
+
+  it('rejects ascii control chars with reason "control-char"', () => {
+    // Tab (0x09), newline, bell (0x07), DEL (0x7F) — all in the
+    // control range and all rejected.
+    for (const bad of ['Tab\tName', 'Line\nBreak', 'Bell\x07Char', 'Del\x7FChar']) {
+      const r = validateIslandName(bad);
+      expect(r.ok).toBe(false);
+      if (!r.ok) expect(r.reason).toBe('control-char');
+    }
   });
 });

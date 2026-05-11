@@ -12,15 +12,21 @@
 //     the lighthouse's tier (`LIGHTHOUSE_VISION_RADII[defId]`) and the
 //     centre is the Lighthouse's world-tile position.
 //
-// `pointInVision` is the union test: a point is in vision iff it lies inside
-// any source.
+// The `VisionSource` type and the `pointInVision` union test live in the
+// leaf `vision-source.ts` module so `world.ts` can consume them without a
+// circular import. We re-export both from here so existing call sites
+// (`import { pointInVision, type VisionSource } from './lighthouse.js'`)
+// keep working unchanged.
 
 import { BUILDING_DEFS } from './building-defs.js';
+import { pointInVision, type VisionSource } from './vision-source.js';
 import {
   VISION_PADDING_TILES,
   islandConstituents,
   type IslandSpec,
 } from './world.js';
+
+export { pointInVision, type VisionSource };
 
 /** Lighthouse defId → vision radius in tiles. Single source of truth.
  *  T1-T4 carry tuned placeholder values; T5/T6 are flagged.
@@ -34,33 +40,6 @@ export const LIGHTHOUSE_VISION_RADII: Readonly<Record<string, number>> = {
   lighthouse_t5: 220,
   lighthouse_t6: 300,
 };
-
-/** A vision-emitting source in world-tile coordinates.
- *
- *  `ellipse` is the baseline padded per-island vision halo:
- *  axis-aligned, semi-axes `(major, minor)`, centred at `(cx + offsetX,
- *  cy + offsetY)` where `(cx, cy)` is the island centre and `(offsetX,
- *  offsetY)` is the constituent offset (0,0 for a single-ellipse island).
- *
- *  `circle` is a per-Lighthouse vision disc: centred at the Lighthouse's
- *  world-tile position, with the tier-dependent radius from
- *  `LIGHTHOUSE_VISION_RADII`. */
-export type VisionSource =
-  | {
-      readonly kind: 'ellipse';
-      readonly cx: number;
-      readonly cy: number;
-      readonly major: number;
-      readonly minor: number;
-      readonly offsetX: number;
-      readonly offsetY: number;
-    }
-  | {
-      readonly kind: 'circle';
-      readonly cx: number;
-      readonly cy: number;
-      readonly radius: number;
-    };
 
 /**
  * Build the full set of vision sources for the current world. Walks every
@@ -120,24 +99,3 @@ export function computeVisionSources(
   return out;
 }
 
-/** Is point (x, y) in world-tile coords inside any vision source? Pure. */
-export function pointInVision(
-  sources: ReadonlyArray<VisionSource>,
-  x: number,
-  y: number,
-): boolean {
-  for (const src of sources) {
-    if (src.kind === 'ellipse') {
-      const dx = x - (src.cx + src.offsetX);
-      const dy = y - (src.cy + src.offsetY);
-      if ((dx * dx) / (src.major * src.major) + (dy * dy) / (src.minor * src.minor) <= 1) {
-        return true;
-      }
-    } else {
-      const dx = x - src.cx;
-      const dy = y - src.cy;
-      if (dx * dx + dy * dy <= src.radius * src.radius) return true;
-    }
-  }
-  return false;
-}

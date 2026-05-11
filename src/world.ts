@@ -27,6 +27,7 @@ import { terrainAtForBiome } from './biomes.js';
 import { BUILDING_DEFS } from './building-defs.js';
 import type { PlacedBuilding } from './buildings.js';
 import { HOME_ISLAND_BUILDINGS, renderBuildings } from './buildings.js';
+import { islandCells } from './discovery.js';
 import type { IslandState } from './economy.js';
 import type { Tile, TerrainKind } from './island.js';
 import {
@@ -37,6 +38,7 @@ import {
 import { ALL_RESOURCES, type ResourceId } from './recipes.js';
 import type { Route } from './routes.js';
 import { RESOURCE_STORAGE_CATEGORY } from './storage-categories.js';
+import { pointInVision, type VisionSource } from './vision-source.js';
 import { generateWorld } from './world-gen.js';
 
 /** Stratification cell side length, in tiles. SPEC §2.1 calls this R. */
@@ -229,19 +231,41 @@ export interface RenameIslandResult {
   readonly reason?: 'empty' | 'too-long' | 'control-char';
 }
 
-/** Pure helper — validate `name` and (on success) mutate `spec.name`.
- *  Trims surrounding whitespace; empty (post-trim) rejects; >32 chars
- *  rejects; any ascii control char (`\x00-\x1F` or `\x7F`) rejects.
- *  Mutates `spec` in place and returns `{ ok: true }` on success. Pure
- *  with respect to the rest of the world — does not touch routes,
- *  drones, or island state. The internal `id` is never modified. */
-export function renameIsland(spec: IslandSpec, name: string): RenameIslandResult {
-  const trimmed = name.trim();
+/** Outcome of `validateIslandName`. On success `name` is the trimmed,
+ *  validated string ready to assign to `spec.name`. On failure `reason`
+ *  enumerates which rule rejected the input. Pure data — no mutation.
+ *
+ *  Sole source of truth for "is this a valid island name?": both
+ *  `renameIsland` (inspector rename path) and `construction-ui.ts`
+ *  (artificial-island creation form) consume this predicate so the rules
+ *  can't drift between the two entry points. */
+export type ValidateNameResult =
+  | { readonly ok: true; readonly name: string }
+  | { readonly ok: false; readonly reason: 'empty' | 'too-long' | 'control-char' };
+
+/** Pure predicate — validate `raw` as an island name. Trims surrounding
+ *  whitespace; empty (post-trim) rejects with `'empty'`; >`ISLAND_NAME_MAX_LEN`
+ *  characters rejects with `'too-long'`; any ascii control character
+ *  (`\x00-\x1F` or `\x7F`) rejects with `'control-char'`. On success the
+ *  returned `name` is the post-trim string; callers that want to MUTATE
+ *  an `IslandSpec` should use `renameIsland`, which wraps this predicate. */
+export function validateIslandName(raw: string): ValidateNameResult {
+  const trimmed = raw.trim();
   if (trimmed.length === 0) return { ok: false, reason: 'empty' };
   if (trimmed.length > ISLAND_NAME_MAX_LEN) return { ok: false, reason: 'too-long' };
   // eslint-disable-next-line no-control-regex
   if (/[\x00-\x1F\x7F]/.test(trimmed)) return { ok: false, reason: 'control-char' };
-  spec.name = trimmed;
+  return { ok: true, name: trimmed };
+}
+
+/** Validate `name` via `validateIslandName` and (on success) mutate
+ *  `spec.name` in place. Pure with respect to the rest of the world —
+ *  does not touch routes, drones, or island state. The internal `id` is
+ *  never modified. */
+export function renameIsland(spec: IslandSpec, name: string): RenameIslandResult {
+  const v = validateIslandName(name);
+  if (!v.ok) return { ok: false, reason: v.reason };
+  spec.name = v.name;
   return { ok: true };
 }
 
@@ -370,55 +394,6 @@ export function islandTileCount(spec: IslandSpec): number {
 }
 
 /**
- * World-axis-aligned vision ellipse for a populated source island. Centered
- * at each constituent's world centre with semi-axes
- * `(constituent.major + VISION_PADDING_TILES, constituent.minor + VISION_PADDING_TILES)`.
- *
- * For a single-ellipse island this collapses to a single padded ellipse
- * around `(p.cx, p.cy)` — identical to the pre-§3.6 behaviour. For a merged
- * island, vision is the UNION of one padded ellipse per constituent (§3.6:
- * "the union of all constituent ellipses"). A point is in vision iff it
- * lies inside ANY padded constituent.
- *
- * Boundary is inclusive to match the test convention from the legacy fixed-
- * radius vision function.
- *
- * Accepts a `Pick` shape rather than the full `IslandSpec` so test callers
- * can pass plain ellipse fixtures; if `extraEllipses` is present (the field
- * lives on `IslandSpec` but isn't part of the minimal `Pick`), each extra
- * contributes its own padded ellipse to the union.
- *
- * NOTE: The Lighthouse-vision redesign moved the renderer over to
- * `lighthouse.ts → computeVisionSources` + `pointInVision`. This helper is
- * deliberately kept as a stand-alone "is this point inside the baseline
- * padded ellipse of source X?" primitive — handy for any future code that
- * needs per-source vision checks without building a full VisionSource[].
- */
-export function pointInVisionEllipse(
-  p: Pick<IslandSpec, 'cx' | 'cy' | 'majorRadius' | 'minorRadius'> & {
-    readonly extraEllipses?: IslandSpec['extraEllipses'];
-  },
-  px: number,
-  py: number,
-): boolean {
-  const a = p.majorRadius + VISION_PADDING_TILES;
-  const b = p.minorRadius + VISION_PADDING_TILES;
-  const dx = px - p.cx;
-  const dy = py - p.cy;
-  if ((dx * dx) / (a * a) + (dy * dy) / (b * b) <= 1) return true;
-  if (p.extraEllipses) {
-    for (const e of p.extraEllipses) {
-      const ea = e.major + VISION_PADDING_TILES;
-      const eb = e.minor + VISION_PADDING_TILES;
-      const edx = px - (p.cx + e.offsetX);
-      const edy = py - (p.cy + e.offsetY);
-      if ((edx * edx) / (ea * ea) + (edy * edy) / (eb * eb) <= 1) return true;
-    }
-  }
-  return false;
-}
-
-/**
  * Classify a single island into one of three render states.
  *
  * Logic (the population short-circuit means we don't have to set
@@ -438,7 +413,7 @@ export function pointInVisionEllipse(
  */
 export function islandRenderState(
   spec: IslandSpec,
-  sources: ReadonlyArray<import('./lighthouse.js').VisionSource>,
+  sources: ReadonlyArray<VisionSource>,
 ): IslandRenderState {
   if (spec.populated) return 'visible';
   if (!spec.discovered) return 'unknown';
@@ -446,38 +421,11 @@ export function islandRenderState(
   // constituent centres lies inside any vision source. For a single-ellipse
   // island this collapses to the natural "is the centre in vision?" check.
   for (const c of islandConstituents(spec)) {
-    if (
-      pointInVisionTest(sources, spec.cx + c.offsetX, spec.cy + c.offsetY)
-    ) {
+    if (pointInVision(sources, spec.cx + c.offsetX, spec.cy + c.offsetY)) {
       return 'visible';
     }
   }
   return 'discovered';
-}
-
-/** Inline copy of `pointInVision` (lighthouse.ts) so `islandRenderState`
- *  doesn't pull in a runtime import that creates a circular dependency with
- *  `world.ts`. Kept tightly synced — both implementations are trivial and
- *  the test suite exercises both via the lighthouse + world test files. */
-function pointInVisionTest(
-  sources: ReadonlyArray<import('./lighthouse.js').VisionSource>,
-  x: number,
-  y: number,
-): boolean {
-  for (const src of sources) {
-    if (src.kind === 'ellipse') {
-      const dx = x - (src.cx + src.offsetX);
-      const dy = y - (src.cy + src.offsetY);
-      if ((dx * dx) / (src.major * src.major) + (dy * dy) / (src.minor * src.minor) <= 1) {
-        return true;
-      }
-    } else {
-      const dx = x - src.cx;
-      const dy = y - src.cy;
-      if (dx * dx + dy * dy <= src.radius * src.radius) return true;
-    }
-  }
-  return false;
 }
 
 /**
@@ -751,27 +699,12 @@ export function makeInitialWorld(_nowMs: number): WorldState {
   // (e.g. desert-far in DEMO_ISLANDS) must ALSO get their cells seeded —
   // otherwise the fog overlay paints UNKNOWN_BLUE on top of them and they
   // disappear from view, violating the "discovered ⇔ any cell revealed"
-  // invariant. Static import of `discovery.ts` would create a cycle
-  // (`discovery.ts → world.ts`); we inline the cell math here, mirroring
-  // `islandCells` in discovery.ts.
+  // invariant. `islandCells` walks every constituent (primary +
+  // extraEllipses) so merged islands are seeded correctly.
   const revealedCells = new Set<string>();
   for (const spec of islands) {
     if (!spec.populated && !spec.discovered) continue;
-    for (const c of islandConstituents(spec)) {
-      const xMin = Math.floor(spec.cx + c.offsetX - c.major);
-      const xMax = Math.ceil(spec.cx + c.offsetX + c.major);
-      const yMin = Math.floor(spec.cy + c.offsetY - c.minor);
-      const yMax = Math.ceil(spec.cy + c.offsetY + c.minor);
-      const cMinX = Math.floor(xMin / CELL_SIZE_TILES);
-      const cMaxX = Math.floor(xMax / CELL_SIZE_TILES);
-      const cMinY = Math.floor(yMin / CELL_SIZE_TILES);
-      const cMaxY = Math.floor(yMax / CELL_SIZE_TILES);
-      for (let cy = cMinY; cy <= cMaxY; cy++) {
-        for (let cx = cMinX; cx <= cMaxX; cx++) {
-          revealedCells.add(`${cx},${cy}`);
-        }
-      }
-    }
+    for (const k of islandCells(spec)) revealedCells.add(k);
   }
   return { islands, drones: [], routes: [], vehicles: [], revealedCells };
 }

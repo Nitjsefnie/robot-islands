@@ -16,13 +16,12 @@
 //     aviation kerosene, etc. No fallback to lower grades.
 
 import { computeSignalRanges, pointInSignalRange } from './antenna.js';
-import { cellCenterTile, corridorCells, parseCellKey } from './discovery.js';
+import { cellCenterTile, corridorCells, islandCells, parseCellKey } from './discovery.js';
 import type { IslandState } from './economy.js';
 import { inv } from './economy.js';
 import { fuelForTier, type ResourceId } from './recipes.js';
 import { tierForLevel } from './skilltree.js';
 import type { WorldState } from './world.js';
-import { islandConstituents, CELL_SIZE_TILES } from './world.js';
 
 /** Drone tier per §11.5. Step 6 only emits tier-2 drones; the field exists so
  *  future tiers can be added without reshaping the data model. */
@@ -344,26 +343,16 @@ export function tickDrones(
 }
 
 /** Whether any cell touched by `spec`'s footprint sits in `revealedCells`.
- *  Walks the same tile-bbox-per-constituent shape `islandCells` (discovery.ts)
- *  uses; short-circuits on the first hit. Pure. */
+ *  Delegates to `islandCells` (discovery.ts) for footprint enumeration —
+ *  walks every constituent (primary + extraEllipses) so merged islands
+ *  flip discovered the moment any one of their absorbed lobes is touched.
+ *  Pure. */
 function islandHasRevealedCell(
   spec: import('./world.js').IslandSpec,
   revealedCells: ReadonlySet<string>,
 ): boolean {
-  for (const c of islandConstituents(spec)) {
-    const xMin = Math.floor(spec.cx + c.offsetX - c.major);
-    const xMax = Math.ceil(spec.cx + c.offsetX + c.major);
-    const yMin = Math.floor(spec.cy + c.offsetY - c.minor);
-    const yMax = Math.ceil(spec.cy + c.offsetY + c.minor);
-    const cMinX = Math.floor(xMin / CELL_SIZE_TILES);
-    const cMaxX = Math.floor(xMax / CELL_SIZE_TILES);
-    const cMinY = Math.floor(yMin / CELL_SIZE_TILES);
-    const cMaxY = Math.floor(yMax / CELL_SIZE_TILES);
-    for (let cy = cMinY; cy <= cMaxY; cy++) {
-      for (let cx = cMinX; cx <= cMaxX; cx++) {
-        if (revealedCells.has(`${cx},${cy}`)) return true;
-      }
-    }
+  for (const k of islandCells(spec)) {
+    if (revealedCells.has(k)) return true;
   }
   return false;
 }

@@ -43,6 +43,7 @@
 import { del, get, set } from 'idb-keyval';
 
 import { terrainAtForBiome } from './biomes.js';
+import { islandCells } from './discovery.js';
 import type { IslandState } from './economy.js';
 import type { Drone } from './drones.js';
 import { _seedConstructionCounter } from './construction-ui.js';
@@ -489,38 +490,10 @@ function deserializeRevealedCells(
     // save that pre-dates §11 may carry `discovered: true` on islands that
     // the player revealed via the old center-flip mechanic; without seeding
     // their cells here the fog overlay would paint over them on load.
+    // `islandCells` walks every constituent (primary + extraEllipses) so
+    // merged islands get their absorbed-lobe cells seeded too.
     if (!spec.populated && !spec.discovered) continue;
-    const xMin = Math.floor(spec.cx - spec.majorRadius);
-    const xMax = Math.ceil(spec.cx + spec.majorRadius);
-    const yMin = Math.floor(spec.cy - spec.minorRadius);
-    const yMax = Math.ceil(spec.cy + spec.minorRadius);
-    const cellSize = 16; // mirrors CELL_SIZE_TILES in world.ts
-    const cMinX = Math.floor(xMin / cellSize);
-    const cMaxX = Math.floor(xMax / cellSize);
-    const cMinY = Math.floor(yMin / cellSize);
-    const cMaxY = Math.floor(yMax / cellSize);
-    for (let cy = cMinY; cy <= cMaxY; cy++) {
-      for (let cx = cMinX; cx <= cMaxX; cx++) {
-        out.add(`${cx},${cy}`);
-      }
-    }
-    if (spec.extraEllipses) {
-      for (const e of spec.extraEllipses) {
-        const exMin = Math.floor(spec.cx + e.offsetX - e.major);
-        const exMax = Math.ceil(spec.cx + e.offsetX + e.major);
-        const eyMin = Math.floor(spec.cy + e.offsetY - e.minor);
-        const eyMax = Math.ceil(spec.cy + e.offsetY + e.minor);
-        const ecMinX = Math.floor(exMin / cellSize);
-        const ecMaxX = Math.floor(exMax / cellSize);
-        const ecMinY = Math.floor(eyMin / cellSize);
-        const ecMaxY = Math.floor(eyMax / cellSize);
-        for (let cy = ecMinY; cy <= ecMaxY; cy++) {
-          for (let cx = ecMinX; cx <= ecMaxX; cx++) {
-            out.add(`${cx},${cy}`);
-          }
-        }
-      }
-    }
+    for (const k of islandCells(spec)) out.add(k);
   }
   return out;
 }

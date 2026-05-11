@@ -36,6 +36,7 @@ import { tierForLevel } from './skilltree.js';
 import {
   distSqTiles,
   ISLAND_NAME_MAX_LEN,
+  validateIslandName,
   type Biome,
   type IslandSpec,
   type WorldState,
@@ -765,18 +766,12 @@ export function mountConstructionUi(
     if (!positionIsFree(options.world, posX, posY, majorRadius)) return;
     const id = nextArtificialId();
     const nowMs = performance.now();
-    // Apply the same trim/length/control-char guard as `renameIsland` so
-    // a malformed custom name silently falls back to `id` rather than
-    // landing as the spec's display name. Empty post-trim → undefined,
-    // which makes `constructIsland` default to `id`.
-    const rawName = customName.trim();
-    const displayName =
-      rawName.length > 0 &&
-      rawName.length <= ISLAND_NAME_MAX_LEN &&
-      // eslint-disable-next-line no-control-regex
-      !/[\x00-\x1F\x7F]/.test(rawName)
-        ? rawName
-        : undefined;
+    // Validate via the shared `validateIslandName` predicate so the rules
+    // can't drift from `renameIsland`. Failure (empty/too-long/control-char)
+    // falls back to `undefined`, which makes `constructIsland` default to
+    // the auto-generated `id` rather than landing a malformed display name.
+    const nameCheck = validateIslandName(customName);
+    const displayName = nameCheck.ok ? nameCheck.name : undefined;
     const result = constructIsland(
       state,
       spec,

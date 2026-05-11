@@ -31,31 +31,15 @@
 
 import { Container, Graphics, Sprite, Texture } from 'pixi.js';
 
-import { CELL_SIZE_TILES } from './discovery.js';
+import { CELL_SIZE_TILES, islandCells } from './discovery.js';
 import { TILE_PX } from './island.js';
 import type { VisionSource } from './lighthouse.js';
 import {
   DISCOVERED_BLUE,
   UNKNOWN_BLUE,
   VISION_BLUE,
+  type IslandSpec,
 } from './world.js';
-
-/** Shape consumed by the fog-overlay layer (step 5 above). The renderer
- *  computes each rendered island's AABB in world-tile coords from
- *  `(cx, cy, majorRadius, minorRadius)` and paints UNKNOWN_BLUE on any
- *  unrevealed cell intersecting that AABB. Discovered/populated flag is
- *  retained for forward compatibility (and to let the caller drop
- *  not-yet-discovered islands cheaply). */
-export interface OceanIsland {
-  /** Centre of the island in world-tile coordinates. */
-  readonly cx: number;
-  readonly cy: number;
-  /** Whether the player has discovered this island. (Populated → discovered.) */
-  readonly discovered: boolean;
-  /** Ellipse semi-axes in tiles — used for the fog-overlay bbox. */
-  readonly majorRadius: number;
-  readonly minorRadius: number;
-}
 
 /** Width of the soft fade band at the rim, in pixels. The inner
  *  `radius - EDGE_FADE_PX` is solid colour; the outer EDGE_FADE_PX fades
@@ -280,46 +264,38 @@ export function renderOcean(
 /**
  * Build the fog-overlay layer (the post-island unknown-blue mask).
  *
- * For each rendered island, compute its AABB in cell coords; for every cell
- * in that AABB NOT in `revealedCells`, paint an UNKNOWN_BLUE 16-tile sprite.
- * Add the returned container ABOVE the islands layer so the squares mask
- * the unrevealed portion of each partially-revealed island.
+ * For each rendered island, enumerate its constituent cells via
+ * `islandCells(spec)` (which walks the primary ellipse PLUS every
+ * `extraEllipses` entry per §3.6); for every cell in that set NOT in
+ * `revealedCells`, paint an UNKNOWN_BLUE 16-tile sprite. Add the returned
+ * container ABOVE the islands layer so the squares mask the unrevealed
+ * portion of each partially-revealed island.
  *
- * Cells that aren't part of any island bbox are left alone — they were
- * already UNKNOWN_BLUE from the base rect, and a redundant overlay there
- * would just be drawcalls for no visual change.
+ * Cells that aren't part of any island footprint are left alone — they
+ * were already UNKNOWN_BLUE from the base rect, and a redundant overlay
+ * there would just be drawcalls for no visual change.
  *
- * @param islands         Islands to consider (skip 'unknown' islands which
- *                        the renderer already short-circuits to null).
+ * @param islands         Islands to consider. Undiscovered islands are
+ *                        skipped (they don't render in the first place,
+ *                        so fogging them would be wasted work).
  * @param revealedCells   Same Set used by `renderOcean`.
  * @returns A `Container` carrying one Sprite per fogged cell.
  */
 export function renderOceanFogOverlay(
-  islands: ReadonlyArray<OceanIsland>,
+  islands: ReadonlyArray<IslandSpec>,
   revealedCells: ReadonlySet<string>,
 ): Container {
   const layer = new Container();
   layer.label = 'ocean-fog-overlay';
-  // Deduplicate cells across overlapping island bboxes — two islands sharing
-  // a bbox cell would otherwise emit two fog sprites at the same world
+  // Deduplicate cells across overlapping island footprints — two islands
+  // sharing a cell would otherwise emit two fog sprites at the same world
   // position. Sprite-cloning is cheap but dedup saves drawcalls.
   const fogCells = new Set<string>();
   for (const isl of islands) {
     if (!isl.discovered) continue;
-    const xMin = Math.floor(isl.cx - isl.majorRadius);
-    const xMax = Math.ceil(isl.cx + isl.majorRadius);
-    const yMin = Math.floor(isl.cy - isl.minorRadius);
-    const yMax = Math.ceil(isl.cy + isl.minorRadius);
-    const cMinX = Math.floor(xMin / CELL_SIZE_TILES);
-    const cMaxX = Math.floor(xMax / CELL_SIZE_TILES);
-    const cMinY = Math.floor(yMin / CELL_SIZE_TILES);
-    const cMaxY = Math.floor(yMax / CELL_SIZE_TILES);
-    for (let cy = cMinY; cy <= cMaxY; cy++) {
-      for (let cx = cMinX; cx <= cMaxX; cx++) {
-        const k = `${cx},${cy}`;
-        if (revealedCells.has(k)) continue;
-        fogCells.add(k);
-      }
+    for (const k of islandCells(isl)) {
+      if (revealedCells.has(k)) continue;
+      fogCells.add(k);
     }
   }
   for (const k of fogCells) {

@@ -158,18 +158,9 @@ async function main(): Promise<void> {
     return renderOcean(ws.revealedCells, visionSources, halfSize);
   }
   /** Bake the post-island fog overlay. One UNKNOWN_BLUE square per cell
-   *  intersecting a discovered island's bbox that isn't in `revealedCells`. */
+   *  in a discovered island's footprint that isn't in `revealedCells`. */
   function renderFogOverlayFromState(ws: WorldState): Container {
-    return renderOceanFogOverlay(
-      ws.islands.map((s) => ({
-        cx: s.cx,
-        cy: s.cy,
-        discovered: s.discovered,
-        majorRadius: s.majorRadius,
-        minorRadius: s.minorRadius,
-      })),
-      ws.revealedCells,
-    );
+    return renderOceanFogOverlay(ws.islands, ws.revealedCells);
   }
   function renderIslandLayer(ws: WorldState): Container {
     const layer = new Container();
