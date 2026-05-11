@@ -24,7 +24,14 @@
 // Spacetime fragment) is DEFERRED to step 14 — only the resources the
 // Reality Forge / Casimir Tap demo recipes consume ship in step 13.
 //
-// `xp_weight` per SPEC §9.1: T0 raws = 1, T1 = 3, T2 = 10, T4 = 100, T5 = 300.
+// Step-20 (T6 Orbital, §14) adds the T5→T6 transition artifact + the
+// resources the spaceport / satellite-assembly defs touch in placeholder form:
+//
+//   T5→T6 artifact: ascendant_core      (§13.4 / §14.1 — flips the §14.1 gate)
+//   T6 fuel:        antimatter_propellant (§11.7 / §14.10)
+//   T6 payload:     scanner_sat, comm_sat, orbital_insertion_package (§14.3 / §14.10)
+//
+// `xp_weight` per SPEC §9.1: T0 raws = 1, T1 = 3, T2 = 10, T4 = 100, T5 = 300, T6 = 1000.
 // Higher-tier outputs grant proportionally more XP per unit produced, so the
 // progression curve rewards climbing the recipe chain rather than just
 // stockpiling raws.
@@ -107,7 +114,33 @@ export type ResourceId =
   | 'aetheric_current'
   | 'tachyon_stream'
   | 'dark_matter'
-  | 'strange_matter';
+  | 'strange_matter'
+  // Step-20 (T6 Orbital, §14). Partial catalog: the resources the §14.2
+  // Spaceport + §14.10 satellite-assembly defs touch. §14.10 placeholder
+  // recipes additionally reference Aluminum, Magnet, Optical Fiber,
+  // Spacetime fragment, Memetic Core, Repair Pack, Phase Converter — those
+  // beyond Phase Converter (already in the T5 catalog) are DEFERRED until
+  // the live launch mechanics (§14.2-14.8 / §14.12) land.
+  //
+  //   ascendant_core           — T5/T6 transition artifact per §13.4 /
+  //                              §14.1. Crafted at `ascendant_assembly`
+  //                              (T5 building); producing one flips the
+  //                              §14.1 ascendantCoreCrafted gate. Auto-flip
+  //                              on first production deferred — current
+  //                              step seeds the flag manually on forest-ne.
+  //   antimatter_propellant    — T6 launch fuel per §11.7 / §14.10. Crafted
+  //                              at `antimatter_refinery` (T6).
+  //   scanner_sat              — §14.3 discovery/weather satellite payload.
+  //   comm_sat                 — §14.3 comm-graph extension payload.
+  //   orbital_insertion_package — §14.7 "T6 Foundation-Kit equivalent" —
+  //                              every launch requires one alongside fuel +
+  //                              variant recipe. Crafted at
+  //                              `orbital_insertion_assembly` (T6).
+  | 'ascendant_core'
+  | 'antimatter_propellant'
+  | 'scanner_sat'
+  | 'comm_sat'
+  | 'orbital_insertion_package';
 
 /** All known resources, useful for iterating to initialise inventories. */
 export const ALL_RESOURCES: ReadonlyArray<ResourceId> = [
@@ -165,6 +198,12 @@ export const ALL_RESOURCES: ReadonlyArray<ResourceId> = [
   'tachyon_stream',
   'dark_matter',
   'strange_matter',
+  // Step-20 T5→T6 artifact + T6 Orbital partial catalog (§14).
+  'ascendant_core',
+  'antimatter_propellant',
+  'scanner_sat',
+  'comm_sat',
+  'orbital_insertion_package',
 ];
 
 /**
@@ -177,6 +216,8 @@ export const ALL_RESOURCES: ReadonlyArray<ResourceId> = [
  *                       exotic_alloy, ai_core)
  *   T5 transcendent = 300 (casimir_energy, reality_anchor, plasma_charge,
  *                          eldritch_processor, phase_converter)
+ *   T6 orbital     = 1000 (ascendant_core (T5→T6 bridge), antimatter_propellant,
+ *                          scanner_sat, comm_sat, orbital_insertion_package)
  */
 export const XP_WEIGHT: Readonly<Record<ResourceId, number>> = {
   // T0 raws
@@ -239,6 +280,16 @@ export const XP_WEIGHT: Readonly<Record<ResourceId, number>> = {
   tachyon_stream: 300,
   dark_matter: 300,
   strange_matter: 300,
+  // T5→T6 transition artifact. §9.1 puts T5 weight at 300 and T6 at 1000;
+  // Ascendant Core is the bridge artifact unlocking T6 access (§13.4 /
+  // §14.1), so it carries the higher T6 weight (1000) — producing one
+  // is the moment the player crosses into the T6 tier band.
+  ascendant_core: 1000,
+  // T6 Orbital — §9.1 T6 weight 1000.
+  antimatter_propellant: 1000,
+  scanner_sat: 1000,
+  comm_sat: 1000,
+  orbital_insertion_package: 1000,
 };
 
 /**
@@ -807,6 +858,63 @@ export const RECIPES: Partial<Record<RecipeId, Recipe>> = {
     cycleSec: 9600, // rebalanced for idle-game scale, step #19 (×8: was 1200s)
     inputs: { aetheric_current: 1, tachyon_stream: 1 },
     outputs: { phase_converter: 1 },
+    category: 'manufacturing',
+  },
+
+  // ---------------------------------------------------------------------------
+  // T5→T6 transition + T6 Orbital (§13.4 / §14.10 / step 20)
+  // ---------------------------------------------------------------------------
+  // Data-only ship. §14.2-14.8 / §14.12 launch + debris + lodge + repair
+  // mechanics are DEFERRED — these recipes give the catalog rows visible
+  // outputs in the inspector but the resulting payloads/fuel are inert
+  // until the live launch system lands. §14.10 spec recipe inputs that
+  // aren't yet in the catalog (Spacetime fragment, Aluminum, Magnet,
+  // Optical Fiber, Memetic Core, Brick, Carbon Fiber) are simplified to
+  // catalog-resident inputs of the same tier-weight — DEFERRED for proper
+  // §14.10 fidelity until the missing intermediates ship.
+
+  // §13.4 / §14.1: Ascendant Assembly produces the Ascendant Core (T5→T6
+  // bridge artifact). Cycle is 2 hours of real time — the artifact's
+  // weight-and-cost framing makes it a meaningful gate. Auto-flip of
+  // `ascendantCoreCrafted` on first production DEFERRED.
+  ascendant_assembly: {
+    cycleSec: 7200,
+    inputs: { reality_anchor: 3, eldritch_processor: 1, ai_core: 5 },
+    outputs: { ascendant_core: 1 },
+    category: 'manufacturing',
+  },
+
+  // §11.7 / §14.10: Antimatter Refinery produces Antimatter Propellant
+  // (T6 launch fuel). 2-hour cycle.
+  antimatter_refinery: {
+    cycleSec: 7200,
+    inputs: { exotic_alloy: 1, reality_anchor: 1, casimir_energy: 2 },
+    outputs: { antimatter_propellant: 1 },
+    category: 'manufacturing',
+  },
+
+  // §14.3 / §14.10: Scanner Sat Assembly. 90-min cycle.
+  scanner_sat_assembly: {
+    cycleSec: 5400,
+    inputs: { ai_core: 2, microchip: 4, exotic_alloy: 1 },
+    outputs: { scanner_sat: 1 },
+    category: 'manufacturing',
+  },
+
+  // §14.3 / §14.10: Comm Sat Assembly. 90-min cycle.
+  comm_sat_assembly: {
+    cycleSec: 5400,
+    inputs: { ai_core: 1, microchip: 6, exotic_alloy: 1 },
+    outputs: { comm_sat: 1 },
+    category: 'manufacturing',
+  },
+
+  // §14.7 / §14.10: Orbital Insertion Assembly produces the T6 Foundation-
+  // Kit-equivalent payload required by every §14.7 launch. 60-min cycle.
+  orbital_insertion_assembly: {
+    cycleSec: 3600,
+    inputs: { antimatter_propellant: 2, exotic_alloy: 1 },
+    outputs: { orbital_insertion_package: 1 },
     category: 'manufacturing',
   },
 };

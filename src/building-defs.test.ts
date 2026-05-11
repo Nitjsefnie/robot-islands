@@ -57,6 +57,13 @@ const KNOWN_DEF_IDS: ReadonlyArray<BuildingDefId> = [
   'genesis_chamber',
   'universe_editor',
   'lattice_node',
+  // Step-20 T5→T6 transition + T6 Orbital (§13.4 / §14.2 / §14.10)
+  'ascendant_assembly',
+  'spaceport',
+  'antimatter_refinery',
+  'scanner_sat_assembly',
+  'comm_sat_assembly',
+  'orbital_insertion_assembly',
   // Step-18 recipe-graph closure (§7.1-§7.12)
   'quarry',
   'sand_pit',
@@ -486,5 +493,146 @@ describe('step-13 T5 catalog (§13.2 / §8.4 / §8.5 / §8.9)', () => {
     expect(buildingUnlocked(30, 'fusion_core', true)).toBe(true);
     // Levels below the tier breakpoint still locked regardless of flag.
     expect(buildingUnlocked(29, 'fusion_core', true)).toBe(false);
+  });
+});
+
+describe('step-20 T5→T6 Ascendant Assembly (§13.4)', () => {
+  it('ascendant_assembly is a T5 def in the catalog', () => {
+    const def = BUILDING_DEFS.ascendant_assembly;
+    expect(def).toBeDefined();
+    expect(def.tier).toBe(5);
+    expect(def.category).toBe('manufacturing');
+  });
+
+  it('ascendant_assembly is gated by the T5 access gate (level 50 + AI core)', () => {
+    // Pre-T5: locked.
+    expect(buildingUnlocked(49, 'ascendant_assembly', true)).toBe(false);
+    expect(buildingUnlocked(50, 'ascendant_assembly', false)).toBe(false);
+    // Post-T5: unlocked.
+    expect(buildingUnlocked(50, 'ascendant_assembly', true)).toBe(true);
+  });
+});
+
+describe('step-20 T6 Orbital catalog (§14 / step 20)', () => {
+  const T6_NON_SPACEPORT_IDS = [
+    'antimatter_refinery',
+    'scanner_sat_assembly',
+    'comm_sat_assembly',
+    'orbital_insertion_assembly',
+  ] as const;
+  const ALL_T6_IDS = ['spaceport', ...T6_NON_SPACEPORT_IDS] as const;
+
+  it('all 5 T6 defs are present with tier 6', () => {
+    for (const id of ALL_T6_IDS) {
+      expect(BUILDING_DEFS[id]).toBeDefined();
+      expect(BUILDING_DEFS[id].tier).toBe(6);
+    }
+  });
+
+  it('Spaceport: 4×4, -3000W consumer, special category, no recipe (gate building)', () => {
+    const def = BUILDING_DEFS.spaceport;
+    expect(def.width).toBe(4);
+    expect(def.height).toBe(4);
+    expect(def.power?.consumes).toBe(3000);
+    expect(def.category).toBe('special');
+    expect(def.requiredBiomes).toBeUndefined();
+  });
+
+  it('Antimatter Refinery: 3×3, -5000W consumer, manufacturing', () => {
+    const def = BUILDING_DEFS.antimatter_refinery;
+    expect(def.width).toBe(3);
+    expect(def.height).toBe(3);
+    expect(def.power?.consumes).toBe(5000);
+    expect(def.category).toBe('manufacturing');
+  });
+
+  it('satellite-assembly defs are 3×3 manufacturing consumers', () => {
+    for (const id of [
+      'scanner_sat_assembly',
+      'comm_sat_assembly',
+      'orbital_insertion_assembly',
+    ] as const) {
+      const def = BUILDING_DEFS[id];
+      expect(def.width).toBe(3);
+      expect(def.height).toBe(3);
+      expect(def.category).toBe('manufacturing');
+      expect(def.power?.consumes).toBeGreaterThan(0);
+    }
+  });
+
+  it('T6 defs are biome-agnostic (per task brief; Spaceport coastal pref documented)', () => {
+    for (const id of ALL_T6_IDS) {
+      expect(BUILDING_DEFS[id].requiredBiomes).toBeUndefined();
+    }
+  });
+
+  it('§14.1 gate: Spaceport itself is buildable on ascendantCoreCrafted (chicken-and-egg exemption)', () => {
+    // Without ascendantCoreCrafted, the Spaceport itself is locked too —
+    // §14.1's first half (Ascendant Core crafted) gates everything T6.
+    expect(buildingUnlocked(50, 'spaceport', true, false, false)).toBe(false);
+    // With ascendantCoreCrafted but no Spaceport yet, the Spaceport IS
+    // buildable (chicken-and-egg resolution: otherwise the gate's second
+    // half locks out its own gate building).
+    expect(buildingUnlocked(50, 'spaceport', true, true, false)).toBe(true);
+    // Once a Spaceport is placed, building another is still allowed by
+    // the def gate (placement.ts decides whether multi-Spaceport is OK).
+    expect(buildingUnlocked(50, 'spaceport', true, true, true)).toBe(true);
+  });
+
+  it('§14.1 gate: non-Spaceport T6 defs require BOTH ascendantCoreCrafted AND hasSpaceport', () => {
+    for (const id of T6_NON_SPACEPORT_IDS) {
+      // Neither half → locked.
+      expect(buildingUnlocked(50, id, true, false, false)).toBe(false);
+      // Half a — ascendant only → still locked (no Spaceport).
+      expect(buildingUnlocked(50, id, true, true, false)).toBe(false);
+      // Half b — Spaceport only → still locked (no Ascendant Core; impossible
+      // in practice since Spaceport itself requires ascendantCoreCrafted,
+      // but the gate logic must be order-independent).
+      expect(buildingUnlocked(50, id, true, false, true)).toBe(false);
+      // Both halves → unlocked.
+      expect(buildingUnlocked(50, id, true, true, true)).toBe(true);
+    }
+  });
+
+  it('§14.1 T6 gate: level is NOT a factor (no §9.2 level threshold for T6)', () => {
+    // T6 access composes orthogonally to level. A level-1 island with both
+    // gates flipped would unlock T6 — though reaching the gates requires
+    // T5 mastery in practice (level 50 + AI core for ascendant_assembly).
+    expect(buildingUnlocked(1, 'spaceport', false, true, false)).toBe(true);
+    expect(buildingUnlocked(1, 'antimatter_refinery', false, true, true)).toBe(true);
+  });
+
+  it('lower-tier defs unaffected by ascendantCoreCrafted / hasSpaceport flags', () => {
+    // T1/T2/T3/T4 defs only consult level → tier; T6 flags have no effect.
+    expect(buildingUnlocked(1, 'mine', false, false, false)).toBe(true);
+    expect(buildingUnlocked(1, 'mine', true, true, true)).toBe(true);
+    expect(buildingUnlocked(30, 'fusion_core', false, false, false)).toBe(true);
+    expect(buildingUnlocked(30, 'fusion_core', true, true, true)).toBe(true);
+  });
+
+  it('unlockedDefs at L50 + ai + ascendant + spaceport includes the full T6 band', () => {
+    const list = unlockedDefs(50, true, true, true);
+    for (const id of ALL_T6_IDS) {
+      expect(list).toContain(id);
+    }
+    // T5 still listed.
+    expect(list).toContain('reality_forge');
+    expect(list).toContain('ascendant_assembly');
+  });
+
+  it('unlockedDefs at L50 + ai + ascendant + no spaceport: only Spaceport from T6', () => {
+    const list = unlockedDefs(50, true, true, false);
+    expect(list).toContain('spaceport');
+    // Other T6 defs gated out.
+    for (const id of T6_NON_SPACEPORT_IDS) {
+      expect(list).not.toContain(id);
+    }
+  });
+
+  it('unlockedDefs at L50 + ai + !ascendant: every T6 def locked', () => {
+    const list = unlockedDefs(50, true, false, true);
+    for (const id of ALL_T6_IDS) {
+      expect(list).not.toContain(id);
+    }
   });
 });

@@ -46,6 +46,7 @@ function makeState(
     specializationRole: null,
     declaredAt: null,
     aiCoreCrafted: false,
+    ascendantCoreCrafted: false,
     lastTick: 0,
   };
 }

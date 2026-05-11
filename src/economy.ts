@@ -123,6 +123,16 @@ export interface IslandState {
    *  automatic flip-on-first-ai_core production-trigger is deferred to
    *  step 14; in step 13 the flag is seeded manually on the demo island. */
   aiCoreCrafted: boolean;
+  /** §14.1 T6 access gate (first half). Becomes `true` the first time this
+   *  island has ever produced an `ascendant_core`. Composed with "Spaceport
+   *  placed on this island" by `t6Unlocked` (skilltree.ts) / `buildingUnlocked`
+   *  to gate the T6 catalog rows. Step-20 deferral: the automatic
+   *  flip-on-first-ascendant-core production-trigger is deferred alongside
+   *  the §13 aiCoreCrafted auto-flip; current step seeds the flag manually
+   *  on the forest-ne demo island. The Spaceport itself is exempt from the
+   *  second half of the gate (chicken-and-egg per §14.1) — see
+   *  `buildingUnlocked`. */
+  ascendantCoreCrafted: boolean;
   /** Wall-clock timestamp of the last advance, in milliseconds. */
   lastTick: number;
 }

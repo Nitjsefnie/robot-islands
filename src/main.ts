@@ -563,6 +563,11 @@ async function main(): Promise<void> {
     if (forestNe) {
       forestNe.level = 50;
       forestNe.aiCoreCrafted = true; // §13.1 T5 access — manual demo seed
+      // §14.1 T6 access (first half) — manual demo seed. Auto-flip on
+      // first ascendant_core production DEFERRED. With this flag plus a
+      // placed Spaceport, forest-ne crosses the §14.1 T6 gate and the
+      // Catalog UI surfaces the T6 band as available.
+      forestNe.ascendantCoreCrafted = true;
       // Rebalanced for idle-game scale, step #19: bumped proportionally to
       // new BASELINE_STORAGE_CAP (2000) so the demo island has meaningful
       // pre-seeded stock relative to the larger caps.

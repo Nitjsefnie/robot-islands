@@ -134,8 +134,9 @@ export const BRANCH_LABEL: Readonly<Record<BranchId, string>> = {
  * on top.
  *
  * T6 ("Ascendant Core + Spaceport" per §9.2) is never returned by this
- * function — neither artefact exists yet. T6 access will mirror T5 with its
- * own composability when step 14+ lands.
+ * function — there is no level threshold for T6. T6 access composes
+ * orthogonally to level via `t6Unlocked` below (Ascendant Core crafted
+ * AND Spaceport placed).
  */
 export function tierForLevel(level: number): Tier {
   if (level >= 50) return 5;
@@ -154,6 +155,34 @@ export function tierForLevel(level: number): Tier {
  */
 export function t5Unlocked(state: { level: number; aiCoreCrafted: boolean }): boolean {
   return state.level >= 50 && state.aiCoreCrafted;
+}
+
+/**
+ * §14.1 T6 access gate: an island unlocks T6 only after BOTH crafting an
+ * Ascendant Core (`ascendantCoreCrafted` flag) AND placing a Spaceport
+ * building on that island. Pure — takes the minimal duck-typed shape so
+ * it can be called with `(IslandState, IslandSpec)` or with bespoke
+ * fixtures. Used as the canonical full-island T6 gate (catalog rows,
+ * future T6 skill sub-paths per §14.9, future T6 launch mechanics per
+ * §14.2-14.8).
+ *
+ * Note: `buildingUnlocked` exempts the Spaceport itself from the
+ * "Spaceport placed" half of the gate — otherwise the very first
+ * Spaceport would be unbuildable. `t6Unlocked` does NOT carry that
+ * exemption because it's the full-island gate: pre-Spaceport the
+ * island is not in the T6 access band even though one specific def
+ * (Spaceport) IS placeable.
+ *
+ * The `spec` argument's shape is intentionally narrow — only
+ * `buildings[].defId` is read — so a synthetic test fixture can pass a
+ * minimal stand-in without satisfying the full IslandSpec contract.
+ */
+export function t6Unlocked(
+  state: { ascendantCoreCrafted: boolean },
+  spec: { buildings: ReadonlyArray<{ defId: string }> },
+): boolean {
+  if (!state.ascendantCoreCrafted) return false;
+  return spec.buildings.some((b) => b.defId === 'spaceport');
 }
 
 /**

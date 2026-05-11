@@ -53,6 +53,7 @@ function makeIslandState(overrides: Partial<IslandState> & { id: string }): Isla
     specializationRole: overrides.specializationRole ?? null,
     declaredAt: overrides.declaredAt ?? null,
     aiCoreCrafted: overrides.aiCoreCrafted ?? false,
+    ascendantCoreCrafted: overrides.ascendantCoreCrafted ?? false,
     lastTick: overrides.lastTick ?? 0,
   };
 }

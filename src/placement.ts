@@ -174,7 +174,16 @@ export function validatePlacement(
   rotation: Rotation,
 ): PlacementValidation {
   const def = BUILDING_DEFS[defId];
-  if (!buildingUnlocked(state.level, defId, state.aiCoreCrafted)) {
+  const hasSpaceport = spec.buildings.some((b) => b.defId === 'spaceport');
+  if (
+    !buildingUnlocked(
+      state.level,
+      defId,
+      state.aiCoreCrafted,
+      state.ascendantCoreCrafted,
+      hasSpaceport,
+    )
+  ) {
     return { ok: false, reason: 'def-not-unlocked' };
   }
   if (!canPlaceOnIsland(def, spec)) {

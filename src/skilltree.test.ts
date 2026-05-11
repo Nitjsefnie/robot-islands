@@ -12,6 +12,7 @@ import {
   nodeRequiredTier,
   spendPoint,
   t5Unlocked,
+  t6Unlocked,
   tierForLevel,
   type SkillNode,
 } from './skilltree.js';
@@ -49,6 +50,7 @@ function makeState(over: Partial<IslandState> = {}): IslandState {
     specializationRole: null,
     declaredAt: null,
     aiCoreCrafted: false,
+    ascendantCoreCrafted: false,
     lastTick: 0,
     ...over,
   };
@@ -95,6 +97,29 @@ describe('t5Unlocked (§13.1 T5 access gate)', () => {
   });
   it('locked at level 1 without AI core (sanity)', () => {
     expect(t5Unlocked({ level: 1, aiCoreCrafted: false })).toBe(false);
+  });
+});
+
+describe('t6Unlocked (§14.1 T6 access gate)', () => {
+  const specWithSpaceport = { buildings: [{ defId: 'spaceport' }] };
+  const specWithoutSpaceport = { buildings: [{ defId: 'mine' }] };
+  const emptySpec = { buildings: [] };
+
+  it('locked when ascendantCoreCrafted=false regardless of Spaceport', () => {
+    expect(t6Unlocked({ ascendantCoreCrafted: false }, specWithSpaceport)).toBe(false);
+    expect(t6Unlocked({ ascendantCoreCrafted: false }, specWithoutSpaceport)).toBe(false);
+    expect(t6Unlocked({ ascendantCoreCrafted: false }, emptySpec)).toBe(false);
+  });
+  it('locked when ascendantCoreCrafted=true but no Spaceport placed', () => {
+    expect(t6Unlocked({ ascendantCoreCrafted: true }, specWithoutSpaceport)).toBe(false);
+    expect(t6Unlocked({ ascendantCoreCrafted: true }, emptySpec)).toBe(false);
+  });
+  it('unlocked when ascendantCoreCrafted=true AND Spaceport placed', () => {
+    expect(t6Unlocked({ ascendantCoreCrafted: true }, specWithSpaceport)).toBe(true);
+  });
+  it('unlocked when Spaceport is one of several placed buildings', () => {
+    const spec = { buildings: [{ defId: 'mine' }, { defId: 'spaceport' }, { defId: 'workshop' }] };
+    expect(t6Unlocked({ ascendantCoreCrafted: true }, spec)).toBe(true);
   });
 });
 

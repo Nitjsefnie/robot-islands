@@ -124,4 +124,16 @@ export const RESOURCE_STORAGE_CATEGORY: Readonly<Record<ResourceId, StorageCateg
   tachyon_stream: 'rare',
   dark_matter: 'rare',
   strange_matter: 'rare',
+  // Step-20 (T6 Orbital). All five route to `rare` — the Vault is the
+  // canonical T5/T6 catch-all. `antimatter_propellant` is a fuel/gas in
+  // nature (§11.7) and an arguable `liquid_gas` candidate, but routing it
+  // to `rare` keeps T6 launch fuel gated behind a Vault rather than a
+  // mid-tier Tank, matching its T6 weight (1000) and §14.10 "real
+  // production commitment" narrative. Reassignable if a T6 fuel-storage
+  // building lands later.
+  ascendant_core: 'rare',
+  antimatter_propellant: 'rare',
+  scanner_sat: 'rare',
+  comm_sat: 'rare',
+  orbital_insertion_package: 'rare',
 };

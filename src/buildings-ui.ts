@@ -525,13 +525,34 @@ export function mountBuildingsUi(
     row.addEventListener('click', () => {
       const st = getState();
       const sp = getSpec();
-      if (!buildingUnlocked(st.level, defId, st.aiCoreCrafted)) return;
+      const hasSp = sp.buildings.some((b) => b.defId === 'spaceport');
+      if (
+        !buildingUnlocked(
+          st.level,
+          defId,
+          st.aiCoreCrafted,
+          st.ascendantCoreCrafted,
+          hasSp,
+        )
+      )
+        return;
       if (!canPlaceOnIsland(BUILDING_DEFS[defId], sp)) return;
       options.onPlaceRequested?.(defId);
     });
     row.addEventListener('mouseenter', () => {
       const st = getState();
-      if (!buildingUnlocked(st.level, defId, st.aiCoreCrafted)) return;
+      const sp = getSpec();
+      const hasSp = sp.buildings.some((b) => b.defId === 'spaceport');
+      if (
+        !buildingUnlocked(
+          st.level,
+          defId,
+          st.aiCoreCrafted,
+          st.ascendantCoreCrafted,
+          hasSp,
+        )
+      )
+        return;
       row.style.background = ROW_BG_HOVER;
       row.style.borderLeftColor = ACCENT;
       row.style.cursor = 'pointer';
@@ -551,7 +572,14 @@ export function mountBuildingsUi(
     const def = BUILDING_DEFS[defId];
     const state = getState();
     const spec = getSpec();
-    const unlocked = buildingUnlocked(state.level, defId, state.aiCoreCrafted);
+    const hasSpaceport = spec.buildings.some((b) => b.defId === 'spaceport');
+    const unlocked = buildingUnlocked(
+      state.level,
+      defId,
+      state.aiCoreCrafted,
+      state.ascendantCoreCrafted,
+      hasSpaceport,
+    );
     // §9.5: biome-locked uniques (those with `requiredBiomes`) are tier-
     // unlocked but cannot be placed on this island unless biome matches and
     // the island is not artificial. `canPlaceOnIsland` is the canonical
@@ -717,7 +745,9 @@ export function mountBuildingsUi(
 
   function paintTierBand(ref: TierBandRef): void {
     const state = getState();
+    const spec = getSpec();
     const playerTier = tierForLevel(state.level);
+    const hasSpaceport = spec.buildings.some((b) => b.defId === 'spaceport');
     // T5 has a two-axis gate (level 50 AND aiCoreCrafted per §13.1). When the
     // level is met but the AI Core requirement isn't, show "AI CORE REQ"
     // instead of "0 LV TO UNLOCK" which would lie about what's missing.
@@ -726,6 +756,35 @@ export function mountBuildingsUi(
       ref.heading.style.borderBottomColor = WARN_DIM;
       ref.headingStatus.textContent = 'AI CORE REQ';
       ref.headingStatus.style.color = WARN;
+      return;
+    }
+    // T6 has a two-axis gate (ascendant_core crafted AND Spaceport placed
+    // per §14.1). The §9.2 catalog has no level threshold for T6 — both
+    // gates are item/building-driven. Surface whichever half is missing
+    // rather than the meaningless "Infinity LV TO UNLOCK" the level-gap
+    // math would produce.
+    if (ref.tier === 6) {
+      if (!state.ascendantCoreCrafted) {
+        ref.headingLabel.style.color = WARN;
+        ref.heading.style.borderBottomColor = WARN_DIM;
+        ref.headingStatus.textContent = 'ASCENDANT CORE REQ';
+        ref.headingStatus.style.color = WARN;
+        return;
+      }
+      if (!hasSpaceport) {
+        // Spaceport is buildable at this point (exempt from the gate),
+        // so the band IS partially available. Flag the remaining
+        // requirement softly.
+        ref.headingLabel.style.color = WARN;
+        ref.heading.style.borderBottomColor = WARN_DIM;
+        ref.headingStatus.textContent = 'SPACEPORT REQ';
+        ref.headingStatus.style.color = WARN;
+        return;
+      }
+      ref.headingLabel.style.color = ACCENT;
+      ref.heading.style.borderBottomColor = ACCENT_DIM;
+      ref.headingStatus.textContent = 'available';
+      ref.headingStatus.style.color = FG_DIM;
       return;
     }
     if (ref.tier <= playerTier && !(ref.tier === 5 && !state.aiCoreCrafted)) {
@@ -806,8 +865,16 @@ export function mountBuildingsUi(
     islandLevelVal.textContent = String(state.level);
     const playerTier = tierForLevel(state.level);
     islandTierVal.textContent = `T${playerTier}`;
+    const spec = getSpec();
+    const hasSpaceport = spec.buildings.some((b) => b.defId === 'spaceport');
     const unlocked = ALL_BUILDING_DEF_IDS.filter((id) =>
-      buildingUnlocked(state.level, id, state.aiCoreCrafted),
+      buildingUnlocked(
+        state.level,
+        id,
+        state.aiCoreCrafted,
+        state.ascendantCoreCrafted,
+        hasSpaceport,
+      ),
     ).length;
     unlockedCountVal.textContent = `${unlocked} / ${ALL_BUILDING_DEF_IDS.length}`;
     for (const band of tierBandRefs) paintTierBand(band);

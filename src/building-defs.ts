@@ -115,6 +115,25 @@ export type BuildingDefId =
   | 'genesis_chamber'
   | 'universe_editor'
   | 'lattice_node'
+  // T5→T6 transition (step 20): produces `ascendant_core`, the §14.1 gate
+  // artifact. Built at T5 (level 50 + AI core) so the player can craft
+  // ascendant_core BEFORE the §14.1 Spaceport requirement — Ascendant
+  // Core is per §13.4 a T5 endgame artifact whose existence promotes the
+  // island into the T6 access band.
+  | 'ascendant_assembly'
+  // New T6 (§14 / step 20) — data-only. §14.2-14.8 / §14.12 live mechanics
+  // (satellite launches, debris fields, comm graph, repair drones,
+  // lodge events) are DEFERRED; these defs ship as visible catalog rows
+  // plus power-balance contributions. §14.2 Spaceport tier I/II/III
+  // upgrade lifecycle, §14.3 satellite variants, §14.4 comm graph,
+  // §14.5 dwell ramps, §14.6 maneuvering fuel, §14.7 launch success,
+  // §14.8 debris and Kessler cascades, §14.9 four new Orbital skill
+  // sub-paths, §14.12 Repair Drone operations — all deferred.
+  | 'spaceport'
+  | 'antimatter_refinery'
+  | 'scanner_sat_assembly'
+  | 'comm_sat_assembly'
+  | 'orbital_insertion_assembly'
   // Step-18 recipe-graph closure (§7.1-§7.12). One defId per recipe
   // since the engine's 1:1 recipe-per-defId model doesn't support
   // multi-recipe-per-building selection without infra changes.
@@ -867,6 +886,134 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     power: { consumes: 800 },
     glyph: '✺',
   },
+  // §13.4 / §14.1: Ascendant Assembly — T5 building dedicated to crafting
+  // the Ascendant Core. Spec §13.4 describes the Core as "constructed"
+  // from T5 inputs once the player has mastered T5; ship it as a
+  // standalone defId with its own recipe (parallel to the step-12
+  // Foundation Kit decision to split kit_assembler from Workshop) so the
+  // engine's 1:1 recipe-per-defId model has no conflict. Crafting one
+  // Ascendant Core flips the §14.1 `ascendantCoreCrafted` gate (auto-flip
+  // on first production DEFERRED — current step seeds the flag manually
+  // on the forest-ne demo island).
+  ascendant_assembly: {
+    id: 'ascendant_assembly',
+    displayName: 'Ascendant Assembly',
+    category: 'manufacturing',
+    tier: 5,
+    width: 4,
+    height: 4,
+    fill: 0xe0c060, // ascendant gold
+    stroke: 0x504010,
+    power: { consumes: 4000 },
+    glyph: '✺',
+  },
+  // -------------------------------------------------------------------------
+  // T6 (Ascendant Core + Spaceport, §14) — Orbital per step 20
+  // -------------------------------------------------------------------------
+  //
+  // Data-only ship. The §14.2-14.8 / §14.12 live mechanics — Spaceport
+  // tier I/II/III upgrade lifecycle, satellite launches as a concurrent
+  // slot, scheduled launches with success rolls, orbital debris fields,
+  // Kessler-cascade chains, comm-graph data delivery, lodge events,
+  // Repair Drone operations, dwell-ramp discovery — are all DEFERRED.
+  // §14.9 four new Orbital skill sub-paths (Launch / Communication /
+  // Discovery / Resilience) — DEFERRED.
+  //
+  // The §14.1 access gate (level 50 + AI core + Ascendant Core crafted +
+  // Spaceport placed) is composed in `buildingUnlocked` below. Spaceport
+  // itself is exempt from the "Spaceport placed" half of the gate
+  // (otherwise it'd be unbuildable — chicken-and-egg per §14.1's literal
+  // reading).
+
+  // §14.2 Spaceport — single building serving as launch facility, ground-
+  // side comm antenna, and repair-launch facility. Tier I/II/III in-place
+  // upgrade lifecycle per §14.2 DEFERRED — ships as a single tier with no
+  // upgrade. §14.7 pad-explosion failure (Spaceport returns to tier I on
+  // destruction) — DEFERRED. No recipe — this is a special placement
+  // (the T6 gate building itself).
+  spaceport: {
+    id: 'spaceport',
+    displayName: 'Spaceport',
+    category: 'special',
+    tier: 6,
+    width: 4,
+    height: 4,
+    fill: 0x202060, // deep cosmic blue
+    stroke: 0x080018,
+    power: { consumes: 3000 },
+    glyph: '▲',
+  },
+  // §11.7 / §14.10: Antimatter Refinery — produces Antimatter Propellant
+  // (T6 launch fuel). Recipe placeholder per the task brief:
+  // `1 exotic_alloy + 1 reality_anchor + 2 casimir_energy → 1 antimatter_propellant`
+  // on a 2-hour cycle. §14.10 actual recipe ("Antimatter Capsule" chain
+  // through Particle Accelerator) — DEFERRED.
+  antimatter_refinery: {
+    id: 'antimatter_refinery',
+    displayName: 'Antimatter Refinery',
+    category: 'manufacturing',
+    tier: 6,
+    width: 3,
+    height: 3,
+    fill: 0xc060e0, // electric violet
+    stroke: 0x300040,
+    power: { consumes: 5000 },
+    glyph: '✦',
+  },
+  // §14.3 / §14.10: Scanner Sat Assembly — produces Scanner Sat payloads
+  // for §14.3 discovery + weather observation. §14.10 placeholder recipe
+  // (`4 exotic_alloy + 2 ai_core + spacetime_fragment + 50 aluminum + 1
+  // orbital_insertion_package`) is simplified here to inputs already in
+  // the catalog: `2 ai_core + 4 microchip + 1 exotic_alloy` on a 90-min
+  // cycle. Spacetime fragment / Aluminum DEFERRED.
+  scanner_sat_assembly: {
+    id: 'scanner_sat_assembly',
+    displayName: 'Scanner Sat Assembly',
+    category: 'manufacturing',
+    tier: 6,
+    width: 3,
+    height: 3,
+    fill: 0x80a0c0, // pale instrument blue
+    stroke: 0x20303a,
+    power: { consumes: 2000 },
+    glyph: '◇',
+  },
+  // §14.3 / §14.10: Comm Sat Assembly — produces Comm Sat payloads for
+  // §14.4 comm-graph extension. §14.10 placeholder recipe (`6 exotic_alloy
+  // + 1 ai_core + 200 optical_fiber + 1 orbital_insertion_package`) is
+  // simplified to inputs in the catalog: `1 ai_core + 6 microchip + 1
+  // exotic_alloy` on a 90-min cycle. Optical Fiber DEFERRED.
+  comm_sat_assembly: {
+    id: 'comm_sat_assembly',
+    displayName: 'Comm Sat Assembly',
+    category: 'manufacturing',
+    tier: 6,
+    width: 3,
+    height: 3,
+    fill: 0xa0c080, // pale antenna green
+    stroke: 0x303a20,
+    power: { consumes: 2000 },
+    glyph: '◇',
+  },
+  // §14.7 / §14.10: Orbital Insertion Assembly — produces Orbital
+  // Insertion Packages (T6 Foundation-Kit equivalent). Every §14.7
+  // satellite launch requires one alongside fuel + variant recipe. §14.10
+  // placeholder recipe (`100 iron_ingot + 30 brick + 20 glass + 10
+  // carbon_fiber + 5 ai_core`) is simplified to T6-scale inputs in the
+  // catalog: `2 antimatter_propellant + 1 exotic_alloy` on a 60-min
+  // cycle. Brick / Carbon Fiber DEFERRED.
+  orbital_insertion_assembly: {
+    id: 'orbital_insertion_assembly',
+    displayName: 'Orbital Insertion Assembly',
+    category: 'manufacturing',
+    tier: 6,
+    width: 3,
+    height: 3,
+    fill: 0xc0a060, // bronze
+    stroke: 0x403014,
+    power: { consumes: 1500 },
+    glyph: '⚙',
+  },
   // -------------------------------------------------------------------------
   // Step-18 recipe-graph closure (§7.1-§7.12)
   // -------------------------------------------------------------------------
@@ -1277,26 +1424,47 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
  *  ("Island reaches level 50 AND has crafted at least one AI core"). The
  *  parameter defaults to `false` so existing callers (and the unlockedDefs
  *  helper) keep working without modification — T5 rows stay locked unless
- *  the caller explicitly opts in by passing `state.aiCoreCrafted`. */
+ *  the caller explicitly opts in by passing `state.aiCoreCrafted`.
+ *
+ *  Step-20: T6 defs require both `ascendantCoreCrafted` (§14.1 first half)
+ *  AND a placed Spaceport on the island (§14.1 second half). Spaceport
+ *  itself is EXEMPT from the spaceport-placed half (otherwise it'd be
+ *  unbuildable by definition — a §14.1 chicken-and-egg); it gates on
+ *  `ascendantCoreCrafted` alone. Both new parameters default to false so
+ *  pre-step-20 callers continue to see T6 rows locked. */
 export function buildingUnlocked(
   islandLevel: number,
   defId: BuildingDefId,
   aiCoreCrafted: boolean = false,
+  ascendantCoreCrafted: boolean = false,
+  hasSpaceport: boolean = false,
 ): boolean {
   const def = BUILDING_DEFS[defId];
+  if (def.tier === 6) {
+    // §14.1 chicken-and-egg resolution: Spaceport itself is the gate
+    // building, so it cannot itself require a Spaceport-already-placed.
+    // The remaining T6 defs need both halves of the §14.1 gate.
+    if (defId === 'spaceport') return ascendantCoreCrafted;
+    return ascendantCoreCrafted && hasSpaceport;
+  }
   if (def.tier === 5) return islandLevel >= 50 && aiCoreCrafted;
   return tierForLevel(islandLevel) >= def.tier;
 }
 
 /** Every def unlocked at the given island level, in catalog declaration order.
  *  Step-13: T5 defs are EXCLUDED from this list unless `aiCoreCrafted` is
- *  also true (defaults to false to keep tier-only callers unaffected). */
+ *  also true (defaults to false to keep tier-only callers unaffected).
+ *  Step-20: T6 defs are EXCLUDED unless both `ascendantCoreCrafted` and
+ *  `hasSpaceport` are true (Spaceport itself is exempt from the latter —
+ *  see `buildingUnlocked`). */
 export function unlockedDefs(
   islandLevel: number,
   aiCoreCrafted: boolean = false,
+  ascendantCoreCrafted: boolean = false,
+  hasSpaceport: boolean = false,
 ): BuildingDefId[] {
   return (Object.keys(BUILDING_DEFS) as BuildingDefId[]).filter((id) =>
-    buildingUnlocked(islandLevel, id, aiCoreCrafted),
+    buildingUnlocked(islandLevel, id, aiCoreCrafted, ascendantCoreCrafted, hasSpaceport),
   );
 }
 

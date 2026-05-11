@@ -18,7 +18,12 @@
 import { describe, expect, it } from 'vitest';
 
 import { effectiveModifierMultipliers } from './biomes.js';
-import { BUILDING_DEFS, type BuildingDef, type BuildingDefId } from './building-defs.js';
+import {
+  BUILDING_DEFS,
+  unlockedDefs,
+  type BuildingDef,
+  type BuildingDefId,
+} from './building-defs.js';
 import type { PlacedBuilding } from './buildings.js';
 import {
   advanceIsland,
@@ -87,6 +92,7 @@ function makeState(over: Partial<IslandState> = {}): IslandState {
     specializationRole: null,
     declaredAt: null,
     aiCoreCrafted: false,
+    ascendantCoreCrafted: false,
     lastTick: 0,
     ...over,
   };
@@ -1310,5 +1316,56 @@ describe('§4.7 maintenance — integration with advanceIsland', () => {
     advanceIsland(state, 24 * HOUR_MS, { defs: POWER_FREE });
     // 24h elapsed but timer stayed at 0 (the flag short-circuits accrual).
     expect(state.buildings[0]!.operatingMs).toBe(0);
+  });
+});
+
+describe('step-20 T6 gate composition (§14.1)', () => {
+  it('a level-50 + AI core + ascendant + Spaceport state unlocks the T6 catalog band', () => {
+    // Compose the IslandState surface and a spec-like buildings list to
+    // exercise `unlockedDefs` against the §14.1 gate. This is the
+    // canonical "the demo path works" coverage: forest-ne is seeded at
+    // this exact configuration in main.ts.
+    const state = makeState({
+      level: 50,
+      aiCoreCrafted: true,
+      ascendantCoreCrafted: true,
+      buildings: [{ id: 'sp-1', defId: 'spaceport', x: 0, y: 0 }],
+    });
+    const hasSpaceport = state.buildings.some((b) => b.defId === 'spaceport');
+    const list = unlockedDefs(
+      state.level,
+      state.aiCoreCrafted,
+      state.ascendantCoreCrafted,
+      hasSpaceport,
+    );
+    // Every T6 def is now in the list.
+    expect(list).toContain('spaceport');
+    expect(list).toContain('antimatter_refinery');
+    expect(list).toContain('scanner_sat_assembly');
+    expect(list).toContain('comm_sat_assembly');
+    expect(list).toContain('orbital_insertion_assembly');
+    // T5 ascendant_assembly also in the list (needed to craft ascendant_core).
+    expect(list).toContain('ascendant_assembly');
+  });
+
+  it('without a Spaceport, only the Spaceport itself unlocks from T6 (chicken-and-egg per §14.1)', () => {
+    const state = makeState({
+      level: 50,
+      aiCoreCrafted: true,
+      ascendantCoreCrafted: true,
+      buildings: [],
+    });
+    const hasSpaceport = state.buildings.some((b) => b.defId === 'spaceport');
+    const list = unlockedDefs(
+      state.level,
+      state.aiCoreCrafted,
+      state.ascendantCoreCrafted,
+      hasSpaceport,
+    );
+    expect(list).toContain('spaceport');
+    expect(list).not.toContain('antimatter_refinery');
+    expect(list).not.toContain('scanner_sat_assembly');
+    expect(list).not.toContain('comm_sat_assembly');
+    expect(list).not.toContain('orbital_insertion_assembly');
   });
 });

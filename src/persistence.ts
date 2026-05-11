@@ -84,7 +84,15 @@ export const STORAGE_KEY = 'robot-islands:save:v3';
  *  placements. See `STORAGE_KEY` for the matching key change.
  *
  *  Step-§4.7: bumped 2 → 3 alongside the PlacedBuilding maintenance fields
- *  to discard saves that pre-date the maintenance timer. */
+ *  to discard saves that pre-date the maintenance timer.
+ *
+ *  Step-20 (T6 Orbital) intentionally does NOT bump 3 → 4. The new
+ *  `IslandState.ascendantCoreCrafted` field is backfilled in
+ *  `deserializeWorld` (defaults to false), and the new T6 ResourceIds /
+ *  BuildingDefIds are additive (`ALL_RESOURCES` backfill in
+ *  `deserializeWorld` zeroes new inventory keys; placed buildings list is
+ *  preserved as-is). A v3 save loads cleanly without losing pre-T6
+ *  progress. */
 export const SCHEMA_VERSION = 3 as const;
 
 // ---------------------------------------------------------------------------
@@ -330,6 +338,17 @@ export function deserializeWorld(
       if (!(r in storageCapsClone)) storageCapsClone[r] = BASELINE_STORAGE_CAP;
       if (!(r in funnelClone)) funnelClone[r] = 0;
     }
+    // Forward-compat backfill: step-20 added `ascendantCoreCrafted` to
+    // IslandState (§14.1 T6 access gate). A v3 save written before the
+    // step-20 schema landed lacks the field; reading it through the
+    // strict `boolean` type would surface as `undefined` at runtime and
+    // poison every downstream gate evaluation. Default to `false` so old
+    // saves keep their pre-T6 progress (the SCHEMA_VERSION 3 → 4 bump
+    // alternative would invalidate every save unnecessarily).
+    const ascendantCoreCrafted =
+      'ascendantCoreCrafted' in s && typeof (s as { ascendantCoreCrafted?: unknown }).ascendantCoreCrafted === 'boolean'
+        ? (s as { ascendantCoreCrafted: boolean }).ascendantCoreCrafted
+        : false;
     const live: IslandState = {
       ...s,
       // Defensive inventory + storageCaps + funnelPending clones so the
@@ -339,6 +358,7 @@ export function deserializeWorld(
       funnelPending: funnelClone,
       unlockedNodes: new Set(s.unlockedNodes),
       subPathProgress: new Map(s.subPathProgress),
+      ascendantCoreCrafted,
       // Remap lastTick from the saved performance.now() domain into the
       // current session's performance.now() domain. The save preserved
       // lastTick literally; we shift by the offline delta so the

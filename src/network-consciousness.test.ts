@@ -43,6 +43,7 @@ function makeState(id: string, level: number): IslandState {
     specializationRole: null,
     declaredAt: null,
     aiCoreCrafted: false,
+    ascendantCoreCrafted: false,
   };
 }
 

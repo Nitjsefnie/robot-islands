@@ -554,6 +554,10 @@ export function makeInitialIslandState(spec: IslandSpec, nowMs: number): IslandS
     // and crafted at least one AI core. Production-trigger flip deferred
     // to step 14; the step-13 demo seeds this true manually on forest-ne.
     aiCoreCrafted: false,
+    // §14.1 T6 access gate (first half). Defaults to false; the step-20
+    // demo seeds this true manually on forest-ne alongside aiCoreCrafted.
+    // Production-trigger flip on first ascendant_core DEFERRED.
+    ascendantCoreCrafted: false,
     lastTick: nowMs,
   };
 }
