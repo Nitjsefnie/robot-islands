@@ -49,6 +49,8 @@ function makeIslandState(over: Partial<IslandState> = {}): IslandState {
       // Step-13 T5 resources (partial catalog per §6.6)
       casimir_energy: 100, reality_anchor: 100, plasma_charge: 100,
       eldritch_processor: 100, phase_converter: 100,
+      // §6.7 demolition byproduct (step 2.5 building interaction)
+      scrap: 100,
     },
     xp: 0,
     level: 1,

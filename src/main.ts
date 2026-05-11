@@ -18,7 +18,7 @@
 // world's vision state at that point, island dimming shows that island's
 // known state.
 
-import { Application, Container } from 'pixi.js';
+import { Application, Container, Graphics } from 'pixi.js';
 
 import {
   centerOn,
@@ -49,8 +49,12 @@ import {
 import { TILE_PX } from './island.js';
 import { renderOcean } from './ocean.js';
 import { loadWorld, saveWorld } from './persistence.js';
+import { BUILDING_DEFS } from './building-defs.js';
+import type { PlacedBuilding } from './buildings.js';
 import { mountBuildingsUi } from './buildings-ui.js';
 import { mountConstructionUi } from './construction-ui.js';
+import { mountInspectorUi, type InspectorTarget } from './inspector-ui.js';
+import { buildingAtTile, demolishBuilding, footprintTiles, type Rotation } from './placement.js';
 import { mountPlacementUi } from './placement-ui.js';
 import { mountSkillTreeUi } from './skilltree-ui.js';
 import { mountUi } from './ui.js';
@@ -345,17 +349,41 @@ async function main(): Promise<void> {
       placementUi.attemptCommit();
       return;
     }
-    // §3 active-island fallback. Runs AFTER the drone-launch / settlement /
-    // placement branches above (each `return`s on commit) so it only fires
-    // on a plain canvas click. The hit-test ignores discovered-but-not-
-    // populated islands and open ocean (returns null → no switch).
+    // §4 building-select. Runs AFTER drone-launch / settlement / placement-
+    // commit (each early-returns above) but BEFORE the active-island
+    // switch — clicking a building on a NON-active island opens the
+    // inspector without forcing an active-island context switch. The
+    // hit-test only runs when the click lands inside a populated island
+    // (the only place buildings exist in step 2.5).
     if (accumDrag < CLICK_DRAG_PX_MAX) {
       const rect = app.canvas.getBoundingClientRect();
       const sx = e.clientX - rect.left;
       const sy = e.clientY - rect.top;
       if (sx < 0 || sx > rect.width || sy < 0 || sy > rect.height) return;
       const wt = screenToWorldTile(sx, sy);
-      const hit = findPopulatedIslandAt(wt.x, wt.y, worldState.islands);
+      const island = findPopulatedIslandAt(wt.x, wt.y, worldState.islands);
+      if (island) {
+        const localX = wt.x - island.cx;
+        const localY = wt.y - island.cy;
+        const hitBuilding = buildingAtTile(island, localX, localY);
+        if (hitBuilding) {
+          const targetState = islandStates.get(island.id);
+          if (targetState) {
+            inspector.open({ spec: island, state: targetState, building: hitBuilding });
+            selectedSpec = island;
+            repaintSelection();
+            // Don't switch active-island on a building click — the player is
+            // inspecting, not focusing. Active-island stays where it was so
+            // the HUD doesn't jump.
+            return;
+          }
+        }
+      }
+      // §3 active-island fallback. Only reached when the click misses every
+      // building on the populated island it lands on (or hits open ocean /
+      // a discovered-only island). The hit-test ignores discovered-but-not-
+      // populated islands and open ocean (returns null → no switch).
+      const hit = island;
       if (hit && hit.id !== activeIslandId) {
         activeIslandId = hit.id;
         // Centre the camera on the new active island so the player sees
@@ -401,11 +429,43 @@ async function main(): Promise<void> {
     if (placementUi.isActive()) {
       placementUi.setCursorScreenPos(sx, sy);
     }
+    // §4 hover affordance — only when no mode is armed (the placement
+    // preview / launch reticle owns the cursor in those modes). Stale
+    // hovered state from before mode-arm is cleared in the mode-changed
+    // callbacks; the suppression here keeps re-entry from re-painting.
+    if (anyModeArmed()) {
+      if (hoveredBuilding) {
+        hoveredBuilding = null;
+        repaintHover();
+      }
+      return;
+    }
+    const wt = screenToWorldTile(sx, sy);
+    const island = findPopulatedIslandAt(wt.x, wt.y, worldState.islands);
+    let next: { spec: IslandSpec; building: PlacedBuilding } | null = null;
+    if (island) {
+      const localX = wt.x - island.cx;
+      const localY = wt.y - island.cy;
+      const b = buildingAtTile(island, localX, localY);
+      if (b) next = { spec: island, building: b };
+    }
+    const prevId = hoveredBuilding?.building.id ?? null;
+    const nextId = next?.building.id ?? null;
+    if (prevId !== nextId) {
+      hoveredBuilding = next;
+      repaintHover();
+    }
   });
   app.canvas.addEventListener('mouseleave', () => {
     dronesUi.hideReticle();
     settlementUi.hideReticle();
     placementUi.hidePreview();
+    // Clear hover outline so it doesn't ghost at the last cursor position
+    // when the user leaves the canvas.
+    if (hoveredBuilding) {
+      hoveredBuilding = null;
+      repaintHover();
+    }
   });
 
   // Wheel zoom toward cursor. preventDefault keeps the page from scrolling.
@@ -607,6 +667,148 @@ async function main(): Promise<void> {
     placementUi.rotate();
   });
 
+  // -----------------------------------------------------------------------
+  // §4 building interaction — hover outline + selection outline + inspector
+  // -----------------------------------------------------------------------
+  //
+  // Two world-space outline layers ride above the placement preview:
+  //   - `hoverLayer`: 2px ACCENT outline under the cursor when a building
+  //     is hovered AND no mode is armed (drone-launch / settlement-launch /
+  //     placement all suppress hover so the existing mode-specific overlay
+  //     stays primary).
+  //   - `selectionLayer`: 3px ACCENT solid outline around the currently
+  //     selected building. Persists until the inspector closes or another
+  //     building is selected.
+  //
+  // Both layers paint from the active island's coordinate system; main.ts
+  // owns the paint helpers so the inspector module can stay pure-DOM. The
+  // selection layer reads `inspector.getSelectedBuildingId()` each frame
+  // to keep the outline in sync with the panel.
+  const hoverLayer = new Container();
+  hoverLayer.label = 'hover-building';
+  const hoverGfx = new Graphics();
+  hoverLayer.addChild(hoverGfx);
+  world.addChild(hoverLayer);
+
+  const selectionLayer = new Container();
+  selectionLayer.label = 'selected-building';
+  const selectionGfx = new Graphics();
+  selectionLayer.addChild(selectionGfx);
+  world.addChild(selectionLayer);
+
+  /** Track the spec the currently-hovered/selected building belongs to,
+   *  since `inspector.getSelectedBuildingId()` only gives us the id. Both
+   *  pieces are needed to compute the world-space footprint rectangle —
+   *  the building's island-local coords need its spec's centre. */
+  let hoveredBuilding: { spec: IslandSpec; building: PlacedBuilding } | null = null;
+  let selectedSpec: IslandSpec | null = null;
+
+  /** Paint a footprint outline for `building` on `spec` into `gfx` with the
+   *  given style. Mirrors the math in placement-ui.ts's preview painter:
+   *  building tiles are in island-local coords; the world-pixel offset
+   *  combines the per-island centre with the per-tile centre convention. */
+  function paintBuildingOutline(
+    gfx: Graphics,
+    spec: IslandSpec,
+    building: PlacedBuilding,
+    color: number,
+    strokeWidth: number,
+    fillAlpha: number,
+  ): void {
+    const def = BUILDING_DEFS[building.defId];
+    const tiles = footprintTiles(
+      def.width,
+      def.height,
+      building.x,
+      building.y,
+      (building.rotation ?? 0) as Rotation,
+    );
+    const islandWorldPx = tileToWorldPx(spec.cx, spec.cy);
+    const half = TILE_PX / 2;
+    for (const t of tiles) {
+      const wpx = t.x * TILE_PX + islandWorldPx.x - half;
+      const wpy = t.y * TILE_PX + islandWorldPx.y - half;
+      gfx
+        .rect(wpx, wpy, TILE_PX, TILE_PX)
+        .fill({ color, alpha: fillAlpha })
+        .stroke({ width: strokeWidth, color, alpha: 0.95, alignment: 1 });
+    }
+  }
+
+  function repaintHover(): void {
+    hoverGfx.clear();
+    if (!hoveredBuilding) {
+      hoverLayer.visible = false;
+      return;
+    }
+    // Suppress the selected building's hover outline — the selection outline
+    // is more prominent and a duplicate at the same site reads as a flicker.
+    const selectedId = inspector.getSelectedBuildingId();
+    if (selectedId && selectedId === hoveredBuilding.building.id) {
+      hoverLayer.visible = false;
+      return;
+    }
+    // ACCENT cyan = VISION_BLUE = 0x7dd3e8 — same hue used by the placement
+    // preview's `ok` state, so two cyan readouts at once read as "things
+    // you can act on" rather than two different signals.
+    paintBuildingOutline(
+      hoverGfx,
+      hoveredBuilding.spec,
+      hoveredBuilding.building,
+      0x7dd3e8,
+      2,
+      0.05,
+    );
+    hoverLayer.visible = true;
+  }
+
+  function repaintSelection(): void {
+    selectionGfx.clear();
+    const selectedId = inspector.getSelectedBuildingId();
+    if (!selectedId || !selectedSpec) {
+      selectionLayer.visible = false;
+      return;
+    }
+    const building = selectedSpec.buildings.find((b) => b.id === selectedId);
+    if (!building) {
+      // Stale selection (e.g. demolish removed it). Defensive close.
+      selectionLayer.visible = false;
+      inspector.close();
+      selectedSpec = null;
+      return;
+    }
+    // ACCENT solid 3px outline + slightly stronger fill alpha than the
+    // hover variant so selection reads as "committed" vs hover's "pending."
+    paintBuildingOutline(selectionGfx, selectedSpec, building, 0x7dd3e8, 3, 0.12);
+    selectionLayer.visible = true;
+  }
+
+  /** Whether any input mode is armed (drone-launch / settlement-launch /
+   *  placement). The hover outline suppresses while armed so the mode's
+   *  own overlay stays primary. */
+  function anyModeArmed(): boolean {
+    return (
+      dronesUi.isLaunchMode() ||
+      settlementUi.isLaunchMode() ||
+      placementUi.isActive()
+    );
+  }
+
+  const inspector = mountInspectorUi(document.body, {
+    onDemolish: (target: InspectorTarget) => {
+      const result = demolishBuilding(target.spec, target.state, target.building.id);
+      if (!result.ok) return;
+      // Close the inspector + clear selection BEFORE the layer rebuild so
+      // the stale-selection guard in repaintSelection doesn't fire.
+      inspector.close();
+      selectedSpec = null;
+      hoveredBuilding = null;
+      repaintHover();
+      repaintSelection();
+      rebuildWorldLayers();
+    },
+  });
+
   // Step-11 Construction modal — sister to skill tree + buildings catalog.
   // Inserts the new island into worldState/islandStates, registers its
   // caches, and rebuilds render layers in the onConstruct callback.
@@ -644,6 +846,14 @@ async function main(): Promise<void> {
     buildingsUi.hide();
     constructionUi.hide();
     placementUi.cancel();
+    // §4 inspector: Escape also closes the inspector + clears the
+    // selection outline. Idempotent; closing while already hidden is a
+    // no-op.
+    if (inspector.isVisible()) {
+      inspector.close();
+      selectedSpec = null;
+      repaintSelection();
+    }
   });
 
   // Forward declaration for the cross-panel disarm callback. Drone-ops
@@ -668,6 +878,13 @@ async function main(): Promise<void> {
       if (armed) {
         placementUi.cancel();
         disarmSettlementLaunch();
+        // Clear hover affordance when entering an armed mode — the mode's
+        // own overlay takes over, and a stale hover outline beneath would
+        // read as conflicting affordance.
+        if (hoveredBuilding) {
+          hoveredBuilding = null;
+          repaintHover();
+        }
       }
     },
   });
@@ -870,6 +1087,13 @@ async function main(): Promise<void> {
     dronesUi.refresh(now);
     routesUi.refresh(now);
     settlementUi.refresh(now);
+    // §4 inspector: refresh while open so the live rate / power / inventory
+    // numbers track the per-frame economy. Cheap when closed (one branch).
+    inspector.refresh();
+    // Selection outline stays in sync with the inspector target — if the
+    // selected building was demolished externally (won't happen in step 2.5
+    // but defensive for future tooling) the repaint clears the outline.
+    repaintSelection();
   });
 
   // Recenter the camera's reference point on resize so the world doesn't

@@ -17,6 +17,8 @@ import { describe, expect, it } from 'vitest';
 import type { PlacedBuilding } from './buildings.js';
 import { ALL_RESOURCES, type ResourceId } from './recipes.js';
 import {
+  buildingAtTile,
+  demolishBuilding,
   footprintTiles,
   placeBuilding,
   rotatedDims,
@@ -326,5 +328,173 @@ describe('placeBuilding', () => {
     expect(p1.id).toBe('gen-1');
     expect(p2.id).toBe('gen-2');
     expect(calls).toBe(2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildingAtTile (§4 hit-test)
+// ---------------------------------------------------------------------------
+describe('buildingAtTile', () => {
+  it('returns the building when the tile lies inside its footprint', () => {
+    const b: PlacedBuilding = { id: 'm1', defId: 'mine', x: 0, y: 0, rotation: 0 };
+    const spec = makeSpec({ buildings: [b] });
+    // Mine is 2×2 at (0,0). All four tiles should hit.
+    expect(buildingAtTile(spec, 0, 0)).toBe(b);
+    expect(buildingAtTile(spec, 1, 0)).toBe(b);
+    expect(buildingAtTile(spec, 0, 1)).toBe(b);
+    expect(buildingAtTile(spec, 1, 1)).toBe(b);
+  });
+
+  it('returns null when the tile is outside every footprint', () => {
+    const b: PlacedBuilding = { id: 'm1', defId: 'mine', x: 0, y: 0, rotation: 0 };
+    const spec = makeSpec({ buildings: [b] });
+    expect(buildingAtTile(spec, 2, 0)).toBeNull();
+    expect(buildingAtTile(spec, 0, 2)).toBeNull();
+    expect(buildingAtTile(spec, -1, -1)).toBeNull();
+  });
+
+  it('snaps fractional tile coords to the integer cell (floor)', () => {
+    const b: PlacedBuilding = { id: 'm1', defId: 'mine', x: 0, y: 0, rotation: 0 };
+    const spec = makeSpec({ buildings: [b] });
+    // 0.7, 0.3 lies in tile (0, 0).
+    expect(buildingAtTile(spec, 0.7, 0.3)).toBe(b);
+    // 2.1, 0 lies in tile (2, 0) — outside the 2×2 at (0,0).
+    expect(buildingAtTile(spec, 2.1, 0)).toBeNull();
+  });
+
+  it('respects rotation in the footprint tile set', () => {
+    // electric_arc_furnace is 2×3. Under rotation 1 it occupies a 3×2 block
+    // (per the rotatedDims tests above). Verify tile-set disambiguation.
+    const b: PlacedBuilding = {
+      id: 'eaf1',
+      defId: 'electric_arc_furnace',
+      x: 0,
+      y: 0,
+      rotation: 1,
+    };
+    const spec = makeSpec({ buildings: [b] });
+    // Rotation-1 covers x∈[0..2], y∈[0..1]. Tile (2, 0) should hit, (0, 2)
+    // should NOT (that's the rotation-0 layout).
+    expect(buildingAtTile(spec, 2, 0)).toBe(b);
+    expect(buildingAtTile(spec, 0, 2)).toBeNull();
+  });
+
+  it('returns the first matching building when buildings overlap (defensive)', () => {
+    // Synthetic fixture — placement would normally reject overlap. Build two
+    // entries at the same anchor and confirm first-match wins so behaviour
+    // is predictable if a test or save fixture ever ships an overlap.
+    const a: PlacedBuilding = { id: 'a', defId: 'mine', x: 0, y: 0, rotation: 0 };
+    const b: PlacedBuilding = { id: 'b', defId: 'mine', x: 0, y: 0, rotation: 0 };
+    const spec = makeSpec({ buildings: [a, b] });
+    expect(buildingAtTile(spec, 0, 0)).toBe(a);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// demolishBuilding (§6.7)
+// ---------------------------------------------------------------------------
+describe('demolishBuilding', () => {
+  it('returns not-found when the buildingId is absent', () => {
+    const spec = makeSpec();
+    const state = makeState(spec);
+    const r = demolishBuilding(spec, state, 'no-such-id');
+    expect(r.ok).toBe(false);
+    expect(r.reason).toBe('not-found');
+    expect(r.scrapReturned).toBe(0);
+  });
+
+  it('removes the building from spec.buildings on the happy path', () => {
+    const spec = makeSpec();
+    const state = makeState(spec);
+    placeBuilding(spec, state, 'mine', 0, 0, 0, () => 'p-mine');
+    expect(spec.buildings).toHaveLength(1);
+    const r = demolishBuilding(spec, state, 'p-mine');
+    expect(r.ok).toBe(true);
+    expect(spec.buildings).toHaveLength(0);
+    // state.buildings is the same array reference — the splice mutation
+    // shows up on both sides without an explicit sync.
+    expect(state.buildings).toHaveLength(0);
+  });
+
+  it('credits scrap = footprint-tile-count × 3 on success', () => {
+    // 1×1 Solar → 3 scrap; 2×2 Mine → 12; 3×3 Blast Furnace → 27. Verify all
+    // three so the formula is locked in.
+    const cases: Array<{ defId: 'solar' | 'mine' | 'blast_furnace'; level: number; expected: number }> = [
+      { defId: 'solar', level: 1, expected: 3 },
+      { defId: 'mine', level: 1, expected: 12 },
+      { defId: 'blast_furnace', level: 5, expected: 27 },
+    ];
+    for (const c of cases) {
+      const spec = makeSpec();
+      const state = makeState(spec, c.level);
+      placeBuilding(spec, state, c.defId, 0, 0, 0, () => `p-${c.defId}`);
+      const beforeScrap = state.inventory.scrap ?? 0;
+      const r = demolishBuilding(spec, state, `p-${c.defId}`);
+      expect(r.ok).toBe(true);
+      expect(r.scrapReturned).toBe(c.expected);
+      expect(state.inventory.scrap).toBe(beforeScrap + c.expected);
+    }
+  });
+
+  it('subtracts storageCap contribution from every resource when a storage def is demolished', () => {
+    const spec = makeSpec();
+    const state = makeState(spec);
+    const before = { ...state.storageCaps };
+    placeBuilding(spec, state, 'crate', 0, 0, 0, () => 'p-crate');
+    // Sanity: place bumped caps by +100 across the board.
+    for (const r of ALL_RESOURCES as ReadonlyArray<ResourceId>) {
+      expect(state.storageCaps[r]).toBe((before[r] ?? 0) + 100);
+    }
+    const dem = demolishBuilding(spec, state, 'p-crate');
+    expect(dem.ok).toBe(true);
+    // Demolish restored caps to their pre-placement baseline.
+    for (const r of ALL_RESOURCES as ReadonlyArray<ResourceId>) {
+      expect(state.storageCaps[r]).toBe(before[r]);
+    }
+  });
+
+  it('leaves storage caps untouched when a non-storage def is demolished', () => {
+    const spec = makeSpec();
+    const state = makeState(spec);
+    placeBuilding(spec, state, 'mine', 0, 0, 0, () => 'p-mine');
+    const beforeCaps = { ...state.storageCaps };
+    demolishBuilding(spec, state, 'p-mine');
+    for (const r of ALL_RESOURCES as ReadonlyArray<ResourceId>) {
+      expect(state.storageCaps[r]).toBe(beforeCaps[r]);
+    }
+  });
+
+  it('clamps inventory down to the new cap when a storage building is demolished', () => {
+    // §4.6: "If current inventory of any affected resource now exceeds the
+    // reduced cap, the excess is lost — inventory clamps down to the new
+    // cap." Place a Silo (+2000 cap), fill iron_ore above the post-demolish
+    // baseline cap (100), then demolish and confirm the excess is dropped.
+    const spec = makeSpec();
+    const state = makeState(spec);
+    placeBuilding(spec, state, 'silo', 0, 0, 0, () => 'p-silo');
+    // Caps are now 2100 across the board. Stuff iron_ore to 500.
+    state.inventory.iron_ore = 500;
+    const r = demolishBuilding(spec, state, 'p-silo');
+    expect(r.ok).toBe(true);
+    // Cap dropped from 2100 → 100; inventory clamps to 100.
+    expect(state.storageCaps.iron_ore).toBe(100);
+    expect(state.inventory.iron_ore).toBe(100);
+  });
+
+  it('caps the credited scrap to the resource cap (no overfill)', () => {
+    const spec = makeSpec();
+    const state = makeState(spec);
+    // Force the scrap cap low so the demolition credit hits it.
+    state.storageCaps.scrap = 5;
+    state.inventory.scrap = 0;
+    // 2×2 Mine would credit 12 scrap; the cap of 5 should clip it.
+    placeBuilding(spec, state, 'mine', 0, 0, 0, () => 'p-mine');
+    const r = demolishBuilding(spec, state, 'p-mine');
+    expect(r.ok).toBe(true);
+    // Reported credit reflects the raw scrap returned per §6.7 formula —
+    // the inventory clip is what gets lost, but the player feedback is the
+    // full earned amount.
+    expect(r.scrapReturned).toBe(12);
+    expect(state.inventory.scrap).toBe(5);
   });
 });

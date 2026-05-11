@@ -273,3 +273,127 @@ export function placeBuilding(
   }
   return placed;
 }
+
+// ---------------------------------------------------------------------------
+// §4 / §6.7 — hit-test + demolition
+// ---------------------------------------------------------------------------
+
+/**
+ * Return the placed building whose footprint covers world-tile `(wx, wy)`
+ * (in island-local tile coords), or null if no building covers it.
+ *
+ * Pure: walks `spec.buildings`, computing each footprint via the same
+ * `footprintTiles` math the placement validator uses. First-match wins —
+ * footprints don't overlap by construction (the placement gate rejects
+ * overlap), but a defensive first-match keeps behaviour predictable if a
+ * mis-built test fixture ships overlapping placements.
+ *
+ * O(buildings × footprint-area). Building counts per island are small
+ * (≤ ~30 on the demo islands), so a flat scan is plenty.
+ */
+export function buildingAtTile(
+  spec: IslandSpec,
+  wx: number,
+  wy: number,
+): PlacedBuilding | null {
+  // Snap to integer tile — callers pass either integer or fractional tile
+  // coords (mouse hit-test is fractional). Tiles are the unit, so we round
+  // down to land in the correct cell.
+  const tx = Math.floor(wx);
+  const ty = Math.floor(wy);
+  for (const b of spec.buildings) {
+    const def = BUILDING_DEFS[b.defId];
+    const tiles = footprintTiles(def.width, def.height, b.x, b.y, (b.rotation ?? 0) as Rotation);
+    for (const t of tiles) {
+      if (t.x === tx && t.y === ty) return b;
+    }
+  }
+  return null;
+}
+
+/** Result of a demolition attempt. `scrapReturned` is the credit applied
+ *  to `state.inventory.scrap` after clamping to the resource's cap. On the
+ *  `not-found` branch `scrapReturned` is 0 and `reason` is populated. */
+export interface DemolishResult {
+  readonly ok: boolean;
+  readonly scrapReturned: number;
+  readonly reason?: 'not-found';
+}
+
+/**
+ * Remove a placed building and credit the player with Scrap per §6.7
+ * ("Demolishing any T1+ placed building produces Scrap proportional to its
+ * build cost"). The §6.7 ingredient-mirror formula is DEFERRED until
+ * placement-time material costs land (§14); the step-2.5 placeholder
+ * formula scales with footprint area:
+ *
+ *   scrap = footprint-tile-count × 3
+ *
+ * That keeps a 1×1 Solar (3 scrap), 2×2 Mine (12), 3×3 Blast Furnace (27),
+ * and 4×4 Fusion Core (48) on a sane progression curve while the proper
+ * cost-based formula is unbuilt.
+ *
+ * Mutations on the `{ ok: true }` path:
+ *   - Removes the building from `spec.buildings` (state.buildings is the
+ *     same array reference, so both stay consistent).
+ *   - For storage defs (def.storageCap > 0): subtracts the same `storageCap`
+ *     contribution from every resource in `state.storageCaps`. Mirrors the
+ *     `placeBuilding` bump exactly, so place→demolish round-trips to the
+ *     same caps. Per §4.6 last paragraph ("If current inventory of any
+ *     affected resource now exceeds the reduced cap, the excess is lost —
+ *     inventory clamps down to the new cap"), we then clamp `inventory[r]`
+ *     to the new cap for every resource.
+ *   - Credits `state.inventory.scrap`, clamped to the post-demolish scrap cap.
+ *
+ * Returns `{ ok: false, reason: 'not-found' }` when the id isn't present —
+ * a defensive guard so a stale UI handle (e.g., demolition button held
+ * after the building was already removed) doesn't corrupt state. Pure
+ * function in the §15.3-pure-layer sense: no DOM, no PixiJS.
+ */
+export function demolishBuilding(
+  spec: IslandSpec,
+  state: IslandState,
+  buildingId: string,
+): DemolishResult {
+  const idx = spec.buildings.findIndex((b) => b.id === buildingId);
+  if (idx < 0) return { ok: false, scrapReturned: 0, reason: 'not-found' };
+  const b = spec.buildings[idx]!;
+  const def = BUILDING_DEFS[b.defId];
+  // Footprint-area × 3 placeholder per §6.7 (proper recipe-cost mirror
+  // deferred until §14 placement costs ship). `footprintTiles` returns the
+  // axis-aligned tile coverage — count its length.
+  const tiles = footprintTiles(
+    def.width,
+    def.height,
+    b.x,
+    b.y,
+    (b.rotation ?? 0) as Rotation,
+  );
+  const scrapReturned = Math.floor(tiles.length * 3);
+  // Splice out the building. `spec.buildings` and `state.buildings` are the
+  // same array reference (see `makeInitialIslandState`), so this mutation
+  // is visible to the next economy tick without an explicit sync.
+  spec.buildings.splice(idx, 1);
+  // Strip storage contribution if the demolished def was a storage building.
+  // §4.6: after the cap reduction, inventory clamps to the new cap (the lost
+  // excess models the spec's "excess is lost" rule literally).
+  const bump = def.storageCap ?? 0;
+  if (bump > 0) {
+    for (const r of ALL_RESOURCES as ReadonlyArray<ResourceId>) {
+      const next = (state.storageCaps[r] ?? 0) - bump;
+      state.storageCaps[r] = next < 0 ? 0 : next;
+      const have = state.inventory[r] ?? 0;
+      const newCap = state.storageCaps[r] ?? 0;
+      if (have > newCap) state.inventory[r] = newCap;
+    }
+  }
+  // Credit the Scrap, clamped to its post-demolish cap. The clamp matches
+  // `applyRates` in economy.ts — never overfill a stockpile.
+  if (scrapReturned > 0) {
+    const have = state.inventory.scrap ?? 0;
+    const scrapCap = state.storageCaps.scrap ?? 0;
+    const next = Math.min(scrapCap, have + scrapReturned);
+    state.inventory.scrap = next;
+  }
+  return { ok: true, scrapReturned };
+}

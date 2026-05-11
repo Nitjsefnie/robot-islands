@@ -38,6 +38,11 @@ export type ResourceId =
   | 'wood'
   | 'iron_ore'
   | 'coal'
+  // §6.7 demolition byproduct. T1 dry-good per spec ("Scrap is a T1 resource
+  // in the dry-goods storage category"). The §6.7 Steel-recipe substitution
+  // ("2 Scrap = 1 Pig iron's worth of steel input") is DEFERRED — for step
+  // 2.5 the resource exists only as the credit returned on demolition.
+  | 'scrap'
   // T1 refined
   | 'biofuel'
   | 'iron_ingot'
@@ -70,6 +75,8 @@ export const ALL_RESOURCES: ReadonlyArray<ResourceId> = [
   'wood',
   'iron_ore',
   'coal',
+  // §6.7 — Scrap credited on building demolition.
+  'scrap',
   'biofuel',
   'iron_ingot',
   'coke',
@@ -107,6 +114,8 @@ export const XP_WEIGHT: Readonly<Record<ResourceId, number>> = {
   wood: 1,
   iron_ore: 1,
   coal: 1,
+  // §6.7 — Scrap is a T1 dry-good per spec; weight 3 to match other T1 raws.
+  scrap: 3,
   // T1 refined
   biofuel: 3,
   iron_ingot: 3,

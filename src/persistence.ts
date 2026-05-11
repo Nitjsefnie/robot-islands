@@ -50,6 +50,7 @@ import type { Route } from './routes.js';
 import { _seedRouteIdCounter } from './routes.js';
 import type { SettlementVehicle } from './settlement.js';
 import { _seedVehicleIdCounter } from './settlement.js';
+import { ALL_RESOURCES } from './recipes.js';
 import type { NodeId, SubPathId } from './skilltree.js';
 import type { IslandSpec, WorldState } from './world.js';
 
@@ -284,13 +285,29 @@ export function deserializeWorld(
     // replacing the two non-JSON fields and remapping lastTick. The order
     // matters: spread first, then the explicit Set/Map/lastTick writes
     // win over the carried-through values.
+    const inventoryClone = { ...s.inventory };
+    const storageCapsClone = { ...s.storageCaps };
+    const funnelClone = { ...s.funnelPending };
+    // Forward-compat backfill: a save written by an older build is missing
+    // any ResourceId added since. The strict `Record<ResourceId, number>`
+    // type would catch reads of missing keys via `noUncheckedIndexedAccess`
+    // (returning undefined), but the per-cap-derived clamp in
+    // `demolishBuilding` and the `applyRates` path expect a real cap
+    // number — `cap=0` would silently zero the demolition credit. Seed
+    // the baseline cap for missing keys; inventory stays at 0 by default.
+    const BASELINE_STORAGE_CAP = 100;
+    for (const r of ALL_RESOURCES) {
+      if (!(r in inventoryClone)) inventoryClone[r] = 0;
+      if (!(r in storageCapsClone)) storageCapsClone[r] = BASELINE_STORAGE_CAP;
+      if (!(r in funnelClone)) funnelClone[r] = 0;
+    }
     const live: IslandState = {
       ...s,
       // Defensive inventory + storageCaps + funnelPending clones so the
       // restored state has its own objects (saved snapshot stays inert).
-      inventory: { ...s.inventory },
-      storageCaps: { ...s.storageCaps },
-      funnelPending: { ...s.funnelPending },
+      inventory: inventoryClone,
+      storageCaps: storageCapsClone,
+      funnelPending: funnelClone,
       unlockedNodes: new Set(s.unlockedNodes),
       subPathProgress: new Map(s.subPathProgress),
       // Remap lastTick from the saved performance.now() domain into the
