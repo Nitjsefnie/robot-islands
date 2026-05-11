@@ -79,6 +79,24 @@ export const UNKNOWN_BLUE = 0x0a0e14;
 
 export type Biome = 'plains' | 'forest' | 'coast' | 'volcanic' | 'desert' | 'arctic';
 
+/**
+ * §3.4 maximum natural radii per biome — the hard cap on Land Reclamation
+ * Hub expansion. Joining (§3.6) is the only path past these caps; a single
+ * island cannot grow beyond its biome's natural ceiling. Numbers per the
+ * SPEC §3.4 placeholder table. Pure data — consumed by
+ * `canExpandIsland` / `expandIsland` in `land-reclamation.ts`.
+ */
+export const BIOME_MAX_RADII: Readonly<
+  Record<Biome, { readonly major: number; readonly minor: number }>
+> = {
+  plains: { major: 28, minor: 28 },
+  forest: { major: 20, minor: 20 },
+  coast: { major: 28, minor: 14 },
+  volcanic: { major: 14, minor: 14 },
+  desert: { major: 24, minor: 24 },
+  arctic: { major: 14, minor: 14 },
+};
+
 export type IslandRenderState = 'visible' | 'discovered' | 'unknown';
 
 export interface IslandSpec {
@@ -87,9 +105,12 @@ export interface IslandSpec {
   /** Centre of the island in world-tile coordinates. */
   readonly cx: number;
   readonly cy: number;
-  /** Ellipse half-axes in tiles. */
-  readonly majorRadius: number;
-  readonly minorRadius: number;
+  /** Ellipse half-axes in tiles. §3.4: Land Reclamation Hub mutates these
+   *  in place (player-chosen +1 per expansion, capped by BIOME_MAX_RADII).
+   *  Rotation cannot change post-generation per §3.4. Persistence already
+   *  round-trips both fields via the JSON spread in `serializeWorld`. */
+  majorRadius: number;
+  minorRadius: number;
   /** Whether the island is populated (origin of vision). Implies discovered.
    *  Mutable in step 12: settlement-vehicle arrivals flip this from false →
    *  true on the target island. See `tickVehicles` in `settlement.ts`. */

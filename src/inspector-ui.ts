@@ -34,13 +34,19 @@ import type { PlacedBuilding } from './buildings.js';
 import type { IslandState } from './economy.js';
 import { computeRates } from './economy.js';
 import {
+  type Axis,
+  type ExpandResult,
+  canExpandIsland,
+  landReclamationCost,
+} from './land-reclamation.js';
+import {
   MAINTENANCE_RECIPES,
   MAINTENANCE_THRESHOLD_MS_BY_TIER,
   maintenanceFactor,
 } from './maintenance.js';
 import { ALL_RESOURCES, resolveRecipe, type Recipe, type ResourceId } from './recipes.js';
 import { RESOURCE_STORAGE_CATEGORY, type StorageCategory } from './storage-categories.js';
-import type { IslandSpec } from './world.js';
+import { BIOME_MAX_RADII, type IslandSpec } from './world.js';
 
 // ---------------------------------------------------------------------------
 // Palette — shared vocabulary with drones-ui / buildings-ui / skilltree-ui
@@ -138,6 +144,14 @@ export interface InspectorDeps {
    *  caller wants to refuse with no state change), but the step-2.5 path
    *  always succeeds. */
   onDemolish(target: InspectorTarget): void;
+  /** §3.4 Land Reclamation: called when the player clicks one of the
+   *  +1 major / +1 minor expand buttons. main.ts owns the actual
+   *  `expandIsland` call (so the inspector stays DOM-pure) and is
+   *  responsible for rebuilding world layers + refreshing the
+   *  inspector after a successful mutation. The inspector pre-checks
+   *  via `canExpandIsland` before surfacing the button, so the
+   *  callback can assume the action is valid at click time. */
+  onExpandIsland(target: InspectorTarget, axis: Axis): void;
 }
 
 // ---------------------------------------------------------------------------
@@ -681,6 +695,60 @@ export function mountInspectorUi(
   maintenanceSection.body.appendChild(maintenanceStatus);
   maintenanceSection.body.appendChild(maintenanceRecipeLine);
 
+  // §3.4 Land Reclamation section — shown only when the selected building
+  // is a `land_reclamation_hub`. Two buttons (+1 major / +1 minor) wired
+  // to deps.onExpandIsland; each shows its current-radius cost or the
+  // gate-failure reason inline.
+  const reclamationSection = makeSection('Reclamation (§3.4)');
+  const reclamationCaption = document.createElement('span');
+  styled(
+    reclamationCaption,
+    [`color: ${FG_DIM}`, 'font-size: 10.5px', 'letter-spacing: 0.02em'].join(';'),
+  );
+  reclamationSection.body.appendChild(reclamationCaption);
+  function makeExpandButton(): HTMLButtonElement {
+    const btn = document.createElement('button');
+    styled(
+      btn,
+      [
+        'background: transparent',
+        `color: ${ACCENT}`,
+        `border: 1px solid ${ACCENT_DIM}`,
+        'padding: 4px 8px',
+        'cursor: pointer',
+        'font-family: ui-monospace, monospace',
+        'font-size: 10.5px',
+        'letter-spacing: 0.08em',
+        'text-transform: uppercase',
+        'border-radius: 2px',
+        'transition: background 80ms ease, border-color 80ms ease',
+        'text-align: left',
+      ].join(';'),
+    );
+    btn.addEventListener('mouseenter', () => {
+      if (btn.disabled) return;
+      btn.style.background = 'rgba(125, 211, 232, 0.08)';
+      btn.style.borderColor = ACCENT;
+    });
+    btn.addEventListener('mouseleave', () => {
+      btn.style.background = 'transparent';
+      btn.style.borderColor = btn.disabled ? FG_MUTED : ACCENT_DIM;
+    });
+    return btn;
+  }
+  const expandMajorBtn = makeExpandButton();
+  const expandMinorBtn = makeExpandButton();
+  expandMajorBtn.addEventListener('click', () => {
+    if (!target) return;
+    deps.onExpandIsland(target, 'major');
+  });
+  expandMinorBtn.addEventListener('click', () => {
+    if (!target) return;
+    deps.onExpandIsland(target, 'minor');
+  });
+  reclamationSection.body.appendChild(expandMajorBtn);
+  reclamationSection.body.appendChild(expandMinorBtn);
+
   // Constraints (requiredTile / requiredBiomes) — shown only when relevant.
   const constraintsSection = makeSection('Constraints');
   const constraintsLine = document.createElement('span');
@@ -760,6 +828,7 @@ export function mountInspectorUi(
   body.appendChild(storageSection.wrap);
   body.appendChild(heatSection.wrap);
   body.appendChild(maintenanceSection.wrap);
+  body.appendChild(reclamationSection.wrap);
   body.appendChild(constraintsSection.wrap);
 
   panel.appendChild(header);
@@ -799,6 +868,53 @@ export function mountInspectorUi(
       const el = recipeLineEls[i];
       if (el) el.style.display = i < n ? '' : 'none';
     }
+  }
+
+  // -------------------------------------------------------------------------
+  // §3.4 Reclamation paint helper — renders the two expand buttons + caption
+  // for the currently-targeted Land Reclamation Hub. Encapsulates the per-
+  // axis gate / cost / labelling so `paint()` stays readable.
+  // -------------------------------------------------------------------------
+  function reclamationButtonText(axis: Axis, current: number, gate: ExpandResult): string {
+    const label = axis === 'major' ? '+1 MAJOR' : '+1 MINOR';
+    if (gate.ok) {
+      const cost = landReclamationCost(current);
+      return `${label} · ${cost.stone} STONE (r ${current} → ${current + 1})`;
+    }
+    if (gate.reason === 'axis-at-max') return `${label} · AT CAP`;
+    if (gate.reason === 'insufficient-resources') {
+      const cost = landReclamationCost(current);
+      return `${label} · NEED ${cost.stone} STONE`;
+    }
+    // no-hub shouldn't reach here (section is only shown for the Hub
+    // itself, so `hasLandReclamationHub` is always true), but treat
+    // defensively.
+    return `${label} · NO HUB`;
+  }
+  function setExpandButtonState(btn: HTMLButtonElement, gate: ExpandResult): void {
+    btn.disabled = !gate.ok;
+    if (gate.ok) {
+      btn.style.color = ACCENT;
+      btn.style.borderColor = ACCENT_DIM;
+      btn.style.cursor = 'pointer';
+      btn.style.opacity = '1';
+    } else {
+      btn.style.color = FG_MUTED;
+      btn.style.borderColor = FG_MUTED;
+      btn.style.cursor = 'not-allowed';
+      btn.style.opacity = '0.6';
+    }
+  }
+  function paintReclamation(spec: IslandSpec, state: IslandState): void {
+    const caps = BIOME_MAX_RADII[spec.biome];
+    reclamationCaption.textContent =
+      `${spec.biome} · ${spec.majorRadius}/${caps.major} maj · ${spec.minorRadius}/${caps.minor} min`;
+    const majorGate = canExpandIsland(spec, state, 'major');
+    const minorGate = canExpandIsland(spec, state, 'minor');
+    expandMajorBtn.textContent = reclamationButtonText('major', spec.majorRadius, majorGate);
+    expandMinorBtn.textContent = reclamationButtonText('minor', spec.minorRadius, minorGate);
+    setExpandButtonState(expandMajorBtn, majorGate);
+    setExpandButtonState(expandMinorBtn, minorGate);
   }
 
   // -------------------------------------------------------------------------
@@ -963,6 +1079,16 @@ export function mountInspectorUi(
       maintenanceRecipeLine.style.display = '';
     }
     maintenanceSection.wrap.style.display = '';
+
+    // §3.4 Land Reclamation section — only for the Hub itself. Renders
+    // two expansion buttons; each is enabled when canExpandIsland
+    // returns ok, otherwise disabled with the rejection reason inline.
+    if (def.id === 'land_reclamation_hub') {
+      paintReclamation(spec, state);
+      reclamationSection.wrap.style.display = '';
+    } else {
+      reclamationSection.wrap.style.display = 'none';
+    }
 
     // Constraints section — shown when requiredTile or requiredBiomes apply.
     const parts: string[] = [];

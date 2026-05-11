@@ -97,6 +97,10 @@ export type BuildingDefId =
   | 'tank'
   | 'cold_storage'
   | 'component_warehouse'
+  // §3.4 / §8.9: Land Reclamation Hub — T2 trigger building. Placing it
+  // enables the inspector's "expand ellipse" action; the building has no
+  // recipe and consumes no power continuously.
+  | 'land_reclamation_hub'
   // New T3
   | 'electric_arc_furnace'
   | 'vault'
@@ -661,6 +665,26 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     stroke: 0x3a2810,
     storage: { category: 'components', capacity: 2000 },
     glyph: '▦',
+  },
+  // §3.4 / §8.9: Land Reclamation Hub — T2 trigger building (3×3 per §8.9
+  // catalog row). Placement enables the inspector's "+1 major / +1 minor"
+  // expansion controls; the building itself has no recipe and no
+  // continuous power draw. Per §3.4 each expansion costs material that
+  // scales superlinearly with current radius; the cost curve lives in
+  // `land-reclamation.ts` (§3.4 placeholder, see `landReclamationCost`).
+  // Multiple Hubs on one island do not stack — the inspector exposes a
+  // single expansion control per island regardless of how many Hubs are
+  // placed (the gate is "at least one Hub present").
+  land_reclamation_hub: {
+    id: 'land_reclamation_hub',
+    displayName: 'Land Reclamation Hub',
+    category: 'special',
+    tier: 2,
+    width: 3,
+    height: 3,
+    fill: 0x5a8a6a, // verdant reclamation green
+    stroke: 0x1a3020,
+    glyph: '⊕',
   },
   // -------------------------------------------------------------------------
   // T3 (levels 15-30)

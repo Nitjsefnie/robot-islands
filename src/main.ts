@@ -55,6 +55,7 @@ import type { PlacedBuilding } from './buildings.js';
 import { mountBuildingsUi } from './buildings-ui.js';
 import { mountConstructionUi } from './construction-ui.js';
 import { mountInspectorUi, type InspectorTarget } from './inspector-ui.js';
+import { expandIsland, type Axis } from './land-reclamation.js';
 import { mountInventoryUi } from './inventory-ui.js';
 import { currentObjective, makeGameSnapshot } from './objectives.js';
 import { buildingAtTile, demolishBuilding, footprintTiles, type Rotation } from './placement.js';
@@ -825,6 +826,17 @@ async function main(): Promise<void> {
       repaintHover();
       repaintSelection();
       rebuildWorldLayers();
+    },
+    // §3.4 Land Reclamation: mutate spec/state via the pure helper, then
+    // rebuild the world layer so the new ellipse mask propagates to
+    // `renderIsland` (which recomputes `computeIslandTiles` from the
+    // current radii on every rebuild). Selection / hover are kept since
+    // the Hub itself doesn't move — the inspector stays open on the
+    // same building with refreshed numbers.
+    onExpandIsland: (target: InspectorTarget, axis: Axis) => {
+      expandIsland(target.spec, target.state, axis);
+      rebuildWorldLayers();
+      inspector.refresh();
     },
   });
 
