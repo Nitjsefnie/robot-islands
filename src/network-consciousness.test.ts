@@ -39,6 +39,7 @@ function makeState(id: string, level: number): IslandState {
     unlockedNodes: new Set(),
     subPathProgress: new Map(),
     funnelPending: blankFunnel(),
+    genesisTarget: null,
     lastTick: 0,
     specializationRole: null,
     declaredAt: null,

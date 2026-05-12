@@ -57,6 +57,7 @@ function makeState(id: string, over: Partial<IslandState> = {}): IslandState {
     accelerationQueue: [],
     accelerationRemainingMin: 0,
     bankingEnabled: false,
+    genesisTarget: null,
     lastTick: 0,
     ...over,
   };

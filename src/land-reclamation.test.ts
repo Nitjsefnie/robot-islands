@@ -82,6 +82,7 @@ function makeState(inventory: Partial<Record<ResourceId, number>> = {}): IslandS
     accelerationQueue: [],
     accelerationRemainingMin: 0,
     bankingEnabled: false,
+    genesisTarget: null,
     lastTick: 0,
   };
 }

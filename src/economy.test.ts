@@ -29,6 +29,7 @@ import {
   accrueXp,
   advanceIsland,
   computeRates,
+  setGenesisTarget,
   spendTimeLock,
   xpForLevel,
   type DefCatalog,
@@ -101,6 +102,7 @@ function makeState(over: Partial<IslandState> = {}): IslandState {
     accelerationQueue: [],
     accelerationRemainingMin: 0,
     bankingEnabled: false,
+    genesisTarget: null,
     lastTick: 0,
     ...over,
   };
@@ -1863,6 +1865,105 @@ describe('extractor tile gating §8.1', () => {
 // -----------------------------------------------------------------------
 // §13.3 Time Lock — banking + acceleration
 // -----------------------------------------------------------------------
+
+describe('Genesis Chamber', () => {
+  it('produces T1 resource at 1 per 5min', () => {
+    const state = makeState({
+      buildings: [{ id: 'g1', defId: 'genesis_chamber', x: 0, y: 0 }],
+      genesisTarget: 'iron_ingot',
+      level: 50,
+      aiCoreCrafted: true,
+    });
+    // Strip power so the test exercises pure production rate without
+    // needing a 50 kW power plant.
+    const noGenesisPower = ((): DefCatalog => {
+      const base = { ...BUILDING_DEFS } as Record<BuildingDefId, BuildingDef>;
+      const { power: _p, ...rest } = base.genesis_chamber;
+      base.genesis_chamber = rest as BuildingDef;
+      return base;
+    })();
+    advanceIsland(state, 300_000, { defs: noGenesisPower }); // 5 min
+    expect(state.inventory.iron_ingot).toBeCloseTo(1, 1);
+  });
+
+  it('draws 50 kW for T1 target', () => {
+    const state = makeState({
+      buildings: [{ id: 'g1', defId: 'genesis_chamber', x: 0, y: 0 }],
+      genesisTarget: 'iron_ingot',
+      level: 50,
+      aiCoreCrafted: true,
+    });
+    const { power } = computeRates(state);
+    expect(power.consumed).toBeCloseTo(50_000, 0);
+  });
+
+  it('draws 50 MW for T4 target', () => {
+    const state = makeState({
+      buildings: [{ id: 'g1', defId: 'genesis_chamber', x: 0, y: 0 }],
+      genesisTarget: 'ai_core',
+      level: 50,
+      aiCoreCrafted: true,
+    });
+    const { power } = computeRates(state);
+    expect(power.consumed).toBeCloseTo(50_000_000, 0);
+  });
+
+  it('rejects T5 target', () => {
+    const state = makeState();
+    expect(setGenesisTarget(state, 'dark_matter')).toBe(false);
+    expect(state.genesisTarget).toBe(null);
+  });
+
+  it('rejects T0 target', () => {
+    const state = makeState();
+    expect(setGenesisTarget(state, 'wood')).toBe(false);
+    expect(state.genesisTarget).toBe(null);
+  });
+
+  it('produces nothing when genesisTarget is null', () => {
+    const state = makeState({
+      buildings: [{ id: 'g1', defId: 'genesis_chamber', x: 0, y: 0 }],
+      genesisTarget: null,
+      level: 50,
+      aiCoreCrafted: true,
+    });
+    advanceIsland(state, 300_000);
+    expect(Object.values(state.inventory).every((v) => v === 0)).toBe(true);
+  });
+
+  it('respects output cap', () => {
+    const state = makeState({
+      buildings: [{ id: 'g1', defId: 'genesis_chamber', x: 0, y: 0 }],
+      genesisTarget: 'iron_ingot',
+      inventory: { ...blankInventory(), iron_ingot: 100 },
+      storageCaps: blankCaps(100),
+      level: 50,
+      aiCoreCrafted: true,
+    });
+    advanceIsland(state, 300_000);
+    // Already at cap, so no production.
+    expect(state.inventory.iron_ingot).toBeCloseTo(100, 6);
+  });
+
+  it('is throttled by brownout', () => {
+    // Genesis Chamber (50 kW) + Mine (40 W) with only Solar (50 W).
+    // Total demand ≈ 50,040 W, supply = 50 W → factor ≈ 0.001.
+    const state = makeState({
+      buildings: [
+        { id: 'g1', defId: 'genesis_chamber', x: 0, y: 0 },
+        { id: 'm1', defId: 'mine', x: 5, y: 0 },
+        { id: 's1', defId: 'solar', x: 10, y: 0 },
+      ],
+      genesisTarget: 'iron_ingot',
+      level: 50,
+      aiCoreCrafted: true,
+    });
+    const { byBuilding } = computeRates(state);
+    const genesisRate = byBuilding.find((r) => r.building.defId === 'genesis_chamber')?.effectiveRate;
+    expect(genesisRate).toBeDefined();
+    expect(genesisRate!).toBeLessThan(1 / 300);
+  });
+});
 
 describe('Time Lock', () => {
   it('banks offline time instead of advancing', () => {

@@ -52,7 +52,7 @@ import type { Route } from './routes.js';
 import { _seedRouteIdCounter } from './routes.js';
 import type { SettlementVehicle } from './settlement.js';
 import { _seedVehicleIdCounter, tuningFor } from './settlement.js';
-import { ALL_RESOURCES } from './recipes.js';
+import { ALL_RESOURCES, type ResourceId } from './recipes.js';
 import type { NodeId, SubPathId } from './skilltree.js';
 import type { IslandSpec, WorldState } from './world.js';
 
@@ -435,6 +435,12 @@ export function deserializeWorld(
       typeof (s as { bankingEnabled?: unknown }).bankingEnabled === 'boolean'
         ? (s as { bankingEnabled: boolean }).bankingEnabled
         : false;
+    // Forward-compat backfill: Genesis Chamber target added after v3.
+    const genesisTarget =
+      (s as { genesisTarget?: unknown }).genesisTarget === null ||
+      typeof (s as { genesisTarget?: unknown }).genesisTarget === 'string'
+        ? (s as { genesisTarget: ResourceId | null }).genesisTarget
+        : null;
     const live: IslandState = {
       ...s,
       // Defensive inventory + storageCaps + funnelPending clones so the
@@ -450,6 +456,7 @@ export function deserializeWorld(
       accelerationQueue,
       accelerationRemainingMin,
       bankingEnabled,
+      genesisTarget,
       // Remap lastTick from the saved performance.now() domain into the
       // current session's performance.now() domain. The save preserved
       // lastTick literally; we shift by the offline delta so the

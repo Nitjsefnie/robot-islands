@@ -167,12 +167,50 @@ export interface IslandState {
   accelerationRemainingMin: number;
   /** §13.3 Whether this island banks time instead of advancing when offline. */
   bankingEnabled: boolean;
+  /** §13.3 Target resource for Genesis Chamber, or null if inactive. */
+  genesisTarget: ResourceId | null;
 }
 
 /**
  * Safe inventory read. `noUncheckedIndexedAccess` makes every `inv[r]`
  * return `number | undefined`, so we centralise the `?? 0` here.
  */
+/**
+ * §13.3 Genesis Chamber tier-based power draw (kilowatts). Converted to
+ * watts inside `computeRates` by multiplying by 1000.
+ */
+const GENESIS_POWER_KW: Record<number, number> = {
+  1: 50,
+  2: 500,
+  3: 5000,
+  4: 50000,
+};
+
+/** §13.3 Genesis Chamber cycle time in seconds. */
+const GENESIS_CYCLE_SEC = 300; // 5 minutes per unit
+
+/** Derive the economic tier of a resource from its XP weight. */
+function tierForResource(r: ResourceId): number {
+  const w = XP_WEIGHT[r];
+  if (w === 1) return 0; // T0
+  if (w === 3) return 1;
+  if (w === 10) return 2;
+  if (w === 30) return 3;
+  if (w === 100) return 4;
+  if (w === 300) return 5;
+  if (w === 1000) return 6;
+  return 1;
+}
+
+/** Set the Genesis Chamber target resource. Returns false if the target is
+ *  outside the T1-T4 band (including T0 and T5+). */
+export function setGenesisTarget(state: IslandState, target: ResourceId): boolean {
+  const tier = tierForResource(target);
+  if (tier > 4 || tier < 1) return false;
+  state.genesisTarget = target;
+  return true;
+}
+
 export function inv(state: IslandState, r: ResourceId): number {
   return state.inventory[r] ?? 0;
 }
@@ -411,6 +449,56 @@ export function computeRates(
   /** Gross production by resource from all tentatively-running buildings. */
   const tentSupply: Record<ResourceId, number> = {} as Record<ResourceId, number>;
   for (const b of state.buildings) {
+    // §13.3 Genesis Chamber — free creation of a player-chosen T1-T4 resource.
+    // Handled before the normal recipe path because genesis_chamber has no
+    // static RECIPES entry.
+    if (b.defId === 'genesis_chamber') {
+      if (!isBuildingActive(b)) {
+        tentative.push({
+          building: b,
+          recipe: { inputs: {}, outputs: {}, cycleSec: 1, category: 'manufacturing' },
+          baseRate: 0,
+          buffStack: 1,
+        });
+        continue;
+      }
+      const target = state.genesisTarget;
+      if (!target) {
+        tentative.push({
+          building: b,
+          recipe: { inputs: {}, outputs: {}, cycleSec: 1, category: 'manufacturing' },
+          baseRate: 0,
+          buffStack: 1,
+        });
+        continue;
+      }
+      const targetTier = tierForResource(target);
+      if (targetTier < 1 || targetTier > 4) {
+        tentative.push({
+          building: b,
+          recipe: { inputs: {}, outputs: {}, cycleSec: 1, category: 'manufacturing' },
+          baseRate: 0,
+          buffStack: 1,
+        });
+        continue;
+      }
+      const syntheticRecipe: Recipe = {
+        inputs: {},
+        outputs: { [target]: 1 },
+        cycleSec: GENESIS_CYCLE_SEC,
+        category: 'manufacturing',
+      };
+      const oa = outputAvail(state, syntheticRecipe);
+      if (oa === 0) {
+        tentative.push({ building: b, recipe: syntheticRecipe, baseRate: 0, buffStack: 1 });
+        continue;
+      }
+      const baseRate = 1 / GENESIS_CYCLE_SEC;
+      tentative.push({ building: b, recipe: syntheticRecipe, baseRate, buffStack: 1 });
+      tentSupply[target] = (tentSupply[target] ?? 0) + baseRate;
+      continue;
+    }
+
     // Tile-aware recipe pickup — see resolveRecipe in recipes.ts. For most
     // buildings this is the same as `RECIPES[def.id]`; Mine branches on
     // its footprint terrain when `terrainAt` is provided.
@@ -535,6 +623,8 @@ export function computeRates(
   let powerConsumed = 0;
   for (const b of state.buildings) {
     const def = defs[b.defId];
+    // §13.3 Genesis Chamber power is handled below with tier-based draw.
+    if (b.defId === 'genesis_chamber') continue;
     // §9.7 Tier Reset runtime gate: tier-gated buildings draw no power and
     // produce no power on a below-tier island (mirrors heat-gate exclusion
     // below). Without this, a post-reset T2 coal_gen would still push W
@@ -569,6 +659,18 @@ export function computeRates(
     // so we divide. Default 1.0 leaves draw untouched.
     powerConsumed += (def.power?.consumes ?? 0) / skillMul.powerConsumption;
   }
+  // §13.3 Genesis Chamber tier-based power draw (converted kW → W).
+  for (const b of state.buildings) {
+    if (b.defId !== 'genesis_chamber') continue;
+    if (!isBuildingActive(b)) continue;
+    if (!state.genesisTarget) continue;
+    const targetTier = tierForResource(state.genesisTarget);
+    if (targetTier < 1 || targetTier > 4) continue;
+    // Output-stalled chambers don't draw power (no production = no load).
+    if (inv(state, state.genesisTarget) >= cap(state, state.genesisTarget)) continue;
+    powerConsumed += (GENESIS_POWER_KW[targetTier]! * 1000) / skillMul.powerConsumption;
+  }
+
   const powerFactor =
     powerConsumed === 0 ? 1 : Math.min(1, powerProduced / powerConsumed);
 

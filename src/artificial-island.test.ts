@@ -85,6 +85,7 @@ function makeFounderState(
     accelerationQueue: [],
     accelerationRemainingMin: 0,
     bankingEnabled: false,
+    genesisTarget: null,
     lastTick: 0,
   };
 }

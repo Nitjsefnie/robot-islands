@@ -860,6 +860,8 @@ export function makeInitialIslandState(spec: IslandSpec, nowMs: number): IslandS
     accelerationQueue: [],
     accelerationRemainingMin: 0,
     bankingEnabled: false,
+    // §13.3 Genesis Chamber defaults to inactive.
+    genesisTarget: null,
     lastTick: nowMs,
   };
 }
