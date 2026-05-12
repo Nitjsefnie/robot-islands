@@ -30,13 +30,12 @@ import type { IslandState } from './economy.js';
 import { TILE_PX } from './island.js';
 import {
   affordabilityShortfall,
-  footprintTiles,
   placeBuilding,
   placementCostFor,
   validatePlacement,
   type PlacementReason,
-  type Rotation,
 } from './placement.js';
+import { footprintTiles, type Rotation } from './shape-mask.js';
 import type { ResourceId } from './recipes.js';
 import { VISION_BLUE, tileToWorldPx, type IslandSpec } from './world.js';
 

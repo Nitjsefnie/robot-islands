@@ -14,7 +14,7 @@
 import { Container, Graphics, Text } from 'pixi.js';
 
 import { BUILDING_DEFS, type BuildingDefId } from './building-defs.js';
-import { footprintTiles, type Rotation } from './placement.js';
+import { footprintTiles, type Rotation } from './shape-mask.js';
 import { TILE_PX, desaturate, lighten } from './island.js';
 import type { ResourceId } from './recipes.js';
 
@@ -102,8 +102,8 @@ const GLYPH_ALPHA = 0.85;
 
 /**
  * Render PlacedBuildings into a fresh container. Each instance's screen
- * rectangle is computed from its def's width/height + fill/stroke (so a
- * single rendering function handles every building kind uniformly).
+ * rectangle is computed from its def's footprint shape mask + fill/stroke
+ * (so a single rendering function handles every building kind uniformly).
  *
  * Coordinate convention matches `renderIslandTiles`: world (0,0) is the
  * centre of tile (0,0), so a footprint origin shifts by -TILE_PX/2 in each

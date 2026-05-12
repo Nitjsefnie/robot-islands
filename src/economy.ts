@@ -36,7 +36,7 @@ import type { PlacedBuilding } from './buildings.js';
 import { nextPhaseBoundaryMs, solarMultiplier } from './daynight.js';
 import { resolveHeatAssignments, type HeatAssignments } from './heat.js';
 import type { TerrainKind } from './island.js';
-import { footprintTiles } from './placement.js';
+import { footprintTiles } from './shape-mask.js';
 import {
   accrueOperatingTime,
   maintenanceFactor,

@@ -31,7 +31,7 @@ import {
   type BuildingDefId,
 } from './building-defs.js';
 import type { PlacedBuilding } from './buildings.js';
-import { footprintTiles, type Rotation } from './placement.js';
+import { footprintTiles, type Rotation } from './shape-mask.js';
 
 /** All footprint tiles a building occupies, returned as a Set of "x,y" keys
  *  for O(1) membership tests during border-overlap checks. Mirrors the

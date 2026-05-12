@@ -39,7 +39,7 @@
 import type { BuildingDef, BuildingDefId } from './building-defs.js';
 import type { PlacedBuilding } from './buildings.js';
 import type { TerrainKind } from './island.js';
-import { footprintTiles, type Rotation } from './placement.js';
+import { footprintTiles, type Rotation } from './shape-mask.js';
 
 export type ResourceId =
   // T0 raws
@@ -1033,11 +1033,8 @@ export const RECIPES: Partial<Record<RecipeId, Recipe>> = {
  * Mine this is the pre-tile-aware recipe that produces iron_ore, matching
  * historical behaviour.
  *
- * The footprint enumeration mirrors `footprintTiles` in placement.ts but is
- * inlined here to keep `recipes.ts → placement.ts` from forming a runtime
- * import cycle (placement.ts imports `recipes.ts` for ResourceId/
- * ALL_RESOURCES). If we ever pull `footprintTiles` into a primitive module
- * the inlining can be removed.
+ * The footprint enumeration uses `footprintTiles` from shape-mask.ts, which
+ * is cycle-safe because shape-mask.ts has no imports back to recipes.ts.
  */
 export function resolveRecipe(
   def: BuildingDef,

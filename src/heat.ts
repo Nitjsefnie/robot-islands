@@ -18,7 +18,7 @@
 //            lowest-id coal source; increment its served count.
 //         c) Else → hasHeat=false. Consumer cannot operate this tick.
 //
-// Pure module — no PixiJS, no DOM. Imports `footprintTiles` from placement.ts
+// Pure module — no PixiJS, no DOM. Imports `footprintTiles` from shape-mask.ts
 // and BUILDING_DEFS from building-defs.ts.
 //
 // Catalog asymmetry note: this resolver reads `requiresHeat` / `heatSource`
@@ -33,7 +33,7 @@
 
 import { BUILDING_DEFS } from './building-defs.js';
 import type { PlacedBuilding } from './buildings.js';
-import { footprintTiles, type Rotation } from './placement.js';
+import { footprintTiles, type Rotation } from './shape-mask.js';
 
 /**
  * Result of heat-assignment resolution for an island's current building list.

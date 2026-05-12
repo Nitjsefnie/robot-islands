@@ -28,7 +28,12 @@
 // validation verdict, optionally appends a new PlacedBuilding.
 
 import { BUILDING_DEFS, buildingUnlocked, canPlaceOnIsland, type BuildingDef, type BuildingDefId } from './building-defs.js';
-import { rotateShape, shapeHeight, shapeWidth, type ShapeMask } from './shape-mask.js';
+import {
+  rotateShape,
+  type ShapeMask,
+  type Rotation,
+  footprintTiles,
+} from './shape-mask.js';
 export { rotateShape, type ShapeMask };
 import type { PlacedBuilding } from './buildings.js';
 import type { IslandState } from './economy.js';
@@ -44,58 +49,6 @@ import type { IslandSpec } from './world.js';
  *  from there. `iron_ore` is the cheapest, earliest-game resource the player
  *  is reliably producing, so labeling defaults to it. */
 const DEFAULT_CARGO_LABEL: ResourceId = 'iron_ore';
-
-/** 4-way rotation in 90° CW increments. 0 = identity, 1 = 90° CW, etc. */
-export type Rotation = 0 | 1 | 2 | 3;
-
-/**
- * All tile coordinates a footprint covers when its anchor sits at
- * `(anchorX, anchorY)` under the given rotation.
- *
- * Convention: rotation pivots around the anchor and stays anchored at the
- * top-left of the AXIS-ALIGNED bounding box that wraps the rotated shape.
- * For a w×h rectangle the bounding box is (w × h) on rotations 0/2 and
- * (h × w) on rotations 1/3. The set of tiles a 2×3 rectangle covers under
- * rotation 1 is therefore a 3×2 axis-aligned block at the same anchor —
- * just with the original "width axis" now running vertically. This matches
- * the §4.2 spec where rotation does not move the placement origin, only
- * reshapes the footprint extent.
- *
- * Implementation: enumerate the original footprint mask, rotate each
- * (dx, dy) into the bounding box coordinate system, emit (anchor + rotated).
- */
-
-export function footprintTiles(
-  mask: ShapeMask,
-  anchorX: number,
-  anchorY: number,
-  rotation: Rotation,
-): ReadonlyArray<{ readonly x: number; readonly y: number }> {
-  const rotated = rotateShape(mask, rotation);
-  let minDx = Infinity;
-  let minDy = Infinity;
-  for (const { dx, dy } of rotated.tiles) {
-    if (dx < minDx) minDx = dx;
-    if (dy < minDy) minDy = dy;
-  }
-  return rotated.tiles.map(({ dx, dy }) => ({
-    x: anchorX + dx - minDx,
-    y: anchorY + dy - minDy,
-  }));
-}
-
-/**
- * The effective axis-aligned bounding-box dimensions of a footprint under
- * rotation. For rectangular masks: rotations 0/2 keep `{w, h}`;
- * rotations 1/3 swap to `{h, w}`.
- */
-export function rotatedDims(
-  mask: ShapeMask,
-  rotation: Rotation,
-): { readonly width: number; readonly height: number } {
-  const r = rotateShape(mask, rotation);
-  return { width: shapeWidth(r), height: shapeHeight(r) };
-}
 
 /** Reasons placement can fail. Mirrors the §4.3 rule set plus the §9.5
  *  biome-locked-unique gate. `out-of-bounds` covers any tile of the
