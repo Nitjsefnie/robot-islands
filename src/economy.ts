@@ -688,7 +688,7 @@ export function computeRates(
   const rawProduced = powerProduced;
   const rawConsumed = powerConsumed;
   if (batteryCount > 0 && powerProduced < powerConsumed && state.singularityStoredWs > 0) {
-    powerProduced += powerConsumed - powerProduced; // cover full deficit
+    powerProduced = powerConsumed; // cover full deficit
   }
 
   const powerFactor =
@@ -1055,9 +1055,8 @@ export function advanceIsland(
     }
     // §13.3 Singularity Battery — bound segment to battery depletion/fill so the
     // piecewise integrator stays exact (rates are constant within a segment).
-    const batteryCount = state.buildings.filter(
-      (b) => !b.invalid && b.defId === 'singularity_battery',
-    ).length;
+    const validBuildings = state.buildings.filter((b) => !b.invalid);
+    const batteryCount = validBuildings.filter((b) => b.defId === 'singularity_battery').length;
     const maxCap = batteryCount * SINGULARITY_BATTERY_CAPACITY_WS;
     const rawBalance = power.rawProduced - power.rawConsumed;
     let nextBatteryMs = Infinity;
@@ -1065,7 +1064,7 @@ export function advanceIsland(
       const surplus = rawBalance;
       const fillTimeSec = (maxCap - state.singularityStoredWs) / surplus;
       nextBatteryMs = t + fillTimeSec * 1000;
-    } else if (rawBalance < 0 && state.singularityStoredWs > 0) {
+    } else if (rawBalance < 0 && state.singularityStoredWs > 0 && batteryCount > 0) {
       const deficit = -rawBalance;
       const depletionTimeSec = state.singularityStoredWs / deficit;
       nextBatteryMs = t + depletionTimeSec * 1000;
