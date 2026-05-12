@@ -132,22 +132,25 @@ export function weather(
   biome?: Biome,
 ): WeatherCell {
   const rng = makeSeededRng(`${seed}_weather_${cx}_${cy}`);
-  let weights = biome ? biomeWeatherWeights(biome) : BASE_WEIGHTS;
-  // §2.7: severe-storm formation rate increases ~25% during Night and Dawn.
-  const phase = dayPhaseName(nowMs);
-  const boost = phase === 'night' || phase === 'dawn' ? 1.25 : 1;
-  if (boost !== 1) {
-    const mutable: WeightEntry[] = weights.map((e) => ({ state: e.state, weight: e.weight }));
-    for (const e of mutable) {
-      if (e.state === 'severe_storm' || e.state === 'catastrophic') {
-        e.weight *= boost;
-      }
-    }
-    weights = mutable;
-  }
+  const baseWeights = biome ? biomeWeatherWeights(biome) : BASE_WEIGHTS;
   let t = 0;
   const MAX_ITERATIONS = 1_000_000;
   for (let i = 0; i < MAX_ITERATIONS; i++) {
+    // §2.7: severe-storm formation rate increases ~25% during Night and Dawn.
+    // Determine the phase at the START of this interval so boosted weights
+    // only apply to intervals that actually fall in night/dawn, preserving
+    // historical determinism.
+    const phase = dayPhaseName(t);
+    let weights: ReadonlyArray<WeightEntry> = baseWeights;
+    if (phase === 'night' || phase === 'dawn') {
+      const mutable: WeightEntry[] = baseWeights.map((e) => ({ state: e.state, weight: e.weight }));
+      for (const e of mutable) {
+        if (e.state === 'severe_storm' || e.state === 'catastrophic') {
+          e.weight *= 1.25;
+        }
+      }
+      weights = mutable;
+    }
     const dwell = MIN_DWELL_MS + Math.floor(rng() * (MAX_DWELL_MS - MIN_DWELL_MS + 1));
     const state = sampleState(weights, rng);
     const until = t + dwell;

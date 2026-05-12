@@ -288,7 +288,7 @@ export const IDENTITY_MODIFIER_MULTIPLIERS: ModifierMultipliers = blankModifierM
  * Fold a modifier list into a multiplier bundle. Pure: handles the empty-list
  * case (returns a fresh identity bundle), and silently ignores unknown ids.
  *
- * Active step-8 effects:
+ * Active §3.5 modifier effects:
  *   - mineral_rich → recipeRateByCategory.extraction × 1.25
  *   - fertile      → recipeRateByCategory.extraction × 1.50
  *                    (composes with mineral_rich; both target extraction)

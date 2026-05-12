@@ -762,6 +762,26 @@ describe('modifier integration in computeRates / advanceIsland (§3.5)', () => {
     expect(power.produced).toBe(50);
   });
 
+  it('high_wind variance on chained production: Workshop stays within ±20% of nominal', () => {
+    // Mine produces iron_ore, Workshop consumes it. With high_wind, the Mine's
+    // output varies but the Workshop's effective rate should still be within
+    // ±20% of its nominal rate (0.01/s), NOT additionally reduced by inputAvail.
+    const state = makeState({
+      buildings: [MINE, WORKSHOP],
+      inventory: { ...blankInventory(), coal: 50 }, // coal for Workshop; no iron_ore — flow-through from Mine
+    });
+    const mul = effectiveModifierMultipliers(['high_wind']);
+    const { byBuilding } = computeRates(state, { modifierMul: mul, defs: POWER_FREE }, 0);
+    const mineRate = byBuilding.find((r) => r.building.defId === 'mine')!.effectiveRate;
+    const wsRate = byBuilding.find((r) => r.building.defId === 'workshop')!.effectiveRate;
+    // Mine should be within ±20% of 0.02
+    expect(mineRate).toBeGreaterThanOrEqual(0.02 * 0.8);
+    expect(mineRate).toBeLessThanOrEqual(0.02 * 1.2);
+    // Workshop should be within ±20% of 0.01 (not double-dipped)
+    expect(wsRate).toBeGreaterThanOrEqual(0.01 * 0.8);
+    expect(wsRate).toBeLessThanOrEqual(0.01 * 1.2);
+  });
+
   it('computeRates with modifierMul matches advanceIsland integration', () => {
     // Direct computeRates with mineral_rich → effectiveRate = 0.02 × 1.25 = 0.025. (rebalanced step #19)
     const state = makeState({

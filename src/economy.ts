@@ -208,6 +208,14 @@ function tierForResource(r: ResourceId): number {
   return 1;
 }
 
+/** Compute the variance factor for high_wind modifier. Deterministic per
+ *  (islandId, second). Returns 1 when variance is inactive. */
+function computeVarianceFactor(state: IslandState, modifierMul: ModifierMultipliers, nowMs: number): number {
+  if (!modifierMul.outputVariance) return 1;
+  const varianceRng = makeSeededRng(`${state.id}_variance_${Math.floor(nowMs / 1000)}`);
+  return 0.8 + varianceRng() * 0.4; // ±20%
+}
+
 /** Set the Genesis Chamber target resource. Returns false if the target is
  *  outside the T1-T4 band (including T0 and T5+). */
 export function setGenesisTarget(state: IslandState, target: ResourceId): boolean {
@@ -401,6 +409,7 @@ export function computeRates(
   // constant multiplier.
   const t = nowMs ?? state.lastTick;
   const solarMul = solarMultiplier(t);
+  const varianceFactor = computeVarianceFactor(state, modifierMul, t);
   // The §5.1 active flag depends on inputAvail, and inputAvail must be
   // computed at NOMINAL rate (independent of powerFactor) to avoid a circular
   // dependency. PowerFactor is then applied to consumers' final effective
@@ -506,12 +515,7 @@ export function computeRates(
         tentative.push({ building: b, recipe: syntheticRecipe, baseRate: 0, buffStack: 1 });
         continue;
       }
-      let baseRate = 1 / GENESIS_CYCLE_SEC;
-      if (modifierMul.outputVariance) {
-        const varianceRng = makeSeededRng(`${state.id}_variance_${Math.floor((nowMs ?? state.lastTick) / 1000)}`);
-        const varianceFactor = 0.8 + varianceRng() * 0.4; // ±20%
-        baseRate *= varianceFactor;
-      }
+      const baseRate = 1 / GENESIS_CYCLE_SEC;
       tentative.push({ building: b, recipe: syntheticRecipe, baseRate, buffStack: 1 });
       tentSupply[target] = (tentSupply[target] ?? 0) + baseRate;
       continue;
@@ -590,12 +594,7 @@ export function computeRates(
       (specMul.recipeRateByCategory[recipe.category] ?? 1) *
       specMul.globalRecipeRate *
       ncBuff;
-    let baseRate = (1 / recipe.cycleSec) * buffStack * rateMul;
-    if (modifierMul.outputVariance) {
-      const varianceRng = makeSeededRng(`${state.id}_variance_${Math.floor((nowMs ?? state.lastTick) / 1000)}`);
-      const varianceFactor = 0.8 + varianceRng() * 0.4; // ±20%
-      baseRate *= varianceFactor;
-    }
+    const baseRate = (1 / recipe.cycleSec) * buffStack * rateMul;
     tentative.push({ building: b, recipe, baseRate, buffStack });
     for (const [r, yld] of Object.entries(recipe.outputs)) {
       const id = r as ResourceId;
@@ -729,7 +728,7 @@ export function computeRates(
     // factor and double-dip on consumers. Resource recipes only.
     const mf = maintenanceFactor(t.building, defs[t.building.defId]);
     const accelMul = ctx?.accelerationMul ?? 1;
-    const effectiveRate = t.baseRate * ia * pf * mf * accelMul;
+    const effectiveRate = t.baseRate * ia * pf * mf * accelMul * varianceFactor;
     byBuilding.push({ building: t.building, recipe: t.recipe, effectiveRate });
 
     if (effectiveRate === 0) continue;

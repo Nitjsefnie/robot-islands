@@ -126,7 +126,7 @@ describe('§2.7 — night/dawn severe-storm boost', () => {
     }
     // Dusk should not be systematically higher than day; we only assert it
     // is not greater (it may be equal or lower by chance).
-    expect(duskSevere).toBeLessThanOrEqual(daySevere + 50);
+    expect(duskSevere).toBeLessThanOrEqual(daySevere + 30);
   });
 });
 
