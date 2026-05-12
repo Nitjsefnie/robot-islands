@@ -855,6 +855,11 @@ export function makeInitialIslandState(spec: IslandSpec, nowMs: number): IslandS
     // §9.7 Tier Reset cooldown anchor. Null on a fresh island — the player
     // hasn't ever paid for a reset yet, so the 24h block doesn't apply.
     lastResetAt: null,
+    // §13.3 Time Lock defaults.
+    timeLockBankedMin: 0,
+    accelerationQueue: [],
+    accelerationRemainingMin: 0,
+    bankingEnabled: false,
     lastTick: nowMs,
   };
 }

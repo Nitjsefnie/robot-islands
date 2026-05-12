@@ -55,6 +55,10 @@ function makeIslandState(overrides: Partial<IslandState> & { id: string }): Isla
     aiCoreCrafted: overrides.aiCoreCrafted ?? false,
     ascendantCoreCrafted: overrides.ascendantCoreCrafted ?? false,
     lastResetAt: overrides.lastResetAt ?? null,
+    timeLockBankedMin: overrides.timeLockBankedMin ?? 0,
+    accelerationQueue: overrides.accelerationQueue ?? [],
+    accelerationRemainingMin: overrides.accelerationRemainingMin ?? 0,
+    bankingEnabled: overrides.bankingEnabled ?? false,
     lastTick: overrides.lastTick ?? 0,
   };
 }

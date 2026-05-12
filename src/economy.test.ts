@@ -29,6 +29,7 @@ import {
   accrueXp,
   advanceIsland,
   computeRates,
+  spendTimeLock,
   xpForLevel,
   type DefCatalog,
   type IslandState,
@@ -96,6 +97,10 @@ function makeState(over: Partial<IslandState> = {}): IslandState {
     aiCoreCrafted: false,
     ascendantCoreCrafted: false,
     lastResetAt: null,
+    timeLockBankedMin: 0,
+    accelerationQueue: [],
+    accelerationRemainingMin: 0,
+    bankingEnabled: false,
     lastTick: 0,
     ...over,
   };
@@ -1852,5 +1857,125 @@ describe('extractor tile gating §8.1', () => {
     });
     const rates = computeRates(state, { terrainAt: () => 'grass' });
     expect(rates.production.wood ?? 0).toBe(0);
+  });
+});
+
+// -----------------------------------------------------------------------
+// §13.3 Time Lock — banking + acceleration
+// -----------------------------------------------------------------------
+
+describe('Time Lock', () => {
+  it('banks offline time instead of advancing', () => {
+    const state = makeState({
+      buildings: [{ id: 'tl-1', defId: 'time_lock', x: 0, y: 0 }],
+      bankingEnabled: true,
+    });
+    advanceIsland(state, 60 * 60 * 1000); // 1 hour
+    expect(state.timeLockBankedMin).toBeCloseTo(60, 6);
+    // Inventory unchanged because the island was paused.
+    expect(state.inventory.iron_ore).toBe(0);
+    expect(state.lastTick).toBe(60 * 60 * 1000);
+  });
+
+  it('caps bank at 24h per lock', () => {
+    // 2 time locks = 2880 min max.
+    const state = makeState({
+      buildings: [
+        { id: 'tl-1', defId: 'time_lock', x: 0, y: 0 },
+        { id: 'tl-2', defId: 'time_lock', x: 3, y: 0 },
+      ],
+      bankingEnabled: true,
+      timeLockBankedMin: 0,
+    });
+    // Advance 50 hours = 3000 minutes.
+    advanceIsland(state, 50 * 60 * 60 * 1000);
+    expect(state.timeLockBankedMin).toBeCloseTo(2880, 6);
+  });
+
+  it('does not bank when bankingEnabled is false', () => {
+    const state = makeState({
+      buildings: [{ id: 'tl-1', defId: 'time_lock', x: 0, y: 0 }],
+      bankingEnabled: false,
+      inventory: { ...blankInventory() },
+    });
+    // Place a Mine too so we can verify normal advancement.
+    state.buildings.push({ id: 'b-mine', defId: 'mine', x: 5, y: 0 });
+    advanceIsland(state, 100_000, { defs: POWER_FREE });
+    expect(state.timeLockBankedMin).toBe(0);
+    expect(state.inventory.iron_ore).toBeCloseTo(2, 6);
+  });
+
+  it('triples production while accelerated', () => {
+    const state = makeState({
+      buildings: [MINE],
+      inventory: blankInventory(),
+      accelerationRemainingMin: 60,
+    });
+    advanceIsland(state, 60_000, { defs: POWER_FREE });
+    // Base mine 0.02/s. Over 60s at 3× = 3.6 iron_ore.
+    expect(state.inventory.iron_ore).toBeCloseTo(3.6, 6);
+    // 1 minute consumed from the 60-minute block.
+    expect(state.accelerationRemainingMin).toBeCloseTo(59, 6);
+  });
+
+  it('queues multiple spends sequentially', () => {
+    const sourceA = makeState({ id: 'source-a', timeLockBankedMin: 30 });
+    const sourceB = makeState({ id: 'source-b', timeLockBankedMin: 20 });
+    const target = makeState({ id: 'target' });
+
+    const r1 = spendTimeLock(sourceA, target, 30);
+    expect(r1.ok).toBe(true);
+    expect(target.accelerationRemainingMin).toBe(30);
+    expect(target.accelerationQueue).toHaveLength(0);
+    expect(sourceA.timeLockBankedMin).toBe(0);
+
+    const r2 = spendTimeLock(sourceB, target, 20);
+    expect(r2.ok).toBe(true);
+    expect(target.accelerationRemainingMin).toBe(30);
+    expect(target.accelerationQueue).toHaveLength(1);
+    expect(target.accelerationQueue[0]).toEqual({ sourceIslandId: 'source-b', durationMin: 20 });
+    expect(sourceB.timeLockBankedMin).toBe(0);
+
+    // Advance 30 minutes — first block exhausted, queue pops.
+    advanceIsland(target, 30 * 60 * 1000, { defs: POWER_FREE });
+    expect(target.accelerationRemainingMin).toBeCloseTo(20, 6);
+    expect(target.accelerationQueue).toHaveLength(0);
+  });
+
+  it('rejects spend without enough banked time', () => {
+    const source = makeState({ timeLockBankedMin: 10 });
+    const target = makeState();
+    const result = spendTimeLock(source, target, 20);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.reason).toBe('insufficient-banked-time');
+    expect(source.timeLockBankedMin).toBe(10);
+    expect(target.accelerationRemainingMin).toBe(0);
+  });
+
+  it('rejects spend with invalid minutes', () => {
+    const source = makeState({ timeLockBankedMin: 10 });
+    const target = makeState();
+    expect(spendTimeLock(source, target, 0).ok).toBe(false);
+    expect(spendTimeLock(source, target, -5).ok).toBe(false);
+  });
+
+  it('acceleration does not affect non-accelerated island', () => {
+    const state = makeState({
+      buildings: [MINE],
+      inventory: blankInventory(),
+    });
+    advanceIsland(state, 60_000, { defs: POWER_FREE });
+    expect(state.inventory.iron_ore).toBeCloseTo(1.2, 6); // 0.02 * 60
+  });
+
+  it('triples XP while accelerated', () => {
+    const state = makeState({
+      buildings: [MINE],
+      inventory: blankInventory(),
+      accelerationRemainingMin: 60,
+    });
+    advanceIsland(state, 60_000, { defs: POWER_FREE });
+    // Base XP: 0.02/s * 60s * 1 = 1.2. At 3×: 3.6.
+    expect(state.xp).toBeCloseTo(3.6, 6);
   });
 });

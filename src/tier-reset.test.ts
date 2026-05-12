@@ -61,6 +61,10 @@ function makeState(over: Partial<IslandState> = {}): IslandState {
     aiCoreCrafted: false,
     ascendantCoreCrafted: false,
     lastResetAt: null,
+    timeLockBankedMin: 0,
+    accelerationQueue: [],
+    accelerationRemainingMin: 0,
+    bankingEnabled: false,
     lastTick: 0,
     ...over,
   };

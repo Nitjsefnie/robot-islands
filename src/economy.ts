@@ -71,6 +71,8 @@ export interface RatesContext {
    *  a closure rather than the full IslandSpec keeps economy.ts off the
    *  world.ts import edge. */
   readonly terrainAt?: (x: number, y: number) => TerrainKind;
+  /** §13.3 acceleration multiplier from Time Lock spend. Default 1 (no acceleration). */
+  readonly accelerationMul?: number;
 }
 
 /**
@@ -157,6 +159,14 @@ export interface IslandState {
   lastResetAt: number | null;
   /** Wall-clock timestamp of the last advance, in milliseconds. */
   lastTick: number;
+  /** §13.3 Time Lock banked time in minutes. One per Time Lock building. */
+  timeLockBankedMin: number;
+  /** §13.3 Currently active acceleration queue. */
+  accelerationQueue: Array<{ readonly sourceIslandId: string; readonly durationMin: number }>;
+  /** §13.3 Remaining minutes of current acceleration (0 if none). */
+  accelerationRemainingMin: number;
+  /** §13.3 Whether this island banks time instead of advancing when offline. */
+  bankingEnabled: boolean;
 }
 
 /**
@@ -585,7 +595,8 @@ export function computeRates(
     // and applying maintenance to power would cascade into the brownout
     // factor and double-dip on consumers. Resource recipes only.
     const mf = maintenanceFactor(t.building, defs[t.building.defId]);
-    const effectiveRate = t.baseRate * ia * pf * mf;
+    const accelMul = ctx?.accelerationMul ?? 1;
+    const effectiveRate = t.baseRate * ia * pf * mf * accelMul;
     byBuilding.push({ building: t.building, recipe: t.recipe, effectiveRate });
 
     if (effectiveRate === 0) continue;
@@ -832,6 +843,29 @@ function levelUpIfReady(state: IslandState): void {
 }
 
 /**
+ * §13.3 Time Lock spend — transfer banked minutes from a source island to
+ * accelerate a target island at 3× tick rate. Queued sequentially if the
+ * target already has an active acceleration.
+ */
+export function spendTimeLock(
+  sourceState: IslandState,
+  targetState: IslandState,
+  minutes: number,
+): { ok: true } | { ok: false; reason: 'insufficient-banked-time' | 'invalid-minutes' } {
+  if (minutes <= 0) return { ok: false, reason: 'invalid-minutes' };
+  if (sourceState.timeLockBankedMin < minutes) {
+    return { ok: false, reason: 'insufficient-banked-time' };
+  }
+  if (targetState.accelerationRemainingMin > 0) {
+    targetState.accelerationQueue.push({ sourceIslandId: sourceState.id, durationMin: minutes });
+  } else {
+    targetState.accelerationRemainingMin = minutes;
+  }
+  sourceState.timeLockBankedMin -= minutes;
+  return { ok: true };
+}
+
+/**
  * Advance one island from its `lastTick` to `nowMs` via event-driven
  * piecewise integration. Mutates state in place.
  *
@@ -860,6 +894,17 @@ export function advanceIsland(
     state.lastTick = nowMs;
     return;
   }
+  // §13.3 Time Lock banking: if the island has at least one Time Lock and
+  // banking is enabled, accumulate offline time into the bank instead of
+  // advancing production.
+  const timeLockCount = state.buildings.filter((b) => b.defId === 'time_lock').length;
+  if (timeLockCount > 0 && state.bankingEnabled) {
+    const maxBank = timeLockCount * 24 * 60; // 24 hours per Lock in minutes
+    const offlineMin = (nowMs - state.lastTick) / 60000;
+    state.timeLockBankedMin = Math.min(maxBank, state.timeLockBankedMin + offlineMin);
+    state.lastTick = nowMs;
+    return; // skip normal advancement — island is paused while banking
+  }
   let t = state.lastTick;
   // §4.7: attempt auto-maintain BEFORE the first segment too — a save loaded
   // with materials in inventory and an over-threshold building should
@@ -870,10 +915,15 @@ export function advanceIsland(
   }
   for (let safety = 0; safety < 10000; safety++) {
     if (t >= nowMs) break;
+    // §13.3 acceleration multiplier from Time Lock spend.
+    const effectiveCtx: RatesContext = {
+      ...ctx,
+      accelerationMul: state.accelerationRemainingMin > 0 ? 3 : 1,
+    };
     // §2.7: pass `t` so the solar multiplier reflects this segment's
     // quadrant, not start-of-tick. Without this, a 24h offline gap would
     // integrate one constant solar multiplier across all four phases.
-    const { production, consumption, net } = computeRates(state, ctx, t);
+    const { production, consumption, net } = computeRates(state, effectiveCtx, t);
     // §13 auto-flip: first local production of ai_core / ascendant_core
     if (!state.aiCoreCrafted && (production.ai_core ?? 0) > 0) {
       state.aiCoreCrafted = true;
@@ -887,9 +937,15 @@ export function advanceIsland(
     // quadrant lasts 6h; offline catchup of N days produces ≤ 4N + extras
     // segments instead of an under-integrated single segment.
     const nextPhaseMs = nextPhaseBoundaryMs(t);
+    // §13.3 bound segment to the end of active acceleration so the multiplier
+    // stays constant within the segment.
+    let nextAccelMs = Infinity;
+    if (state.accelerationRemainingMin > 0) {
+      nextAccelMs = t + state.accelerationRemainingMin * 60 * 1000;
+    }
     // Clamp to nowMs; findNextCapEvent already returns nowMs when nothing
     // changes, but if all rates are zero we still need to exit the loop.
-    const segEndMs = Math.min(nextEventMs, nextPhaseMs, nowMs);
+    const segEndMs = Math.min(nextEventMs, nextPhaseMs, nextAccelMs, nowMs);
     const dtSec = (segEndMs - t) / 1000;
     if (dtSec > 0) {
       applyRates(state, net, dtSec);
@@ -914,6 +970,20 @@ export function advanceIsland(
       t = nowMs;
     } else {
       t = segEndMs;
+    }
+    // §13.3 acceleration queue: consume the elapsed real-time minutes from
+    // the active acceleration block. If the boundary was hit, zero it and
+    // pop the next queued entry (if any).
+    if (state.accelerationRemainingMin > 0) {
+      const consumedMin = dtSec / 60;
+      state.accelerationRemainingMin -= consumedMin;
+      if (state.accelerationRemainingMin <= 0 || nextAccelMs <= segEndMs) {
+        state.accelerationRemainingMin = 0;
+        const next = state.accelerationQueue.shift();
+        if (next) {
+          state.accelerationRemainingMin = next.durationMin;
+        }
+      }
     }
     // §4.7 auto-maintenance check. Fires at every segment boundary —
     // including inventory-cap/floor boundaries where a maintenance material

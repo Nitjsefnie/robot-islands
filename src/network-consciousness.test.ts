@@ -45,6 +45,10 @@ function makeState(id: string, level: number): IslandState {
     aiCoreCrafted: false,
     ascendantCoreCrafted: false,
     lastResetAt: null,
+    timeLockBankedMin: 0,
+    accelerationQueue: [],
+    accelerationRemainingMin: 0,
+    bankingEnabled: false,
   };
 }
 

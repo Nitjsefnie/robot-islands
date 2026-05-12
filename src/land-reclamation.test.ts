@@ -78,6 +78,10 @@ function makeState(inventory: Partial<Record<ResourceId, number>> = {}): IslandS
     aiCoreCrafted: false,
     ascendantCoreCrafted: false,
     lastResetAt: null,
+    timeLockBankedMin: 0,
+    accelerationQueue: [],
+    accelerationRemainingMin: 0,
+    bankingEnabled: false,
     lastTick: 0,
   };
 }
