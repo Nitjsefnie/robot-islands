@@ -203,7 +203,11 @@ export type BuildingDefId =
   | 'antenna_t3'
   | 'antenna_t4'
   | 'antenna_t5'
-  | 'antenna_t6';
+  | 'antenna_t6'
+  | 'pcb_etcher'
+  | 'circuit_assembler'
+  | 'processor_fab'
+  | 'compute_module_fab';
 
 /**
  * §4.5 buff-adjacency entry: per matching 4-neighbor, multiply the building's
@@ -1870,6 +1874,61 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     power: { consumes: 400 },
     placementCost: { antimatter_propellant: 40, steel: 80, reality_anchor: 40 },
     glyph: '⟁',
+  },
+  // ---------------------------------------------------------------------------
+  // T3 microchip intermediate chain (§7.7)
+  // ---------------------------------------------------------------------------
+  pcb_etcher: {
+    id: 'pcb_etcher',
+    displayName: 'PCB Etcher',
+    category: 'electronics',
+    tier: 2,
+    width: 2,
+    height: 2,
+    fill: 0x4a7a5a,
+    stroke: 0x1a3a2a,
+    power: { consumes: 80 },
+    placementCost: { steel: 50, microchip: 20, stone: 20 },
+    glyph: '◈',
+  },
+  circuit_assembler: {
+    id: 'circuit_assembler',
+    displayName: 'Circuit Assembler',
+    category: 'electronics',
+    tier: 3,
+    width: 2,
+    height: 2,
+    fill: 0x4a90d9,
+    stroke: 0x2a6099,
+    power: { consumes: 30 },
+    placementCost: { steel: 10, microchip: 5, gear: 5 },
+    glyph: '◈',
+  },
+  processor_fab: {
+    id: 'processor_fab',
+    displayName: 'Processor Fabricator',
+    category: 'electronics',
+    tier: 4,
+    width: 3,
+    height: 2,
+    fill: 0x6a50b9,
+    stroke: 0x4a3099,
+    power: { consumes: 60 },
+    placementCost: { steel: 20, microchip: 10, exotic_alloy: 2 },
+    glyph: '◈',
+  },
+  compute_module_fab: {
+    id: 'compute_module_fab',
+    displayName: 'Computing Module Fabricator',
+    category: 'electronics',
+    tier: 4,
+    width: 3,
+    height: 3,
+    fill: 0x8a40a9,
+    stroke: 0x6a2089,
+    power: { consumes: 100 },
+    placementCost: { steel: 30, quantum_chip: 2, exotic_alloy: 5 },
+    glyph: '◈',
   },
 };
 

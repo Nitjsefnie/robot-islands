@@ -139,7 +139,11 @@ export type ResourceId =
   | 'antimatter_propellant'
   | 'scanner_sat'
   | 'comm_sat'
-  | 'orbital_insertion_package';
+  | 'orbital_insertion_package'
+  | 'pcb'
+  | 'circuit_board'
+  | 'processor'
+  | 'computing_module';
 
 /** All known resources, useful for iterating to initialise inventories. */
 export const ALL_RESOURCES: ReadonlyArray<ResourceId> = [
@@ -203,6 +207,10 @@ export const ALL_RESOURCES: ReadonlyArray<ResourceId> = [
   'scanner_sat',
   'comm_sat',
   'orbital_insertion_package',
+  'pcb',
+  'circuit_board',
+  'processor',
+  'computing_module',
 ];
 
 /**
@@ -289,6 +297,10 @@ export const XP_WEIGHT: Readonly<Record<ResourceId, number>> = {
   scanner_sat: 1000,
   comm_sat: 1000,
   orbital_insertion_package: 1000,
+  pcb: 10,
+  circuit_board: 30,
+  processor: 30,
+  computing_module: 30,
 };
 
 /**
@@ -949,6 +961,36 @@ export const RECIPES: Partial<Record<RecipeId, Recipe>> = {
     inputs: { antimatter_propellant: 2, exotic_alloy: 1 },
     outputs: { orbital_insertion_package: 1 },
     category: 'manufacturing',
+  },
+
+  // ---------------------------------------------------------------------------
+  // T3 microchip intermediate chain (§7.7) — circuit_board, processor,
+  // computing_module. Produces the T3 electronics intermediates that feed
+  // T4+ assembly recipes.
+  // ---------------------------------------------------------------------------
+  pcb_etcher: {
+    cycleSec: 200,
+    inputs: { wire: 1, glass: 1 },
+    outputs: { pcb: 1 },
+    category: 'electronics',
+  },
+  circuit_assembler: {
+    cycleSec: 30,
+    inputs: { pcb: 1, microchip: 2, steel: 1 },
+    outputs: { circuit_board: 1 },
+    category: 'electronics',
+  },
+  processor_fab: {
+    cycleSec: 60,
+    inputs: { circuit_board: 2, microchip: 4, exotic_alloy: 1 },
+    outputs: { processor: 1 },
+    category: 'electronics',
+  },
+  compute_module_fab: {
+    cycleSec: 120,
+    inputs: { processor: 2, circuit_board: 4, quantum_chip: 1 },
+    outputs: { computing_module: 1 },
+    category: 'electronics',
   },
 };
 

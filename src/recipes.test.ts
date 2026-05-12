@@ -173,3 +173,26 @@ describe('fuelForTier (§11.7)', () => {
     }
   });
 });
+
+describe('microchip chain', () => {
+  it('circuit_assembler outputs circuit_board: 1', () => {
+    expect(RECIPES.circuit_assembler!.outputs.circuit_board).toBe(1);
+  });
+
+  it('processor_fab outputs processor: 1 and inputs circuit_board: 2', () => {
+    expect(RECIPES.processor_fab!.outputs.processor).toBe(1);
+    expect(RECIPES.processor_fab!.inputs.circuit_board).toBe(2);
+  });
+
+  it('compute_module_fab outputs computing_module: 1', () => {
+    expect(RECIPES.compute_module_fab!.outputs.computing_module).toBe(1);
+  });
+
+  it('XP_WEIGHT.circuit_board is 30', () => {
+    expect(XP_WEIGHT.circuit_board).toBe(30);
+  });
+
+  it('XP_WEIGHT.computing_module is 30', () => {
+    expect(XP_WEIGHT.computing_module).toBe(30);
+  });
+});

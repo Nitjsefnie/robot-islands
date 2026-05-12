@@ -106,6 +106,10 @@ export const RESOURCE_STORAGE_CATEGORY: Readonly<Record<ResourceId, StorageCateg
   cryo_coolant: 'temp_sensitive', // §4.6 lists "cryo-coolant" under temp_sensitive.
   aviation_kerosene: 'liquid_gas',
   microchip: 'components',
+  pcb: 'components',
+  circuit_board: 'components',
+  processor: 'components',
+  computing_module: 'components',
 
   // T4 — components/rare/liquid.
   helium_3: 'rare',             // §6.4 T3-rare raw; §4.6 names it explicitly.
