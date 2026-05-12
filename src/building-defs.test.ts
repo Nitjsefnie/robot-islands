@@ -528,6 +528,12 @@ describe('step-20 T5→T6 Ascendant Assembly (§13.4)', () => {
   });
 });
 
+describe('§8.8 shipyard coastal gating', () => {
+  it('shipyard has requiredTile containing water', () => {
+    expect(BUILDING_DEFS.shipyard.requiredTile).toContain('water');
+  });
+});
+
 describe('step-20 T6 Orbital catalog (§14 / step 20)', () => {
   const T6_NON_SPACEPORT_IDS = [
     'antimatter_refinery',

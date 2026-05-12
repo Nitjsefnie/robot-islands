@@ -588,10 +588,8 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     glyph: '⚙',
   },
   // §8.8 / §12.2: Shipyard — T1 logistics building that launches §12 cargo
-  // ships for settlement (and, later, T1 cargo routes). Spec requires
-  // coastal placement; coastal-tile gating is DEFERRED (no water-tile
-  // system yet). Step-12 places Shipyard freely on any tile inside the
-  // island ellipse.
+  // ships for settlement (and, later, T1 cargo routes). Requires at least
+  // one footprint tile on water (coastal placement gate per §4.3).
   shipyard: {
     id: 'shipyard',
     displayName: 'Shipyard',
@@ -605,6 +603,7 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     // §14 placeholder — tune in Appendix A. 3×3 footprint scales the
     // base T1 cost up versus the 2×2 baseline.
     placementCost: { stone: 60, wood: 40 },
+    requiredTile: ['water'],
     glyph: '⚓',
   },
   // §8.8 / §12.2: Helipad — T2 logistics building that launches §12
