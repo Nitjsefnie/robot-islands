@@ -109,7 +109,6 @@ function makeTestWorld(): {
   const world = freshWorld([homeSpec, targetSpec]);
   const homeState = makeIslandState({ id: 'home' });
   homeState.inventory.biofuel = 50;
-  homeState.inventory.foundation_kit = 3;
   const islandStates = new Map<string, IslandState>([['home', homeState]]);
   return { world, homeSpec, homeState, targetSpec, islandStates };
 }
@@ -691,5 +690,7 @@ describe('§12.4 foundation kit decomposition', () => {
     tickVehicles(world, islandStates, r.vehicle.expectedArrivalTime + 1);
     const newState = islandStates.get(targetSpec.id);
     expect(newState!.inventory.iron_ingot).toBe(10);
+    expect(newState!.inventory.wood).toBe(60); // 40 starter + 20 from 2 kits
+    expect(newState!.inventory.bolt).toBe(10);
   });
 });
