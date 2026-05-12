@@ -459,8 +459,8 @@ export function buildingAtTile(
   return null;
 }
 
-/** Result of a demolition attempt. `scrapReturned` is the §6.7 footprint-
- *  area scrap credit applied to `state.inventory.scrap` after clamping to
+/** Result of a demolition attempt. `scrapReturned` is the §6.7 build-cost scrap credit
+ *  (`floor(sum(placementCost) * 0.3)`) applied to `state.inventory.scrap` after clamping to
  *  the resource's cap. `refunded` is the §14 50%-of-placement-cost return
  *  applied per-resource (each entry clamped to its respective cap, so the
  *  reported number reflects what actually landed in inventory). On the
