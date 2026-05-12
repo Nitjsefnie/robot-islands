@@ -289,6 +289,9 @@ export interface BuildingDef {
    *  gate. Honored by all extractors (mine, logger, quarry, sand_pit, well,
    *  coastal_pump, quartz_mine, pump_jack, gas_extractor, drilling_rig). */
   readonly requiredTile?: ReadonlyArray<TerrainKind>;
+  /** §8.8 coastal placement: at least one footprint tile must be water.
+   *  Distinct from `requiredTile` which requires ALL tiles to match. */
+  readonly coastal?: boolean;
   /** Visual polish: a 1-2 character glyph stamped centred on the building
    *  footprint at render time (see `renderBuildings`). Chosen from the
    *  monospace-friendly Unicode block so the schematic reads at a glance
@@ -603,7 +606,7 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     // §14 placeholder — tune in Appendix A. 3×3 footprint scales the
     // base T1 cost up versus the 2×2 baseline.
     placementCost: { stone: 60, wood: 40 },
-    requiredTile: ['water'],
+    coastal: true,
     glyph: '⚓',
   },
   // §8.8 / §12.2: Helipad — T2 logistics building that launches §12

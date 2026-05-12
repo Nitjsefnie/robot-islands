@@ -529,8 +529,8 @@ describe('step-20 T5→T6 Ascendant Assembly (§13.4)', () => {
 });
 
 describe('§8.8 shipyard coastal gating', () => {
-  it('shipyard has requiredTile containing water', () => {
-    expect(BUILDING_DEFS.shipyard.requiredTile).toContain('water');
+  it('shipyard has coastal flag', () => {
+    expect(BUILDING_DEFS.shipyard.coastal).toBe(true);
   });
 });
 

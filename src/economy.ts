@@ -444,6 +444,20 @@ export function computeRates(
         continue;
       }
     }
+    // §8.8 coastal placement: at least one footprint tile must be water.
+    if (def.coastal && terrainAt) {
+      let hasWater = false;
+      for (const t of footprintTiles(def.width, def.height, b.x, b.y, (b.rotation ?? 0) as 0 | 1 | 2 | 3)) {
+        if (terrainAt(t.x, t.y) === 'water') {
+          hasWater = true;
+          break;
+        }
+      }
+      if (!hasWater) {
+        tentative.push({ building: b, recipe, baseRate: 0, buffStack });
+        continue;
+      }
+    }
     const oa = outputAvail(state, recipe);
     if (oa === 0) {
       tentative.push({ building: b, recipe, baseRate: 0, buffStack });

@@ -280,6 +280,19 @@ export function validatePlacement(
       }
     }
   }
+  // §8.8 coastal placement: at least one footprint tile must be water.
+  if (def.coastal && spec.terrainAt) {
+    let hasWater = false;
+    for (const t of tiles) {
+      if (spec.terrainAt(t.x, t.y) === 'water') {
+        hasWater = true;
+        break;
+      }
+    }
+    if (!hasWater) {
+      return { ok: false, reason: 'tile-requirement-not-met' };
+    }
+  }
   // §14 placement-cost gate. Computed LAST so the geometry/biome/tier
   // reasons take priority — if the cursor is out of bounds, "out of bounds"
   // is more actionable to surface than "you also can't afford this".

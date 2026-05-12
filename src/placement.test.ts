@@ -31,6 +31,7 @@ import {
 import { makeInitialIslandState } from './world.js';
 import type { IslandSpec } from './world.js';
 import type { IslandState } from './economy.js';
+import type { TerrainKind } from './biomes.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -713,6 +714,31 @@ describe('demolishBuilding', () => {
     // refunded number reflects what ACTUALLY landed (5), not the raw 15.
     expect(r.refunded.stone).toBe(5);
     expect(state.inventory.stone).toBe(75); // clamped
+  });
+});
+
+describe('§8.8 coastal placement', () => {
+  function terrainAt(x: number, y: number): TerrainKind {
+    // 2×2 water patch at (0,0), (0,1), (1,0), (1,1); rest is grass
+    if (x >= 0 && x <= 1 && y >= 0 && y <= 1) return 'water';
+    return 'grass';
+  }
+
+  it('allows shipyard when at least one tile is water', () => {
+    const spec = makeSpec({ terrainAt });
+    const state = makeState(spec);
+    // Place 3×3 shipyard so its footprint covers the 2×2 water patch
+    const result = validatePlacement(spec, state, 'shipyard', 0, 0, 0);
+    expect(result.ok).toBe(true);
+  });
+
+  it('rejects shipyard when no tile is water', () => {
+    const spec = makeSpec({ terrainAt });
+    const state = makeState(spec);
+    // Shift inside the island but far from the water patch
+    const result = validatePlacement(spec, state, 'shipyard', 5, 5, 0);
+    expect(result.ok).toBe(false);
+    expect(result.reason).toBe('tile-requirement-not-met');
   });
 });
 
