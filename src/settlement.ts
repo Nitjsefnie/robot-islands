@@ -15,7 +15,7 @@
 //   - Auto-routing at the 10-island NC milestone (§9.6 Auto-Patronage,
 //     §12.7) DEFERRED.
 //   - Coastal-tile placement check on Shipyard implemented via
-//     `requiredTile: ['water']` in building-defs (§4.3 / §8.8).
+//     `coastal: true` on the shipyard def (§4.3 / §8.8).
 //   - Foundation Kit "starter inventory grace cap" (§12.4) remains
 //     DEFERRED — step 12 consumes the kit on dispatch. Decomposition
 //     into raw recipe inputs on arrival is implemented in tickVehicles.
