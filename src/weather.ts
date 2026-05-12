@@ -25,6 +25,22 @@ export const WEATHER_SCAN_PENALTY: Record<WeatherState, number> = {
   catastrophic: 1.0,
 };
 
+export const WEATHER_ROUTE_LOSS_RATE: Record<WeatherState, number> = {
+  clear: 0,
+  light_fog: 0,
+  storm: 0.05,
+  severe_storm: 0.15,
+  catastrophic: 0.30,
+};
+
+export const WEATHER_ROUTE_CAPACITY_MULTIPLIER: Record<WeatherState, number> = {
+  clear: 1,
+  light_fog: 1,
+  storm: 0.5,
+  severe_storm: 0.1,
+  catastrophic: 0,
+};
+
 const MIN_DWELL_MS = 30 * 60 * 1000; // 30 minutes
 const MAX_DWELL_MS = 4 * 60 * 60 * 1000; // 4 hours
 
@@ -151,6 +167,9 @@ export function isWeatherVisible(world: WorldState, cx: number, cy: number): boo
   return false;
 }
 
+/** DDA line rasterization for vehicle paths. Shares core DDA logic with
+ *  `lineSegmentCells` (used by `rasterizeLineSegment`/`rasterizeRouteCells`);
+ *  keep the two in sync if the stepping algorithm changes. */
 export function rasterizePath(
   originX: number,
   originY: number,
@@ -274,6 +293,8 @@ export function rollVehicleDestruction(
 // Route rasterization + weather modulation §2.6
 // ---------------------------------------------------------------------------
 
+/** DDA line rasterization for route cells. Shares core DDA logic with
+ *  `rasterizePath`; keep the two in sync if the stepping algorithm changes. */
 function lineSegmentCells(
   fromX: number,
   fromY: number,
@@ -405,9 +426,8 @@ export function routeCapacityMultiplierForWeather(
   let minMul = 1;
   for (const { cx, cy } of cells) {
     const w = weather(seed, cx, cy, nowMs);
-    if (w.state === 'storm') minMul = Math.min(minMul, 0.5);
-    else if (w.state === 'severe_storm') minMul = Math.min(minMul, 0.1);
-    else if (w.state === 'catastrophic') minMul = Math.min(minMul, 0);
+    const mul = WEATHER_ROUTE_CAPACITY_MULTIPLIER[w.state];
+    if (mul !== undefined) minMul = Math.min(minMul, mul);
   }
   return minMul;
 }

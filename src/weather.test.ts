@@ -6,6 +6,8 @@ import {
   WEATHER_DESTRUCTION_CHANCE,
   WEATHER_SCAN_PENALTY,
   rasterizePath,
+  rasterizeLineSegment,
+  rasterizeRouteCells,
   rollVehicleDestruction,
 } from './weather.js';
 import type { WorldState } from './world.js';
@@ -272,6 +274,54 @@ describe('rasterizePath', () => {
     const a = rasterizePath(5, 5, 1, 0, 30, 2, 1000, 16);
     const b = rasterizePath(5, 5, 1, 0, 30, 2, 1000, 16);
     expect(a).toEqual(b);
+  });
+});
+
+describe('rasterizeLineSegment', () => {
+  it('returns a single cell for a zero-length segment', () => {
+    const cells = rasterizeLineSegment(8, 8, 8, 8, 16);
+    expect(cells).toEqual([{ cx: 0, cy: 0 }]);
+  });
+
+  it('traverses multiple cells on a diagonal', () => {
+    const cells = rasterizeLineSegment(0, 0, 30, 30, 16);
+    expect(cells).toEqual([
+      { cx: 0, cy: 0 },
+      { cx: 1, cy: 1 },
+    ]);
+  });
+
+  it('includes the destination cell for an exact boundary crossing', () => {
+    const cells = rasterizeLineSegment(0, 0, 16, 0, 16);
+    expect(cells).toEqual([
+      { cx: 0, cy: 0 },
+      { cx: 1, cy: 0 },
+    ]);
+  });
+});
+
+describe('rasterizeRouteCells', () => {
+  it('returns transitFraction 0 for a zero-length route', () => {
+    const cells = rasterizeRouteCells(8, 8, 8, 8, 16);
+    expect(cells).toEqual([{ cx: 0, cy: 0, transitFraction: 0 }]);
+  });
+
+  it('marks transitFraction 1 for the final cell on an exact boundary crossing', () => {
+    const cells = rasterizeRouteCells(0, 0, 16, 0, 16);
+    expect(cells).toEqual([
+      { cx: 0, cy: 0, transitFraction: 0 },
+      { cx: 1, cy: 0, transitFraction: 1 },
+    ]);
+  });
+
+  it('includes intermediate cells with increasing transitFraction', () => {
+    const cells = rasterizeRouteCells(0, 0, 40, 0, 16);
+    // 40 tiles east across three cells; fractions are 0, 16/40, 32/40.
+    expect(cells).toEqual([
+      { cx: 0, cy: 0, transitFraction: 0 },
+      { cx: 1, cy: 0, transitFraction: 0.4 },
+      { cx: 2, cy: 0, transitFraction: 0.8 },
+    ]);
   });
 });
 

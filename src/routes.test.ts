@@ -17,7 +17,7 @@ import {
   type Route,
 } from './routes.js';
 import { ALL_RESOURCES, XP_WEIGHT, type ResourceId } from './recipes.js';
-import { makeSeededRng } from './rng.js';
+
 import type { IslandState } from './economy.js';
 import { CELL_SIZE_TILES, type WorldState } from './world.js';
 import type { IslandSpec } from './world.js';
@@ -615,11 +615,11 @@ describe('§2.6 in-flight weather losses', () => {
   });
 
   it('reduces delivered amount when batch crosses a storm cell', () => {
-    const cell = findCellWithWeather('test-seed', 0, 'storm');
-    expect(cell).not.toBeNull();
-    if (!cell) return;
+    // Deterministic storm cell for seed 'test-seed' at t=0: (-20, -18).
+    // Verified by brute-force search; weather('test-seed', -20, -18, 0) === 'storm'.
+    const cell = { cx: -20, cy: -18 };
 
-    // Place route so it crosses the storm cell
+    // Place a 12-tile vertical route entirely inside that cell.
     const fromX = cell.cx * CELL_SIZE_TILES;
     const fromY = cell.cy * CELL_SIZE_TILES + 2;
     const toX = cell.cx * CELL_SIZE_TILES;
@@ -645,23 +645,11 @@ describe('§2.6 in-flight weather losses', () => {
     expect(delivered).toBeLessThan(10);
     expect(delivered).toBeGreaterThan(0);
 
-    // Verify exact deterministic loss
-    if (batch && batch.crossedCells && batch.id) {
-      let expected = batch.amount;
-      const transitTimeMs = batch.arrivalTime - batch.dispatchTime;
-      for (const c of batch.crossedCells) {
-        const w = weather(world.seed, c.cx, c.cy, batch.dispatchTime + c.transitFraction * transitTimeMs);
-        const lossRate =
-          w.state === 'storm' ? 0.05
-          : w.state === 'severe_storm' ? 0.15
-          : w.state === 'catastrophic' ? 0.30
-          : 0;
-        if (lossRate > 0) {
-          const rng = makeSeededRng(`${world.seed}_routeloss_${batch.id}_${c.cx}_${c.cy}`);
-          expected *= 1 - lossRate * rng();
-        }
-      }
-      expect(delivered).toBeCloseTo(expected, 9);
-    }
+    // Golden value derived once from the exact loss math for this
+    // seed / cell / route geometry / batch-id (route-1_0_0).  Capacity
+    // is reduced to 5 units by the storm multiplier (0.5); the single
+    // crossed cell then applies a 5% loss sampled with rng = 0.6697…
+    // → 5 * (1 - 0.05 * 0.6697049676440656) = 4.832573758088984.
+    expect(delivered).toBeCloseTo(4.832573758088984, 9);
   });
 });

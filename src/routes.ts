@@ -9,8 +9,7 @@
 //   - T1 cargo only. T2 drone cargo, T3 airship, T4 teleporter, T5 spacetime
 //     anchor all share this `Route` shape but their tier-specific capacities
 //     and transit times are deferred.
-//   - No weather modulation of capacity or in-flight loss (no weather system
-//     yet — §2.6 deferred).
+//   - Weather modulation of capacity and in-flight loss implemented per §2.6.
 //   - Multi-route contention on the same source resource IS implemented per
 //     §15.4 (proportional distribution by capacity).
 //   - Funneling tier-cap check uses `state.level < FUNNELING_TIER_CAP` as a
@@ -27,6 +26,7 @@ import {
   routeCapacityMultiplierForWeather,
   rasterizeRouteCells,
   weather,
+  WEATHER_ROUTE_LOSS_RATE,
 } from './weather.js';
 import { CELL_SIZE_TILES, type WorldState } from './world.js';
 
@@ -244,11 +244,7 @@ export function deliverArrivals(
             cell.cy,
             b.dispatchTime + cell.transitFraction * transitTimeMs,
           );
-          const lossRate =
-            w.state === 'storm' ? 0.05
-            : w.state === 'severe_storm' ? 0.15
-            : w.state === 'catastrophic' ? 0.30
-            : 0;
+          const lossRate = WEATHER_ROUTE_LOSS_RATE[w.state] ?? 0;
           if (lossRate > 0) {
             const rng = makeSeededRng(`${world.seed}_routeloss_${b.id}_${cell.cx}_${cell.cy}`);
             remaining *= 1 - lossRate * rng();
@@ -287,6 +283,14 @@ interface RouteDemand {
   readonly resourceId: ResourceId;
   /** Desired dispatch amount before cross-route source contention scaling. */
   readonly desired: number;
+  /** Pre-computed weather capacity multiplier (§2.6). */
+  readonly weatherMul: number;
+  /** Pre-computed stratification cells crossed by this route (§2.6). */
+  readonly crossedCells: ReadonlyArray<{
+    readonly cx: number;
+    readonly cy: number;
+    readonly transitFraction: number;
+  }>;
 }
 
 /**
@@ -366,7 +370,17 @@ function dispatchPhase(
     const headroom = destinationHeadroom(world, states, route.to, r);
     const desired = Math.min(capDemand, headroom);
     if (desired <= 0) continue;
-    demands.push({ route, resourceId: r, desired });
+    const crossedCells =
+      fromSpec && toSpec
+        ? rasterizeRouteCells(
+            fromSpec.cx,
+            fromSpec.cy,
+            toSpec.cx,
+            toSpec.cy,
+            CELL_SIZE_TILES,
+          )
+        : [];
+    demands.push({ route, resourceId: r, desired, weatherMul, crossedCells });
   }
 
   // Phase 2: source contention. Group demands by (fromIslandId, resourceId).
@@ -428,18 +442,6 @@ function dispatchPhase(
         }
       }
     } else {
-      const fromSpec2 = world.islands.find((i) => i.id === d.route.from);
-      const toSpec2 = world.islands.find((i) => i.id === d.route.to);
-      const crossedCells =
-        fromSpec2 && toSpec2
-          ? rasterizeRouteCells(
-              fromSpec2.cx,
-              fromSpec2.cy,
-              toSpec2.cx,
-              toSpec2.cy,
-              CELL_SIZE_TILES,
-            )
-          : [];
       const batchId = `${d.route.id}_${nowMs}_${d.route.inFlight.length}`;
       d.route.inFlight.push({
         resourceId: d.resourceId,
@@ -447,7 +449,7 @@ function dispatchPhase(
         arrivalTime: nowMs + d.route.transitTimeSec * 1000,
         dispatchTime: nowMs,
         id: batchId,
-        crossedCells,
+        crossedCells: d.crossedCells,
       });
     }
     dispatches.push({ routeId: d.route.id, resourceId: d.resourceId, amount });
