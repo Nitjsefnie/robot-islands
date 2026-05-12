@@ -175,6 +175,10 @@ describe('fuelForTier (§11.7)', () => {
 });
 
 describe('microchip chain', () => {
+  it('pcb_etcher outputs pcb: 1', () => {
+    expect(RECIPES.pcb_etcher!.outputs.pcb).toBe(1);
+  });
+
   it('circuit_assembler outputs circuit_board: 1', () => {
     expect(RECIPES.circuit_assembler!.outputs.circuit_board).toBe(1);
   });

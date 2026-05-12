@@ -1028,7 +1028,7 @@ describe('§13 core-craft auto-flip', () => {
     })();
     const state = makeState({
       buildings: [ASC],
-      inventory: { ...blankInventory(), reality_anchor: 100, eldritch_processor: 100, ai_core: 100 },
+      inventory: { ...blankInventory(), reality_anchor: 100, eldritch_processor: 100, ai_core: 100, computing_module: 200 },
       storageCaps: blankCaps(10000),
       level: 50,
       aiCoreCrafted: true,

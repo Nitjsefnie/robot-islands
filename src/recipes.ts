@@ -964,9 +964,10 @@ export const RECIPES: Partial<Record<RecipeId, Recipe>> = {
   },
 
   // ---------------------------------------------------------------------------
-  // T3 microchip intermediate chain (§7.7) — circuit_board, processor,
-  // computing_module. Produces the T3 electronics intermediates that feed
-  // T4+ assembly recipes.
+  // T3 microchip intermediate chain (§7.7) — pcb, circuit_board, processor,
+  // computing_module. pcb_etcher is the first step; its output feeds
+  // circuit_assembler, then processor_fab, then compute_module_fab.
+  // Produces the T3 electronics intermediates that feed T4+ assembly recipes.
   // ---------------------------------------------------------------------------
   pcb_etcher: {
     cycleSec: 200,
