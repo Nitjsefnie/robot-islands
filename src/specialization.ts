@@ -28,10 +28,10 @@ export type RoleId =
 
 /** Optional bonus axis a role declares in addition to its recipe-rate
  *  multipliers. Step-10 wires `storage_cap_plus_50` (logistics_hub) and
- *  `skill_xp_plus_50` (research_beacon) through the economy; the other
- *  flags are catalog-only (route capacity / etc. depend on systems still
- *  to be built). The flag also drives UI labels — declaring a role surfaces
- *  the extra in the card datasheet. */
+ *  `skill_xp_plus_50` (research_beacon) through the economy;
+ *  `route_capacity_double` is wired through `routeCapacityMultiplier` in
+ *  `routes.ts`; the other flags are catalog-only. The flag also drives UI
+ *  labels — declaring a role surfaces the extra in the card datasheet. */
 export type RoleExtra =
   | 'route_capacity_double'
   | 'storage_cap_plus_50'
