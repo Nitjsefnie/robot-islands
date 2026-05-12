@@ -441,6 +441,11 @@ export function deserializeWorld(
       typeof (s as { genesisTarget?: unknown }).genesisTarget === 'string'
         ? (s as { genesisTarget: ResourceId | null }).genesisTarget
         : null;
+    // Forward-compat backfill: Singularity Battery stored energy added after v3.
+    const singularityStoredWs =
+      typeof (s as { singularityStoredWs?: unknown }).singularityStoredWs === 'number'
+        ? (s as { singularityStoredWs: number }).singularityStoredWs
+        : 0;
     const live: IslandState = {
       ...s,
       // Defensive inventory + storageCaps + funnelPending clones so the
@@ -457,6 +462,7 @@ export function deserializeWorld(
       accelerationRemainingMin,
       bankingEnabled,
       genesisTarget,
+      singularityStoredWs,
       // Remap lastTick from the saved performance.now() domain into the
       // current session's performance.now() domain. The save preserved
       // lastTick literally; we shift by the offline delta so the

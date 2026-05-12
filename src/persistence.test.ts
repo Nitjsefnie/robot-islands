@@ -86,6 +86,7 @@ function makeIslandState(over: Partial<IslandState> = {}): IslandState {
     accelerationRemainingMin: 0,
     bankingEnabled: false,
     genesisTarget: null,
+    singularityStoredWs: 0,
     lastTick: 1000,
     ...over,
   };

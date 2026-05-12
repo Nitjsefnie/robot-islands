@@ -57,6 +57,9 @@ import {
  * new parameters (heat, gates, …) extends this interface rather than
  * growing positional arity.
  */
+/** §13.3 Singularity Battery capacity per unit: 50 MWh in W-seconds. */
+export const SINGULARITY_BATTERY_CAPACITY_WS = 50e6 * 3600;
+
 export interface RatesContext {
   readonly modifierMul?: ModifierMultipliers;
   readonly defs?: DefCatalog;
@@ -169,6 +172,8 @@ export interface IslandState {
   bankingEnabled: boolean;
   /** §13.3 Target resource for Genesis Chamber, or null if inactive. */
   genesisTarget: ResourceId | null;
+  /** Singularity Battery stored energy in W-seconds (Joules). */
+  singularityStoredWs: number;
 }
 
 /**
@@ -336,6 +341,10 @@ export interface PowerBalance {
   readonly consumed: number;
   /** `consumed === 0 ? 1 : min(1, produced / consumed)`. */
   readonly factor: number;
+  /** Power produced before Singularity Battery discharge adjustment. */
+  readonly rawProduced: number;
+  /** Power consumed before Singularity Battery discharge adjustment. */
+  readonly rawConsumed: number;
 }
 
 /**
@@ -674,6 +683,14 @@ export function computeRates(
     powerConsumed += (GENESIS_POWER_KW[targetTier]! * 1000) / skillMul.powerConsumption;
   }
 
+  // §13.3 Singularity Battery — cover deficit from stored energy.
+  const batteryCount = validBuildings.filter((b) => b.defId === 'singularity_battery').length;
+  const rawProduced = powerProduced;
+  const rawConsumed = powerConsumed;
+  if (batteryCount > 0 && powerProduced < powerConsumed && state.singularityStoredWs > 0) {
+    powerProduced += powerConsumed - powerProduced; // cover full deficit
+  }
+
   const powerFactor =
     powerConsumed === 0 ? 1 : Math.min(1, powerProduced / powerConsumed);
 
@@ -747,7 +764,7 @@ export function computeRates(
     production,
     consumption,
     net,
-    power: { produced: powerProduced, consumed: powerConsumed, factor: powerFactor },
+    power: { produced: powerProduced, consumed: powerConsumed, factor: powerFactor, rawProduced, rawConsumed },
     heat,
   };
 }
@@ -1028,13 +1045,30 @@ export function advanceIsland(
     // §2.7: pass `t` so the solar multiplier reflects this segment's
     // quadrant, not start-of-tick. Without this, a 24h offline gap would
     // integrate one constant solar multiplier across all four phases.
-    const { production, consumption, net } = computeRates(state, effectiveCtx, t);
+    const { production, consumption, net, power } = computeRates(state, effectiveCtx, t);
     // §13 auto-flip: first local production of ai_core / ascendant_core
     if (!state.aiCoreCrafted && (production.ai_core ?? 0) > 0) {
       state.aiCoreCrafted = true;
     }
     if (!state.ascendantCoreCrafted && (production.ascendant_core ?? 0) > 0) {
       state.ascendantCoreCrafted = true;
+    }
+    // §13.3 Singularity Battery — bound segment to battery depletion/fill so the
+    // piecewise integrator stays exact (rates are constant within a segment).
+    const batteryCount = state.buildings.filter(
+      (b) => !b.invalid && b.defId === 'singularity_battery',
+    ).length;
+    const maxCap = batteryCount * SINGULARITY_BATTERY_CAPACITY_WS;
+    const rawBalance = power.rawProduced - power.rawConsumed;
+    let nextBatteryMs = Infinity;
+    if (rawBalance > 0 && maxCap > 0 && state.singularityStoredWs < maxCap) {
+      const surplus = rawBalance;
+      const fillTimeSec = (maxCap - state.singularityStoredWs) / surplus;
+      nextBatteryMs = t + fillTimeSec * 1000;
+    } else if (rawBalance < 0 && state.singularityStoredWs > 0) {
+      const deficit = -rawBalance;
+      const depletionTimeSec = state.singularityStoredWs / deficit;
+      nextBatteryMs = t + depletionTimeSec * 1000;
     }
     const nextEventMs = findNextCapEvent(state, net, t, nowMs, ctx);
     // §2.7: bound the segment to the next phase boundary so the constant-
@@ -1050,11 +1084,21 @@ export function advanceIsland(
     }
     // Clamp to nowMs; findNextCapEvent already returns nowMs when nothing
     // changes, but if all rates are zero we still need to exit the loop.
-    const segEndMs = Math.min(nextEventMs, nextPhaseMs, nextAccelMs, nowMs);
+    const segEndMs = Math.min(nextEventMs, nextPhaseMs, nextAccelMs, nextBatteryMs, nowMs);
     const dtSec = (segEndMs - t) / 1000;
     if (dtSec > 0) {
       applyRates(state, net, dtSec);
       accrueXp(state, production, consumption, dtSec, specMul.xpMul);
+      // §13.3 Singularity Battery — apply charge/discharge over the segment.
+      if (rawBalance > 0 && maxCap > 0) {
+        const chargeWs = rawBalance * dtSec;
+        const charge = Math.min(chargeWs, maxCap - state.singularityStoredWs);
+        state.singularityStoredWs += charge;
+      } else if (rawBalance < 0 && state.singularityStoredWs > 0) {
+        const deficitWs = -rawBalance * dtSec;
+        const discharge = Math.min(deficitWs, state.singularityStoredWs);
+        state.singularityStoredWs -= discharge;
+      }
       levelUpIfReady(state);
       // §4.7 operating-time accrual: every building accrues regardless of
       // whether it produced this segment (§4.7 literal: "Idle buildings,

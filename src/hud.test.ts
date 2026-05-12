@@ -53,6 +53,7 @@ function makeState(
     accelerationRemainingMin: 0,
     bankingEnabled: false,
     genesisTarget: null,
+    singularityStoredWs: 0,
     lastTick: 0,
   };
 }

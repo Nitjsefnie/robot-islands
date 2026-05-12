@@ -50,6 +50,7 @@ function makeState(id: string, level: number): IslandState {
     accelerationQueue: [],
     accelerationRemainingMin: 0,
     bankingEnabled: false,
+    singularityStoredWs: 0,
   };
 }
 

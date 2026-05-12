@@ -60,6 +60,7 @@ function makeIslandState(overrides: Partial<IslandState> & { id: string }): Isla
     accelerationRemainingMin: overrides.accelerationRemainingMin ?? 0,
     bankingEnabled: overrides.bankingEnabled ?? false,
     genesisTarget: overrides.genesisTarget ?? null,
+    singularityStoredWs: overrides.singularityStoredWs ?? 0,
     lastTick: overrides.lastTick ?? 0,
   };
 }

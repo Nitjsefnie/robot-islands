@@ -284,12 +284,12 @@ export function useRealityForge(
   if (!spec) return;
 
   // Regenerate terrain.
-  regenerateTerrain(spec as IslandSpec, targetBiome, (x, y) =>
+  regenerateTerrain(spec, targetBiome, (x, y) =>
     terrainAtForBiome(targetBiome, spec.id, x, y),
   );
 
   // Reroll modifiers — natural-only ones are excluded.
-  (spec as any).modifiers = rerollModifiers(WORLD_SEED, targetBiome);
+  (spec as unknown as { modifiers: ModifierId[] }).modifiers = rerollModifiers(WORLD_SEED, targetBiome);
 
   // Invalidate buildings that no longer match terrain.
   for (const b of spec.buildings) {
@@ -902,6 +902,8 @@ export function makeInitialIslandState(spec: IslandSpec, nowMs: number): IslandS
     bankingEnabled: false,
     // §13.3 Genesis Chamber defaults to inactive.
     genesisTarget: null,
+    // §13.3 Singularity Battery defaults to empty.
+    singularityStoredWs: 0,
     lastTick: nowMs,
   };
 }
