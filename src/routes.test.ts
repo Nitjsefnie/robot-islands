@@ -17,9 +17,11 @@ import {
   type Route,
 } from './routes.js';
 import { ALL_RESOURCES, XP_WEIGHT, type ResourceId } from './recipes.js';
+import { makeSeededRng } from './rng.js';
 import type { IslandState } from './economy.js';
-import type { WorldState } from './world.js';
+import { CELL_SIZE_TILES, type WorldState } from './world.js';
 import type { IslandSpec } from './world.js';
+import { weather, routeCapacityMultiplierForWeather, type WeatherState } from './weather.js';
 
 function blankInventory(): Record<ResourceId, number> {
   const inv = {} as Record<ResourceId, number>;
@@ -63,10 +65,24 @@ function makeState(id: string, over: Partial<IslandState> = {}): IslandState {
     ...over,
   };
 }
-function makeWorld(routes: Route[] = []): WorldState {
-  // We don't need IslandSpec data for routes logic; supply empty stubs as needed.
-  const stub: IslandSpec[] = [];
-  return { islands: stub, drones: [], routes, vehicles: [], revealedCells: new Set(), seed: 'test-seed' };
+function makeWorld(routes: Route[] = [], islands: IslandSpec[] = []): WorldState {
+  return { islands, drones: [], routes, vehicles: [], revealedCells: new Set(), seed: 'test-seed' };
+}
+
+function makeIslandSpec(id: string, cx: number, cy: number): IslandSpec {
+  return {
+    id,
+    name: id,
+    biome: 'plains',
+    cx,
+    cy,
+    majorRadius: 10,
+    minorRadius: 10,
+    populated: true,
+    discovered: true,
+    buildings: [],
+    modifiers: [],
+  };
 }
 
 function makeTwoIslandWorld(): { world: WorldState; states: Map<string, IslandState> } {
@@ -78,6 +94,21 @@ function makeTwoIslandWorld(): { world: WorldState; states: Map<string, IslandSt
     ['island-b', dst],
   ]);
   return { world, states };
+}
+
+function findCellWithWeather(
+  seed: string,
+  nowMs: number,
+  targetState: WeatherState,
+): { cx: number; cy: number } | null {
+  for (let cx = -20; cx <= 20; cx++) {
+    for (let cy = -20; cy <= 20; cy++) {
+      if (weather(seed, cx, cy, nowMs).state === targetState) {
+        return { cx, cy };
+      }
+    }
+  }
+  return null;
 }
 
 function cargoRoute(
@@ -425,5 +456,212 @@ describe('§9.4 logistics hub route capacity doubling', () => {
     const result = dispatchAttempt(world, states, 0, 1);
     expect(result.length).toBe(1);
     expect(result[0]!.amount).toBe(1); // base capacity
+  });
+});
+
+
+describe('routeCapacityMultiplierForWeather', () => {
+  it('returns 1 when route crosses only clear weather', () => {
+    const cell = findCellWithWeather('test-seed', 0, 'clear');
+    expect(cell).not.toBeNull();
+    if (!cell) return;
+    const mul = routeCapacityMultiplierForWeather(
+      'test-seed',
+      cell.cx * CELL_SIZE_TILES,
+      cell.cy * CELL_SIZE_TILES,
+      cell.cx * CELL_SIZE_TILES + 5,
+      cell.cy * CELL_SIZE_TILES,
+      0,
+      CELL_SIZE_TILES,
+    );
+    expect(mul).toBe(1);
+  });
+
+  it('returns 0.5 when route crosses a storm cell', () => {
+    const cell = findCellWithWeather('test-seed', 0, 'storm');
+    expect(cell).not.toBeNull();
+    if (!cell) return;
+    const mul = routeCapacityMultiplierForWeather(
+      'test-seed',
+      cell.cx * CELL_SIZE_TILES,
+      cell.cy * CELL_SIZE_TILES,
+      cell.cx * CELL_SIZE_TILES + 5,
+      cell.cy * CELL_SIZE_TILES,
+      0,
+      CELL_SIZE_TILES,
+    );
+    expect(mul).toBe(0.5);
+  });
+
+  it('returns 0.1 when route crosses a severe_storm cell', () => {
+    const cell = findCellWithWeather('test-seed', 0, 'severe_storm');
+    expect(cell).not.toBeNull();
+    if (!cell) return;
+    const mul = routeCapacityMultiplierForWeather(
+      'test-seed',
+      cell.cx * CELL_SIZE_TILES,
+      cell.cy * CELL_SIZE_TILES,
+      cell.cx * CELL_SIZE_TILES + 5,
+      cell.cy * CELL_SIZE_TILES,
+      0,
+      CELL_SIZE_TILES,
+    );
+    expect(mul).toBe(0.1);
+  });
+
+  it('returns 0 when route crosses a catastrophic cell', () => {
+    const cell = findCellWithWeather('test-seed', 0, 'catastrophic');
+    expect(cell).not.toBeNull();
+    if (!cell) return;
+    const mul = routeCapacityMultiplierForWeather(
+      'test-seed',
+      cell.cx * CELL_SIZE_TILES,
+      cell.cy * CELL_SIZE_TILES,
+      cell.cx * CELL_SIZE_TILES + 5,
+      cell.cy * CELL_SIZE_TILES,
+      0,
+      CELL_SIZE_TILES,
+    );
+    expect(mul).toBe(0);
+  });
+});
+
+describe('§2.6 dispatch weather capacity reduction', () => {
+  it('reduces dispatch amount when route crosses a storm cell', () => {
+    const cell = findCellWithWeather('test-seed', 0, 'storm');
+    expect(cell).not.toBeNull();
+    if (!cell) return;
+
+    const src = makeState('a', { inventory: { ...blankInventory(), iron_ore: 100 } });
+    const dst = makeState('b');
+    const world = makeWorld([], [
+      makeIslandSpec('a', cell.cx * CELL_SIZE_TILES, cell.cy * CELL_SIZE_TILES),
+      makeIslandSpec('b', cell.cx * CELL_SIZE_TILES + 5, cell.cy * CELL_SIZE_TILES),
+    ]);
+    const states = new Map([['a', src], ['b', dst]]);
+    const r = cargoRoute('a', 'b', 'iron_ore', [], 10, 1);
+    world.routes.push(r);
+
+    const dispatches = dispatchAttempt(world, states, 0, 1);
+    expect(dispatches.length).toBe(1);
+    expect(dispatches[0]!.amount).toBeCloseTo(5, 9); // 10 * 0.5
+  });
+
+  it('reduces dispatch amount when route crosses a severe_storm cell', () => {
+    const cell = findCellWithWeather('test-seed', 0, 'severe_storm');
+    expect(cell).not.toBeNull();
+    if (!cell) return;
+
+    const src = makeState('a', { inventory: { ...blankInventory(), iron_ore: 100 } });
+    const dst = makeState('b');
+    const world = makeWorld([], [
+      makeIslandSpec('a', cell.cx * CELL_SIZE_TILES, cell.cy * CELL_SIZE_TILES),
+      makeIslandSpec('b', cell.cx * CELL_SIZE_TILES + 5, cell.cy * CELL_SIZE_TILES),
+    ]);
+    const states = new Map([['a', src], ['b', dst]]);
+    const r = cargoRoute('a', 'b', 'iron_ore', [], 10, 1);
+    world.routes.push(r);
+
+    const dispatches = dispatchAttempt(world, states, 0, 1);
+    expect(dispatches.length).toBe(1);
+    expect(dispatches[0]!.amount).toBeCloseTo(1, 9); // 10 * 0.1
+  });
+
+  it('dispatches nothing when route crosses a catastrophic cell', () => {
+    const cell = findCellWithWeather('test-seed', 0, 'catastrophic');
+    expect(cell).not.toBeNull();
+    if (!cell) return;
+
+    const src = makeState('a', { inventory: { ...blankInventory(), iron_ore: 100 } });
+    const dst = makeState('b');
+    const world = makeWorld([], [
+      makeIslandSpec('a', cell.cx * CELL_SIZE_TILES, cell.cy * CELL_SIZE_TILES),
+      makeIslandSpec('b', cell.cx * CELL_SIZE_TILES + 5, cell.cy * CELL_SIZE_TILES),
+    ]);
+    const states = new Map([['a', src], ['b', dst]]);
+    const r = cargoRoute('a', 'b', 'iron_ore', [], 10, 1);
+    world.routes.push(r);
+
+    const dispatches = dispatchAttempt(world, states, 0, 1);
+    expect(dispatches.length).toBe(0);
+  });
+});
+
+describe('§2.6 in-flight weather losses', () => {
+  it('delivers full amount when route crosses only clear cells', () => {
+    const cell = findCellWithWeather('test-seed', 0, 'clear');
+    expect(cell).not.toBeNull();
+    if (!cell) return;
+
+    const fromX = cell.cx * CELL_SIZE_TILES;
+    const fromY = cell.cy * CELL_SIZE_TILES + 2;
+    const toX = cell.cx * CELL_SIZE_TILES;
+    const toY = cell.cy * CELL_SIZE_TILES + 14;
+
+    const src = makeState('a', { inventory: { ...blankInventory(), iron_ore: 100 } });
+    const dst = makeState('b');
+    const world = makeWorld([], [
+      makeIslandSpec('a', fromX, fromY),
+      makeIslandSpec('b', toX, toY),
+    ]);
+    const states = new Map([['a', src], ['b', dst]]);
+    const r = cargoRoute('a', 'b', 'iron_ore', [], 10, 1);
+    world.routes.push(r);
+
+    tickRoutes(world, states, 0, 1);
+    const result = tickRoutes(world, states, 2000, 0);
+    expect(result.arrivals.length).toBe(1);
+    expect(result.arrivals[0]!.amount).toBeCloseTo(10, 9);
+  });
+
+  it('reduces delivered amount when batch crosses a storm cell', () => {
+    const cell = findCellWithWeather('test-seed', 0, 'storm');
+    expect(cell).not.toBeNull();
+    if (!cell) return;
+
+    // Place route so it crosses the storm cell
+    const fromX = cell.cx * CELL_SIZE_TILES;
+    const fromY = cell.cy * CELL_SIZE_TILES + 2;
+    const toX = cell.cx * CELL_SIZE_TILES;
+    const toY = cell.cy * CELL_SIZE_TILES + 14;
+
+    const src = makeState('a', { inventory: { ...blankInventory(), iron_ore: 100 } });
+    const dst = makeState('b');
+    const world = makeWorld([], [
+      makeIslandSpec('a', fromX, fromY),
+      makeIslandSpec('b', toX, toY),
+    ]);
+    const states = new Map([['a', src], ['b', dst]]);
+    const r = cargoRoute('a', 'b', 'iron_ore', [], 10, 1);
+    world.routes.push(r);
+
+    tickRoutes(world, states, 0, 1);
+    const batch = r.inFlight[0];
+    expect(batch).toBeDefined();
+
+    const result = tickRoutes(world, states, 2000, 0);
+    expect(result.arrivals.length).toBe(1);
+    const delivered = result.arrivals[0]!.amount;
+    expect(delivered).toBeLessThan(10);
+    expect(delivered).toBeGreaterThan(0);
+
+    // Verify exact deterministic loss
+    if (batch && batch.crossedCells && batch.id) {
+      let expected = batch.amount;
+      const transitTimeMs = batch.arrivalTime - batch.dispatchTime;
+      for (const c of batch.crossedCells) {
+        const w = weather(world.seed, c.cx, c.cy, batch.dispatchTime + c.transitFraction * transitTimeMs);
+        const lossRate =
+          w.state === 'storm' ? 0.05
+          : w.state === 'severe_storm' ? 0.15
+          : w.state === 'catastrophic' ? 0.30
+          : 0;
+        if (lossRate > 0) {
+          const rng = makeSeededRng(`${world.seed}_routeloss_${batch.id}_${c.cx}_${c.cy}`);
+          expected *= 1 - lossRate * rng();
+        }
+      }
+      expect(delivered).toBeCloseTo(expected, 9);
+    }
   });
 });

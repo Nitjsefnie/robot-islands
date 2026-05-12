@@ -20,9 +20,15 @@
 //     correct.
 
 import { cap, inv, type IslandState } from './economy.js';
+import { makeSeededRng } from './rng.js';
 import { XP_WEIGHT, type ResourceId } from './recipes.js';
 import { routeCapacityMultiplier } from './specialization.js';
-import type { WorldState } from './world.js';
+import {
+  routeCapacityMultiplierForWeather,
+  rasterizeRouteCells,
+  weather,
+} from './weather.js';
+import { CELL_SIZE_TILES, type WorldState } from './world.js';
 
 /** Transport tier per §2.4. Step 7 only emits `cargo` routes; the field
  *  exists so future tiers can be added without reshaping the data model. */
@@ -44,6 +50,15 @@ export interface InFlightBatch {
   /** Wall-clock ms when this batch was dispatched (renderer uses both
    *  timestamps for the interpolation parameter). */
   readonly dispatchTime: number;
+  /** Deterministic id for weather-loss RNG seeding. */
+  readonly id?: string;
+  /** Stratification cells crossed by this batch, with transit fraction [0,1]
+   *  for weather sampling at the time the batch was in each cell. */
+  readonly crossedCells?: ReadonlyArray<{
+    readonly cx: number;
+    readonly cy: number;
+    readonly transitFraction: number;
+  }>;
 }
 
 export interface Route {
@@ -218,11 +233,34 @@ export function deliverArrivals(
         kept.push(b);
         continue;
       }
+      // §2.6 in-flight weather losses
+      let remaining = b.amount;
+      if (b.crossedCells && b.crossedCells.length > 0 && b.id !== undefined) {
+        const transitTimeMs = b.arrivalTime - b.dispatchTime;
+        for (const cell of b.crossedCells) {
+          const w = weather(
+            world.seed,
+            cell.cx,
+            cell.cy,
+            b.dispatchTime + cell.transitFraction * transitTimeMs,
+          );
+          const lossRate =
+            w.state === 'storm' ? 0.05
+            : w.state === 'severe_storm' ? 0.15
+            : w.state === 'catastrophic' ? 0.30
+            : 0;
+          if (lossRate > 0) {
+            const rng = makeSeededRng(`${world.seed}_routeloss_${b.id}_${cell.cx}_${cell.cy}`);
+            remaining *= 1 - lossRate * rng();
+          }
+        }
+      }
+
       const headroom = cap(destState, b.resourceId) - inv(destState, b.resourceId);
       // Clamp against current cap headroom only — totalInboundInFlight at
       // dispatch already accounted for siblings, so we don't subtract those
       // again here.
-      const accept = Math.max(0, Math.min(b.amount, headroom));
+      const accept = Math.max(0, Math.min(remaining, headroom));
       if (accept > 0) {
         destState.inventory[b.resourceId] = inv(destState, b.resourceId) + accept;
         if (destState.level < FUNNELING_TIER_CAP) {
@@ -307,7 +345,24 @@ function dispatchPhase(
     const r = selectResource(world, states, route);
     if (r === null) continue;
     const capacityMul = routeCapacityMultiplier(srcState.specializationRole);
-    const capDemand = route.capacityPerSec * capacityMul * elapsedSec;
+
+    // §2.6 weather capacity modulation
+    const fromSpec = world.islands.find((i) => i.id === route.from);
+    const toSpec = world.islands.find((i) => i.id === route.to);
+    const weatherMul =
+      fromSpec && toSpec
+        ? routeCapacityMultiplierForWeather(
+            world.seed,
+            fromSpec.cx,
+            fromSpec.cy,
+            toSpec.cx,
+            toSpec.cy,
+            nowMs,
+            CELL_SIZE_TILES,
+          )
+        : 1;
+
+    const capDemand = route.capacityPerSec * capacityMul * weatherMul * elapsedSec;
     const headroom = destinationHeadroom(world, states, route.to, r);
     const desired = Math.min(capDemand, headroom);
     if (desired <= 0) continue;
@@ -373,11 +428,26 @@ function dispatchPhase(
         }
       }
     } else {
+      const fromSpec2 = world.islands.find((i) => i.id === d.route.from);
+      const toSpec2 = world.islands.find((i) => i.id === d.route.to);
+      const crossedCells =
+        fromSpec2 && toSpec2
+          ? rasterizeRouteCells(
+              fromSpec2.cx,
+              fromSpec2.cy,
+              toSpec2.cx,
+              toSpec2.cy,
+              CELL_SIZE_TILES,
+            )
+          : [];
+      const batchId = `${d.route.id}_${nowMs}_${d.route.inFlight.length}`;
       d.route.inFlight.push({
         resourceId: d.resourceId,
         amount,
         arrivalTime: nowMs + d.route.transitTimeSec * 1000,
         dispatchTime: nowMs,
+        id: batchId,
+        crossedCells,
       });
     }
     dispatches.push({ routeId: d.route.id, resourceId: d.resourceId, amount });

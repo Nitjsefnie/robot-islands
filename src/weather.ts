@@ -269,3 +269,145 @@ export function rollVehicleDestruction(
   }
   return { destroyed: false, atCellIndex: null };
 }
+
+// ---------------------------------------------------------------------------
+// Route rasterization + weather modulation §2.6
+// ---------------------------------------------------------------------------
+
+function lineSegmentCells(
+  fromX: number,
+  fromY: number,
+  toX: number,
+  toY: number,
+  cellSizeTiles: number,
+): Array<{ cx: number; cy: number; transitFraction: number }> {
+  const result: Array<{ cx: number; cy: number; transitFraction: number }> = [];
+
+  const dx = toX - fromX;
+  const dy = toY - fromY;
+  const totalLen = Math.hypot(dx, dy);
+
+  if (totalLen === 0) {
+    result.push({
+      cx: Math.floor(fromX / cellSizeTiles),
+      cy: Math.floor(fromY / cellSizeTiles),
+      transitFraction: 0,
+    });
+    return result;
+  }
+
+  const dirX = dx / totalLen;
+  const dirY = dy / totalLen;
+
+  let cx = Math.floor(fromX / cellSizeTiles);
+  let cy = Math.floor(fromY / cellSizeTiles);
+
+  const stepX = Math.sign(dirX);
+  const stepY = Math.sign(dirY);
+
+  const tDeltaX = stepX !== 0 ? cellSizeTiles / Math.abs(dirX) : Infinity;
+  const tDeltaY = stepY !== 0 ? cellSizeTiles / Math.abs(dirY) : Infinity;
+
+  const nextBorderX = stepX > 0 ? (cx + 1) * cellSizeTiles : cx * cellSizeTiles;
+  const nextBorderY = stepY > 0 ? (cy + 1) * cellSizeTiles : cy * cellSizeTiles;
+
+  let tMaxX = stepX !== 0 ? (nextBorderX - fromX) / dirX : Infinity;
+  let tMaxY = stepY !== 0 ? (nextBorderY - fromY) / dirY : Infinity;
+
+  let dist = 0;
+  result.push({ cx, cy, transitFraction: 0 });
+
+  while (dist < totalLen) {
+    let nextDist: number;
+    let nextCx = cx;
+    let nextCy = cy;
+
+    if (tMaxX < tMaxY) {
+      nextDist = tMaxX;
+      nextCx = cx + stepX;
+      nextCy = cy;
+      tMaxX += tDeltaX;
+    } else if (tMaxY < tMaxX) {
+      nextDist = tMaxY;
+      nextCx = cx;
+      nextCy = cy + stepY;
+      tMaxY += tDeltaY;
+    } else {
+      nextDist = tMaxX;
+      nextCx = cx + stepX;
+      nextCy = cy + stepY;
+      tMaxX += tDeltaX;
+      tMaxY += tDeltaY;
+    }
+
+    if (nextDist > totalLen) break;
+    if (nextDist === totalLen) {
+      dist = nextDist;
+      break;
+    }
+
+    dist = nextDist;
+    cx = nextCx;
+    cy = nextCy;
+
+    const last = result[result.length - 1];
+    if (!last || last.cx !== cx || last.cy !== cy) {
+      result.push({ cx, cy, transitFraction: dist / totalLen });
+    }
+  }
+
+  const endCx = Math.floor(toX / cellSizeTiles);
+  const endCy = Math.floor(toY / cellSizeTiles);
+  const last = result[result.length - 1];
+  if (last && (last.cx !== endCx || last.cy !== endCy)) {
+    result.push({ cx: endCx, cy: endCy, transitFraction: 1 });
+  }
+
+  return result;
+}
+
+/** Rasterize a line segment between two endpoints into stratification cells.
+ *  Returns each unique cell once, in traversal order. */
+export function rasterizeLineSegment(
+  fromX: number,
+  fromY: number,
+  toX: number,
+  toY: number,
+  cellSizeTiles: number,
+): Array<{ cx: number; cy: number }> {
+  return lineSegmentCells(fromX, fromY, toX, toY, cellSizeTiles).map(({ cx, cy }) => ({ cx, cy }));
+}
+
+/** Same as `rasterizeLineSegment` but carries the transit fraction [0,1]
+ *  at which the batch enters each cell. Used by `routes.ts` for per-cell
+ *  weather-loss sampling. */
+export function rasterizeRouteCells(
+  fromX: number,
+  fromY: number,
+  toX: number,
+  toY: number,
+  cellSizeTiles: number,
+): Array<{ cx: number; cy: number; transitFraction: number }> {
+  return lineSegmentCells(fromX, fromY, toX, toY, cellSizeTiles);
+}
+
+/** Returns capacity multiplier [0,1] for a route crossing given cells at nowMs. */
+export function routeCapacityMultiplierForWeather(
+  seed: string,
+  fromX: number,
+  fromY: number,
+  toX: number,
+  toY: number,
+  nowMs: number,
+  cellSizeTiles: number,
+): number {
+  const cells = rasterizeLineSegment(fromX, fromY, toX, toY, cellSizeTiles);
+  let minMul = 1;
+  for (const { cx, cy } of cells) {
+    const w = weather(seed, cx, cy, nowMs);
+    if (w.state === 'storm') minMul = Math.min(minMul, 0.5);
+    else if (w.state === 'severe_storm') minMul = Math.min(minMul, 0.1);
+    else if (w.state === 'catastrophic') minMul = Math.min(minMul, 0);
+  }
+  return minMul;
+}
