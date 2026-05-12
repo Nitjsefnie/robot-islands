@@ -434,15 +434,11 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     placementCost: { stone: 30, wood: 20 },
     glyph: '⚓',
   },
-  // §8.8 lists Drone Pad as T2. Step 6 hardcoded it on the home island
-  // (T1) so the drone demo works without a level grind; preserved here as
-  // T1 with a deferred-tier comment. Re-tier to T2 when placement +
-  // settlement (step 2.5 / §12) land and the demo no longer relies on it.
   dronepad: {
     id: 'dronepad',
     displayName: 'Drone Pad',
     category: 'logistics',
-    tier: 1, // §8.8 = T2; demo retains T1 until placement system arrives.
+    tier: 2,
     width: 1,
     height: 1,
     fill: 0x4a6b78,

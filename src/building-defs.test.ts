@@ -339,8 +339,7 @@ describe('unlockedDefs', () => {
   it('returns every T1 id at level 1', () => {
     const list = unlockedDefs(1);
     // T1 defs in the catalog: mine, workshop, solar, coal_gen, dock,
-    // dronepad, logger, smelter, crate, silo, biomass_plant. (Drone Pad
-    // currently sits at T1 for the demo — see building-defs.ts.)
+    // logger, smelter, crate, silo, biomass_plant.
     expect(list).toContain('mine');
     expect(list).toContain('workshop');
     expect(list).toContain('logger');
@@ -359,6 +358,7 @@ describe('unlockedDefs', () => {
     expect(list).toContain('steel_mill');
     expect(list).toContain('assembler');
     expect(list).toContain('tank');
+    expect(list).toContain('dronepad');
     expect(list).not.toContain('electric_arc_furnace');
   });
 
