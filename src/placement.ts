@@ -195,9 +195,9 @@ export function affordabilityShortfall(
  *      player needs to pick a different island).
  *   3. out-of-bounds         (geometry; the player can move the cursor).
  *   4. overlap               (geometry; the player can move the cursor).
- *   5. tile-requirement-not-met (§4.3 — placement reaches a real tile in the
- *      island but its TerrainKind isn't acceptable for this def. Geometry-
- *      adjacent: the player can move the cursor to a tile that matches.)
+ *   5. tile-requirement-not-met (§4.3 — def.requiredTile or def.coastal
+ *      isn't satisfied. Geometry-adjacent: the player can move the cursor
+ *      to a tile that matches.)
  *   6. insufficient-resources (§14 — every other gate passed but the
  *      player's inventory is below `def.placementCost`. Returned LAST so
  *      that an out-of-bounds cursor still surfaces the geometry error
