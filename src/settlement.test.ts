@@ -8,9 +8,8 @@ import { ALL_RESOURCES, type ResourceId } from './recipes.js';
 import { makeSeededRng } from './rng.js';
 import type { SettlementVehicle } from './settlement.js';
 import {
-  HELI_TILES_PER_FUEL,
-  SHIP_SPEED_TILES_PER_SEC,
-  SHIP_TILES_PER_FUEL,
+  HELICOPTER_STATS,
+  SHIP_STATS,
   _resetVehicleIdCounter,
   dispatchVehicle,
   hasLaunchBuildingFor,
@@ -123,18 +122,70 @@ beforeEach(() => {
 
 describe('vehicle tuning', () => {
   it('ship tuning is T1, slow, fuel-efficient', () => {
-    const t = tuningFor('ship');
+    const t = tuningFor('ship', 1);
     expect(t.tier).toBe(1);
-    expect(t.speed).toBe(SHIP_SPEED_TILES_PER_SEC);
-    expect(t.tilesPerFuel).toBe(SHIP_TILES_PER_FUEL);
+    expect(t.speed).toBe(SHIP_STATS[1].speed);
+    expect(t.tilesPerFuel).toBe(SHIP_STATS[1].tilesPerFuel);
   });
 
   it('helicopter tuning is T2, fast, fuel-hungry', () => {
-    const t = tuningFor('helicopter');
+    const t = tuningFor('helicopter', 2);
     expect(t.tier).toBe(2);
-    expect(t.tilesPerFuel).toBe(HELI_TILES_PER_FUEL);
+    expect(t.tilesPerFuel).toBe(HELICOPTER_STATS[2].tilesPerFuel);
     // Heli is faster than ship per §12.6.
-    expect(t.speed).toBeGreaterThan(SHIP_SPEED_TILES_PER_SEC);
+    expect(t.speed).toBeGreaterThan(SHIP_STATS[1].speed);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Per-tier vehicle stats
+// ---------------------------------------------------------------------------
+
+describe('per-tier vehicle stats', () => {
+  it('T3 ship is faster than T1 ship', () => {
+    expect(SHIP_STATS[3].speed).toBeGreaterThan(SHIP_STATS[1].speed);
+  });
+  it('T4 VTOL carries 2 kits', () => {
+    expect(HELICOPTER_STATS[4].maxKits).toBe(2);
+  });
+  it('T1 ship has 2% failure rate', () => {
+    expect(SHIP_STATS[1].failureRate).toBe(0.02);
+  });
+  it('T3 ship drops starter buildings on arrival', () => {
+    const { world, homeSpec, homeState, targetSpec, islandStates } = makeTestWorld();
+    homeState.inventory.foundation_kit = 1;
+    homeState.inventory.biofuel = 10;
+    const r = dispatchVehicle(world, homeSpec, homeState, targetSpec, 'ship', 3, 2, 1, 0);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    tickVehicles(world, islandStates, r.vehicle.expectedArrivalTime + 1);
+    expect(targetSpec.buildings.some((b) => b.defId === 'solar')).toBe(true);
+    expect(targetSpec.buildings.some((b) => b.defId === 'workshop')).toBe(true);
+    expect(targetSpec.buildings.some((b) => b.defId === 'mine')).toBe(true);
+  });
+  it('T4 ship arrival grants 6 free skill points', () => {
+    const { world, homeSpec, homeState, targetSpec, islandStates } = makeTestWorld();
+    homeState.inventory.foundation_kit = 1;
+    homeState.inventory.biofuel = 10;
+    const r = dispatchVehicle(world, homeSpec, homeState, targetSpec, 'ship', 4, 2, 1, 0);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    tickVehicles(world, islandStates, r.vehicle.expectedArrivalTime + 1);
+    const newState = islandStates.get(targetSpec.id);
+    expect(newState).toBeDefined();
+    expect(newState!.unspentSkillPoints).toBe(6);
+  });
+  it('T2 arrival grants no free skill points', () => {
+    const { world, homeSpec, homeState, targetSpec, islandStates } = makeTestWorld();
+    homeState.inventory.foundation_kit = 1;
+    homeState.inventory.biofuel = 10;
+    const r = dispatchVehicle(world, homeSpec, homeState, targetSpec, 'ship', 2, 2, 1, 0);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    tickVehicles(world, islandStates, r.vehicle.expectedArrivalTime + 1);
+    const newState = islandStates.get(targetSpec.id);
+    expect(newState).toBeDefined();
+    expect(newState!.unspentSkillPoints).toBe(0);
   });
 });
 
@@ -207,8 +258,8 @@ describe('dispatchVehicle', () => {
   it('happy path: deducts fuel + kit, appends vehicle, computes arrival', () => {
     const { world, home, homeState, target } = setup();
     // Distance = 30 tiles; fuel 5 × ship efficiency 12 = 60 tile range (covers
-    // 30). Travel time = 30 / 0.25 t/s = 120s → arrival at 1000 + 120_000. (rebalanced step #19)
-    const r = dispatchVehicle(world, home, homeState, target, 'ship', 5, 1, 1000);
+    // 30). Travel time = 30 / 0.25 t/s = 120s → arrival at 1000 + 120_000.
+    const r = dispatchVehicle(world, home, homeState, target, 'ship', 1, 5, 1, 1000);
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(homeState.inventory.biofuel).toBe(45);
@@ -219,13 +270,13 @@ describe('dispatchVehicle', () => {
     expect(r.vehicle.target).toBe('target');
     expect(r.vehicle.fuelLoaded).toBe(5);
     expect(r.vehicle.foundationKitCount).toBe(1);
-    expect(r.vehicle.expectedArrivalTime).toBe(1000 + 120_000); // rebalanced step #19 (was 30_000)
+    expect(r.vehicle.expectedArrivalTime).toBe(1000 + 120_000);
   });
 
   it('rejects a non-discovered target', () => {
     const { world, home, homeState, target } = setup();
     target.discovered = false;
-    const r = dispatchVehicle(world, home, homeState, target, 'ship', 5, 1, 0);
+    const r = dispatchVehicle(world, home, homeState, target, 'ship', 1, 5, 1, 0);
     expect(r.ok).toBe(false);
     if (r.ok) return;
     expect(r.reason).toBe('target-not-discovered');
@@ -237,7 +288,7 @@ describe('dispatchVehicle', () => {
   it('rejects an already-populated target', () => {
     const { world, home, homeState, target } = setup();
     target.populated = true;
-    const r = dispatchVehicle(world, home, homeState, target, 'ship', 5, 1, 0);
+    const r = dispatchVehicle(world, home, homeState, target, 'ship', 1, 5, 1, 0);
     expect(r.ok).toBe(false);
     if (r.ok) return;
     expect(r.reason).toBe('target-populated');
@@ -248,7 +299,7 @@ describe('dispatchVehicle', () => {
   it('rejects when origin lacks a Shipyard for a ship dispatch', () => {
     const { world, home, homeState, target } = setup();
     home.buildings.length = 0;
-    const r = dispatchVehicle(world, home, homeState, target, 'ship', 5, 1, 0);
+    const r = dispatchVehicle(world, home, homeState, target, 'ship', 1, 5, 1, 0);
     expect(r.ok).toBe(false);
     if (r.ok) return;
     expect(r.reason).toBe('missing-launch-building');
@@ -258,7 +309,7 @@ describe('dispatchVehicle', () => {
   it('rejects insufficient fuel without mutation', () => {
     const { world, home, homeState, target } = setup();
     homeState.inventory.biofuel = 2;
-    const r = dispatchVehicle(world, home, homeState, target, 'ship', 5, 1, 0);
+    const r = dispatchVehicle(world, home, homeState, target, 'ship', 1, 5, 1, 0);
     expect(r.ok).toBe(false);
     if (r.ok) return;
     expect(r.reason).toBe('insufficient-fuel');
@@ -268,7 +319,7 @@ describe('dispatchVehicle', () => {
 
   it('rejects zero or negative fuel as insufficient-fuel', () => {
     const { world, home, homeState, target } = setup();
-    const r = dispatchVehicle(world, home, homeState, target, 'ship', 0, 1, 0);
+    const r = dispatchVehicle(world, home, homeState, target, 'ship', 1, 0, 1, 0);
     expect(r.ok).toBe(false);
     if (r.ok) return;
     expect(r.reason).toBe('insufficient-fuel');
@@ -277,7 +328,7 @@ describe('dispatchVehicle', () => {
   it('rejects insufficient foundation kits', () => {
     const { world, home, homeState, target } = setup();
     homeState.inventory.foundation_kit = 0;
-    const r = dispatchVehicle(world, home, homeState, target, 'ship', 5, 1, 0);
+    const r = dispatchVehicle(world, home, homeState, target, 'ship', 1, 5, 1, 0);
     expect(r.ok).toBe(false);
     if (r.ok) return;
     expect(r.reason).toBe('insufficient-kits');
@@ -286,7 +337,7 @@ describe('dispatchVehicle', () => {
 
   it('rejects zero kit count', () => {
     const { world, home, homeState, target } = setup();
-    const r = dispatchVehicle(world, home, homeState, target, 'ship', 5, 0, 0);
+    const r = dispatchVehicle(world, home, homeState, target, 'ship', 1, 5, 0, 0);
     expect(r.ok).toBe(false);
     if (r.ok) return;
     expect(r.reason).toBe('insufficient-kits');
@@ -294,7 +345,7 @@ describe('dispatchVehicle', () => {
 
   it('rejects dispatching to self', () => {
     const { world, home, homeState } = setup();
-    const r = dispatchVehicle(world, home, homeState, home, 'ship', 5, 1, 0);
+    const r = dispatchVehicle(world, home, homeState, home, 'ship', 1, 5, 1, 0);
     expect(r.ok).toBe(false);
     if (r.ok) return;
     expect(r.reason).toBe('invalid-target');
@@ -303,7 +354,7 @@ describe('dispatchVehicle', () => {
   it('rejects out-of-range — fuel × efficiency < distance', () => {
     const { world, home, homeState, target } = setup();
     // Distance = 30 tiles; fuel 2 × 12 = 24 tile range — insufficient.
-    const r = dispatchVehicle(world, home, homeState, target, 'ship', 2, 1, 0);
+    const r = dispatchVehicle(world, home, homeState, target, 'ship', 1, 2, 1, 0);
     expect(r.ok).toBe(false);
     if (r.ok) return;
     expect(r.reason).toBe('out-of-range');
@@ -313,8 +364,8 @@ describe('dispatchVehicle', () => {
 
   it('rejects a second dispatch from same origin to same target', () => {
     const { world, home, homeState, target } = setup();
-    expect(dispatchVehicle(world, home, homeState, target, 'ship', 5, 1, 0).ok).toBe(true);
-    const r = dispatchVehicle(world, home, homeState, target, 'ship', 5, 1, 0);
+    expect(dispatchVehicle(world, home, homeState, target, 'ship', 1, 5, 1, 0).ok).toBe(true);
+    const r = dispatchVehicle(world, home, homeState, target, 'ship', 1, 5, 1, 0);
     expect(r.ok).toBe(false);
     if (r.ok) return;
     expect(r.reason).toBe('already-in-flight');
@@ -331,8 +382,8 @@ describe('dispatchVehicle', () => {
       discovered: true,
     });
     world.islands.push(target2);
-    expect(dispatchVehicle(world, home, homeState, target, 'ship', 5, 1, 0).ok).toBe(true);
-    const r = dispatchVehicle(world, home, homeState, target2, 'ship', 5, 1, 0);
+    expect(dispatchVehicle(world, home, homeState, target, 'ship', 1, 5, 1, 0).ok).toBe(true);
+    const r = dispatchVehicle(world, home, homeState, target2, 'ship', 1, 5, 1, 0);
     expect(r.ok).toBe(true);
     expect(world.vehicles).toHaveLength(2);
   });
@@ -340,13 +391,13 @@ describe('dispatchVehicle', () => {
   it('helicopter dispatch requires a Helipad, not a Shipyard', () => {
     const { world, home, homeState, target } = setup();
     // origin has Shipyard only → helicopter dispatch fails.
-    const r1 = dispatchVehicle(world, home, homeState, target, 'helicopter', 10, 1, 0);
+    const r1 = dispatchVehicle(world, home, homeState, target, 'helicopter', 2, 10, 1, 0);
     expect(r1.ok).toBe(false);
     if (r1.ok) return;
     expect(r1.reason).toBe('missing-launch-building');
     // Add helipad → succeeds.
     home.buildings.push({ id: 'hp', defId: 'helipad', x: 1, y: 1 });
-    const r2 = dispatchVehicle(world, home, homeState, target, 'helicopter', 10, 1, 0);
+    const r2 = dispatchVehicle(world, home, homeState, target, 'helicopter', 2, 10, 1, 0);
     expect(r2.ok).toBe(true);
   });
 });
@@ -394,8 +445,8 @@ describe('tickVehicles', () => {
 
   it('leaves a vehicle in flight when nowMs < expectedArrivalTime', () => {
     const { world, home, homeState, target, islandStates } = setup();
-    dispatchVehicle(world, home, homeState, target, 'ship', 5, 1, 1000);
-    // Travel 120s → arrives at 121_000. (rebalanced step #19: 30/0.25=120s)
+    dispatchVehicle(world, home, homeState, target, 'ship', 1, 5, 1, 1000);
+    // Travel 120s → arrives at 121_000.
     const r = tickVehicles(world, islandStates, 5_000);
     expect(r.arrivals).toHaveLength(0);
     expect(world.vehicles).toHaveLength(1);
@@ -404,8 +455,8 @@ describe('tickVehicles', () => {
 
   it('populates target on arrival, places auto Cargo Dock, creates IslandState', () => {
     const { world, home, homeState, target, islandStates } = setup();
-    dispatchVehicle(world, home, homeState, target, 'ship', 5, 1, 0);
-    // Travel 120s → arrives at 120_000. (rebalanced step #19: 30/0.25=120s)
+    dispatchVehicle(world, home, homeState, target, 'ship', 1, 5, 1, 0);
+    // Travel 120s → arrives at 120_000.
     const r = tickVehicles(world, islandStates, 121_000);
     expect(r.arrivals).toHaveLength(1);
     expect(r.arrivals[0]!.targetIslandId).toBe('target');
@@ -427,9 +478,9 @@ describe('tickVehicles', () => {
   it('places an auto Helipad for a helicopter arrival', () => {
     const { world, home, homeState, target, islandStates } = setup();
     home.buildings.push({ id: 'hp', defId: 'helipad', x: 1, y: 1 });
-    // Helicopter: speed 0.75 t/s, eff 4 tiles/fuel. 30 tile trip = 40s. Need
-    // 30/4 = 7.5 → 8 fuel min. Use 10 fuel. (rebalanced step #19: was speed 3 → 10s)
-    dispatchVehicle(world, home, homeState, target, 'helicopter', 10, 1, 0);
+    // Helicopter T2: speed 0.75 t/s, eff 6 tiles/fuel. 30 tile trip = 40s. Need
+    // 30/6 = 5 fuel min. Use 10 fuel.
+    dispatchVehicle(world, home, homeState, target, 'helicopter', 2, 10, 1, 0);
     tickVehicles(world, islandStates, 41_000);
     expect(target.populated).toBe(true);
     const heliBuilding = target.buildings.find((b) => b.defId === 'helipad');
@@ -439,10 +490,10 @@ describe('tickVehicles', () => {
 
   it('does not double-populate when target was already populated mid-flight', () => {
     const { world, home, homeState, target, islandStates } = setup();
-    dispatchVehicle(world, home, homeState, target, 'ship', 5, 1, 0);
+    dispatchVehicle(world, home, homeState, target, 'ship', 1, 5, 1, 0);
     // External path populates the target before the tick fires.
     target.populated = true;
-    // 30 tiles / 0.25 t/s = 120s. (rebalanced step #19)
+    // 30 tiles / 0.25 t/s = 120s.
     const r = tickVehicles(world, islandStates, 121_000);
     expect(r.arrivals).toHaveLength(1);
     // Target stays populated; vehicle consumed (lost cargo) but no new
@@ -454,10 +505,10 @@ describe('tickVehicles', () => {
   it('foundation_kit is consumed on dispatch (not on arrival)', () => {
     const { world, home, homeState, target, islandStates } = setup();
     expect(homeState.inventory.foundation_kit).toBe(3);
-    dispatchVehicle(world, home, homeState, target, 'ship', 5, 1, 0);
+    dispatchVehicle(world, home, homeState, target, 'ship', 1, 5, 1, 0);
     // Already consumed at dispatch.
     expect(homeState.inventory.foundation_kit).toBe(2);
-    // 30 tiles / 0.25 t/s = 120s. (rebalanced step #19)
+    // 30 tiles / 0.25 t/s = 120s.
     tickVehicles(world, islandStates, 121_000);
     // Not consumed again at arrival.
     expect(homeState.inventory.foundation_kit).toBe(2);
@@ -473,10 +524,10 @@ describe('tickVehicles', () => {
       discovered: true,
     });
     world.islands.push(target2);
-    dispatchVehicle(world, home, homeState, target, 'ship', 5, 1, 0);
-    dispatchVehicle(world, home, homeState, target2, 'ship', 5, 1, 0);
+    dispatchVehicle(world, home, homeState, target, 'ship', 1, 5, 1, 0);
+    dispatchVehicle(world, home, homeState, target2, 'ship', 1, 5, 1, 0);
     expect(world.vehicles).toHaveLength(2);
-    // Tick at 85s — target2 (20 tile / 0.25 t/s = 80s) has arrived; target (30 tile / 0.25 t/s = 120s) hasn't. (rebalanced step #19)
+    // Tick at 85s — target2 (20 tile / 0.25 t/s = 80s) has arrived; target (30 tile / 0.25 t/s = 120s) hasn't.
     const r = tickVehicles(world, islandStates, 85_000);
     expect(r.arrivals).toHaveLength(1);
     expect(r.arrivals[0]!.targetIslandId).toBe('target2');
@@ -521,7 +572,7 @@ describe('dispatchVehicle — §11.7 tier-matched fuel', () => {
     const { world, home, homeState, target } = tieredSetup(1);
     homeState.inventory.biofuel = 50;
     homeState.inventory.diesel = 50; // wrong-grade present, must be untouched
-    const r = dispatchVehicle(world, home, homeState, target, 'ship', 5, 1, 0);
+    const r = dispatchVehicle(world, home, homeState, target, 'ship', 1, 5, 1, 0);
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.vehicle.fuelResource).toBe('biofuel');
@@ -534,8 +585,8 @@ describe('dispatchVehicle — §11.7 tier-matched fuel', () => {
     home.buildings.push({ id: 'hp', defId: 'helipad', x: 1, y: 1 });
     homeState.inventory.biofuel = 999;
     homeState.inventory.diesel = 50;
-    // helicopter eff 4 t/fuel: 30 tile trip needs ≥ 8 fuel.
-    const r = dispatchVehicle(world, home, homeState, target, 'helicopter', 10, 1, 0);
+    // helicopter T2 eff 6 t/fuel: 30 tile trip needs ≥ 5 fuel.
+    const r = dispatchVehicle(world, home, homeState, target, 'helicopter', 2, 10, 1, 0);
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.vehicle.fuelResource).toBe('diesel');
@@ -547,7 +598,7 @@ describe('dispatchVehicle — §11.7 tier-matched fuel', () => {
     const { world, home, homeState, target } = tieredSetup(15);
     homeState.inventory.biofuel = 999;
     homeState.inventory.aviation_kerosene = 50;
-    const r = dispatchVehicle(world, home, homeState, target, 'ship', 5, 1, 0);
+    const r = dispatchVehicle(world, home, homeState, target, 'ship', 1, 5, 1, 0);
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.vehicle.fuelResource).toBe('aviation_kerosene');
@@ -559,7 +610,7 @@ describe('dispatchVehicle — §11.7 tier-matched fuel', () => {
     const { world, home, homeState, target } = tieredSetup(15);
     homeState.inventory.biofuel = 999;
     homeState.inventory.aviation_kerosene = 2;
-    const r = dispatchVehicle(world, home, homeState, target, 'ship', 5, 1, 0);
+    const r = dispatchVehicle(world, home, homeState, target, 'ship', 1, 5, 1, 0);
     expect(r.ok).toBe(false);
     if (r.ok) return;
     expect(r.reason).toBe('insufficient-fuel');
@@ -572,7 +623,7 @@ describe('dispatchVehicle — §11.7 tier-matched fuel', () => {
   it('T4 island (level 30) consumes cryogenic_hydrogen', () => {
     const { world, home, homeState, target } = tieredSetup(30);
     homeState.inventory.cryogenic_hydrogen = 50;
-    const r = dispatchVehicle(world, home, homeState, target, 'ship', 5, 1, 0);
+    const r = dispatchVehicle(world, home, homeState, target, 'ship', 1, 5, 1, 0);
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.vehicle.fuelResource).toBe('cryogenic_hydrogen');
@@ -610,7 +661,7 @@ describe('mechanical failure §12.5', () => {
       launchTime += 1;
     }
 
-    const result = dispatchVehicle(world, origin, originState, target, 'ship', 10, 1, launchTime);
+    const result = dispatchVehicle(world, origin, originState, target, 'ship', 1, 10, 1, launchTime);
     expect(result.ok).toBe(true);
     const v = (result as any).vehicle as SettlementVehicle;
 
@@ -651,7 +702,7 @@ describe('mechanical failure §12.5', () => {
       launchTime += 1;
     }
 
-    const result = dispatchVehicle(world, origin, originState, target, 'helicopter', 10, 1, launchTime);
+    const result = dispatchVehicle(world, origin, originState, target, 'helicopter', 2, 10, 1, launchTime);
     expect(result.ok).toBe(true);
     const v = (result as any).vehicle as SettlementVehicle;
 
@@ -667,7 +718,7 @@ describe('§12.4 foundation kit decomposition', () => {
     const { world, homeSpec, homeState, targetSpec, islandStates } = makeTestWorld();
     homeState.inventory.foundation_kit = 1;
     homeState.inventory.biofuel = 10;
-    const r = dispatchVehicle(world, homeSpec, homeState, targetSpec, 'ship', 5, 1, 0);
+    const r = dispatchVehicle(world, homeSpec, homeState, targetSpec, 'ship', 1, 5, 1, 0);
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     tickVehicles(world, islandStates, r.vehicle.expectedArrivalTime + 1);
@@ -684,7 +735,7 @@ describe('§12.4 foundation kit decomposition', () => {
     const { world, homeSpec, homeState, targetSpec, islandStates } = makeTestWorld();
     homeState.inventory.foundation_kit = 2;
     homeState.inventory.biofuel = 10;
-    const r = dispatchVehicle(world, homeSpec, homeState, targetSpec, 'ship', 5, 2, 0);
+    const r = dispatchVehicle(world, homeSpec, homeState, targetSpec, 'ship', 1, 5, 2, 0);
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     tickVehicles(world, islandStates, r.vehicle.expectedArrivalTime + 1);

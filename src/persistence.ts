@@ -350,7 +350,12 @@ export function deserializeWorld(
       failureRate:
         'failureRate' in v && typeof (v as { failureRate?: unknown }).failureRate === 'number'
           ? (v as { failureRate: SettlementVehicle['failureRate'] }).failureRate
-          : tuningFor(v.kind).failureRate,
+          : tuningFor(
+              v.kind,
+              'tier' in v && typeof (v as { tier?: unknown }).tier === 'number'
+                ? (v as { tier: SettlementVehicle['tier'] }).tier
+                : (v.kind === 'ship' ? 1 : 2),
+            ).failureRate,
     })),
     // §11 telemetry forward-compat backfill: legacy v3 saves predate the
     // `revealedCells` field. Restore from the snapshot's array (Set form

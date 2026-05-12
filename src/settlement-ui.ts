@@ -785,7 +785,8 @@ export function mountSettlementUi(parentEl: HTMLElement, deps: SettlementUiDeps)
 
     fuelHeadR.textContent = `${fuelLoaded} u`;
     kitHeadR.textContent = `${kitCount}`;
-    const t = tuningFor(kind);
+    const uiTier: 1 | 2 = kind === 'ship' ? 1 : 2;
+    const t = tuningFor(kind, uiTier);
     tierStat.valueEl.textContent = `T${t.tier}`;
     const originSpec = originId ? deps.islandSpecs.get(originId) ?? null : null;
     const targetSpec = targetId ? deps.islandSpecs.get(targetId) ?? null : null;
@@ -844,7 +845,8 @@ export function mountSettlementUi(parentEl: HTMLElement, deps: SettlementUiDeps)
     if (onhandFuel < fuelLoaded) return `low ${fuelLabel}: ${onhandFuel.toFixed(0)} on hand`;
     const onhandKits = inv(originState, 'foundation_kit');
     if (onhandKits < kitCount) return `low kits: ${onhandKits.toFixed(0)} on hand`;
-    const t = tuningFor(kind);
+    const uiTier: 1 | 2 = kind === 'ship' ? 1 : 2;
+    const t = tuningFor(kind, uiTier);
     const range = fuelLoaded * t.tilesPerFuel;
     const dx = originSpec.cx - targetSpec.cx;
     const dy = originSpec.cy - targetSpec.cy;
@@ -974,12 +976,14 @@ export function mountSettlementUi(parentEl: HTMLElement, deps: SettlementUiDeps)
     }
     if (!targetSpec) targetSpec = nearestDiscoveredUnpopulated(worldTileX, worldTileY);
     if (!targetSpec) return { ok: false, reason: 'no target near click' };
+    const tier: 1 | 2 = kind === 'ship' ? 1 : 2;
     const r = dispatchVehicle(
       deps.world,
       originSpec,
       originState,
       targetSpec,
       kind,
+      tier,
       fuelLoaded,
       kitCount,
       nowMs,

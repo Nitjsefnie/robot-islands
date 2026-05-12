@@ -26,20 +26,17 @@
 
 import type { IslandState } from './economy.js';
 import { inv } from './economy.js';
+import type { BuildingDefId } from './building-defs.js';
 import { fuelForTier, RECIPES, type ResourceId } from './recipes.js';
 import { makeSeededRng } from './rng.js';
 import { tierForLevel } from './skilltree.js';
 import type { IslandSpec, WorldState } from './world.js';
 import { makeInitialIslandState } from './world.js';
 
-/** Settlement vehicle kind per §12.6. Step 12 ships one generic class per
- *  kind — `ship` (T1) and `helicopter` (T2). T3+ tiered variants are added
- *  later. */
+/** Settlement vehicle kind per §12.6. */
 export type VehicleKind = 'ship' | 'helicopter';
 
-/** Vehicle tier per §12.6. Step 12 only emits T1 ships and T2 helicopters;
- *  the field exists so future tiers can be added without reshaping the
- *  data model. */
+/** Vehicle tier per §12.6. T1-T4 span Cargo Ship and VTOL Helicopter lines. */
 export type VehicleTier = 1 | 2 | 3 | 4;
 
 /**
@@ -56,56 +53,50 @@ export interface SettlementVehicle {
   readonly target: string;
   readonly fuelLoaded: number;
   readonly foundationKitCount: number;
-  /** Travel speed in tiles/sec. T1 ship = SHIP_SPEED; T2 heli = HELI_SPEED. */
+  /** Travel speed in tiles/sec. */
   readonly speed: number;
   /** Wall-clock ms timestamp of dispatch. */
   readonly launchTime: number;
   /** Wall-clock ms timestamp the vehicle is expected to arrive. */
   readonly expectedArrivalTime: number;
-  /** §2.6 weather vulnerability multiplier per vehicle tier. Carried for
-   *  forward-compat with §11.4 destruction logic; not consulted by the
-   *  step-12 deterministic-arrival tick. */
+  /** §2.6 weather vulnerability multiplier per vehicle tier. */
   readonly weatherMultiplier: number;
-  /** §11.7 tier-matched fuel grade resolved at dispatch from the launching
-   *  island's tier (`fuelForTier(tierForLevel(origin.level))`). Stored so
-   *  the ticker / UI / persistence layer know which inventory key was
-   *  burned without re-deriving from level (which is mutable post-launch). */
+  /** §11.7 tier-matched fuel grade resolved at dispatch. */
   readonly fuelResource: ResourceId;
-  /** §12.5 mechanical failure probability [0,1]. Carried on the record so
-   *  the tick loop can roll deterministically at arrival time. */
+  /** §12.5 mechanical failure probability [0,1]. */
   readonly failureRate: number;
 }
 
 // ---------------------------------------------------------------------------
-// Step-12 tuning constants
+// Per-tier stat tables (§12.6)
 // ---------------------------------------------------------------------------
 
-/** T1 cargo-ship speed in tiles/sec. Rebalanced for idle-game scale, step #19:
- *  1 → 0.25 t/s so a 200-tile colonization run takes ~800s (~13 min). */
-export const SHIP_SPEED_TILES_PER_SEC = 0.25; // rebalanced for idle-game scale, step #19 (was 1)
-/** T2 helicopter speed in tiles/sec. Faster than ships per §12.6 vehicle
- *  tier table ("Light Helicopter — high speed"). Rebalanced for idle-game
- *  scale, step #19: 3 → 0.75 t/s. */
-export const HELI_SPEED_TILES_PER_SEC = 0.75; // rebalanced for idle-game scale, step #19 (was 3)
+export interface VehicleStats {
+  readonly speed: number;
+  readonly tilesPerFuel: number;
+  readonly maxKits: number;
+  readonly failureRate: number;
+  readonly weatherMultiplier: number;
+}
 
-/** Fuel efficiency in tiles per biofuel unit (one-way; vehicles are
- *  consumed on arrival). T1 ship is fuel-efficient over long distance;
- *  T2 helicopter is fuel-hungry per §12.6 ("Light Helicopter — high
- *  speed, fuel-hungry"). */
-export const SHIP_TILES_PER_FUEL = 12;
-export const HELI_TILES_PER_FUEL = 4;
+export const SHIP_STATS: Record<VehicleTier, VehicleStats> = {
+  1: { speed: 0.25, tilesPerFuel: 12, maxKits: 1, failureRate: 0.02, weatherMultiplier: 1.0 },
+  2: { speed: 0.30, tilesPerFuel: 16, maxKits: 2, failureRate: 0.015, weatherMultiplier: 0.9 },
+  3: { speed: 0.40, tilesPerFuel: 20, maxKits: 2, failureRate: 0.01, weatherMultiplier: 0.8 },
+  4: { speed: 0.50, tilesPerFuel: 24, maxKits: 2, failureRate: 0.005, weatherMultiplier: 0.7 },
+};
+
+export const HELICOPTER_STATS: Record<VehicleTier, VehicleStats> = {
+  1: { speed: 0, tilesPerFuel: 0, maxKits: 0, failureRate: 0, weatherMultiplier: 0 }, // no T1 heli
+  2: { speed: 0.75, tilesPerFuel: 6, maxKits: 1, failureRate: 0.01, weatherMultiplier: 1.2 },
+  3: { speed: 0.95, tilesPerFuel: 8, maxKits: 1, failureRate: 0.008, weatherMultiplier: 1.0 },
+  4: { speed: 1.20, tilesPerFuel: 10, maxKits: 2, failureRate: 0.005, weatherMultiplier: 0.7 },
+};
 
 /** UI slider bounds for fuel selection. Min covers a short hop (12 tiles
  *  for a ship at min fuel); max covers any in-world target. */
 export const MIN_FUEL_PER_VEHICLE = 5;
 export const MAX_FUEL_PER_VEHICLE = 100;
-
-/** §12.5 placeholder weather multipliers per vehicle tier. Carried on the
- *  vehicle record for forward-compat; weather destruction roll DEFERRED.
- *  Numbers mirror §2.6 / §12.6 — ships are more weather-vulnerable than
- *  helicopters at the same tier. */
-const SHIP_T1_WEATHER_MUL = 1.0;
-const HELI_T2_WEATHER_MUL = 0.7;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -128,22 +119,17 @@ export interface VehicleTuning {
   readonly failureRate: number; // §12.5 mechanical failure probability [0,1]
 }
 
-export function tuningFor(kind: VehicleKind): VehicleTuning {
-  if (kind === 'ship') {
-    return {
-      tier: 1,
-      speed: SHIP_SPEED_TILES_PER_SEC,
-      tilesPerFuel: SHIP_TILES_PER_FUEL,
-      weatherMultiplier: SHIP_T1_WEATHER_MUL,
-      failureRate: 0.02, // 2% T1 ship
-    };
+export function tuningFor(kind: VehicleKind, tier: VehicleTier): VehicleTuning {
+  const stats = kind === 'ship' ? SHIP_STATS[tier] : HELICOPTER_STATS[tier];
+  if (!stats) {
+    throw new Error(`Invalid vehicle kind/tier combo: ${kind} tier ${tier}`);
   }
   return {
-    tier: 2,
-    speed: HELI_SPEED_TILES_PER_SEC,
-    tilesPerFuel: HELI_TILES_PER_FUEL,
-    weatherMultiplier: HELI_T2_WEATHER_MUL,
-    failureRate: 0.01, // 1% T2 helicopter
+    tier,
+    speed: stats.speed,
+    tilesPerFuel: stats.tilesPerFuel,
+    weatherMultiplier: stats.weatherMultiplier,
+    failureRate: stats.failureRate,
   };
 }
 
@@ -153,6 +139,34 @@ export function tuningFor(kind: VehicleKind): VehicleTuning {
 export function hasLaunchBuildingFor(origin: IslandSpec, kind: VehicleKind): boolean {
   const required = kind === 'ship' ? 'shipyard' : 'helipad';
   return origin.buildings.some((b) => b.defId === required);
+}
+
+// ---------------------------------------------------------------------------
+// Starter state helpers (§12.6 per-tier loadouts)
+// ---------------------------------------------------------------------------
+
+function computeStarterBuildings(
+  kind: VehicleKind,
+  tier: VehicleTier,
+): Array<{ defId: BuildingDefId; x: number; y: number }> {
+  if (tier <= 2) return [];
+  const base: Array<{ defId: BuildingDefId; x: number; y: number }> = [
+    { defId: 'solar', x: 2, y: 0 },
+    { defId: 'workshop', x: 4, y: 0 },
+  ];
+  if (kind === 'ship' && tier >= 3) {
+    base.push({ defId: 'mine', x: 6, y: 0 });
+  }
+  if (tier >= 4) {
+    base.push({ defId: 'coal_gen', x: 8, y: 0 }, { defId: 'crate', x: 10, y: 0 });
+  }
+  return base;
+}
+
+function computeFreeSkillPoints(tier: VehicleTier): number {
+  if (tier === 3) return 4;
+  if (tier === 4) return 6;
+  return 0;
 }
 
 // ---------------------------------------------------------------------------
@@ -223,6 +237,7 @@ export function dispatchVehicle(
   originState: IslandState,
   targetSpec: IslandSpec,
   kind: VehicleKind,
+  tier: VehicleTier,
   fuelLoaded: number,
   foundationKitCount: number,
   nowMs: number,
@@ -250,7 +265,7 @@ export function dispatchVehicle(
   if (fuelLoaded <= 0 || inv(originState, fuelResource) < fuelLoaded) {
     return { ok: false, reason: 'insufficient-fuel' };
   }
-  const t = tuningFor(kind);
+  const t = tuningFor(kind, tier);
   const range = fuelLoaded * t.tilesPerFuel;
   const dist = distanceTiles(originSpec, targetSpec);
   if (dist > range) return { ok: false, reason: 'out-of-range' };
@@ -315,15 +330,17 @@ export interface TickVehiclesResult {
  *      the target spec's `buildings` array. Coordinate is (0, 0) — the
  *      auto-placed dock convention from §12.4. Coast-tile selection is
  *      DEFERRED — the dock lands at the island centre.
- *   3. A fresh IslandState is constructed via `makeInitialIslandState` and
+ *   3. Starter buildings for T3+ vehicles are pushed onto the spec before
+ *      `makeInitialIslandState` so they count for storage + economy.
+ *   4. A fresh IslandState is constructed via `makeInitialIslandState` and
  *      added to `islandStates`. The spec's `buildings` array IS the same
- *      reference the state will hold, so the auto-placed dock is visible
- *      to the economy on the very next tick.
+ *      reference the state will hold, so the auto-placed dock + starters
+ *      are visible to the economy on the very next tick.
  *
  * Per the load-bearing invariant in `persistence.test.ts` ("keeps
- * IslandState.buildings === IslandSpec.buildings"), we push the dock onto
- * the spec's buildings BEFORE calling `makeInitialIslandState` so the
- * storage-cap aggregation accounts for the auto-placed building.
+ * IslandState.buildings === IslandSpec.buildings"), we push all buildings
+ * onto the spec BEFORE calling `makeInitialIslandState` so the storage-cap
+ * aggregation accounts for every starter building.
  *
  * If the target's spec is missing (impossibly) or the target is already
  * populated (e.g. via a parallel pathway), the vehicle is still consumed —
@@ -378,6 +395,13 @@ export function tickVehicles(
       x: 0,
       y: 0,
     });
+
+    // §12.6 starter buildings for T3+ vehicles.
+    const starters = computeStarterBuildings(v.kind, v.tier);
+    for (const b of starters) {
+      target.buildings.push({ id: `${target.id}-starter-${b.defId}`, defId: b.defId, x: b.x, y: b.y });
+    }
+
     const newState = makeInitialIslandState(target, nowMs);
     islandStates.set(target.id, newState);
 
@@ -391,6 +415,12 @@ export function tickVehicles(
           newState.inventory[id] = (newState.inventory[id] ?? 0) + total;
         }
       }
+    }
+
+    // §12.6 free skill points for T3+ arrivals.
+    const freePoints = computeFreeSkillPoints(v.tier);
+    if (freePoints > 0) {
+      newState.unspentSkillPoints += freePoints;
     }
 
     arrivals.push({ targetIslandId: target.id, fromIslandId: v.from, kind: v.kind });
