@@ -9,8 +9,9 @@
 //     vehicles (Heavy Freighter, Industrial Carrier, VTOL Tilt-Rotor) and
 //     their per-tier loadouts/speeds DEFERRED to a later step.
 //   - No weather destruction (no weather system yet — §11.4 / §12.5
-//     DEFERRED). Mechanical-failure rolls DEFERRED — every dispatched
-//     vehicle arrives.
+//     DEFERRED). Mechanical-failure rolls are implemented (§12.5).
+//     Every dispatched vehicle still arrives deterministically unless the
+//     roll fails at the expected-arrival tick.
 //   - Auto-routing at the 10-island NC milestone (§9.6 Auto-Patronage,
 //     §12.7) DEFERRED.
 //   - Coastal-tile placement check on Shipyard DEFERRED.
@@ -25,7 +26,7 @@
 
 import type { IslandState } from './economy.js';
 import { inv } from './economy.js';
-import { fuelForTier, type ResourceId } from './recipes.js';
+import { fuelForTier, RECIPES, type ResourceId } from './recipes.js';
 import { makeSeededRng } from './rng.js';
 import { tierForLevel } from './skilltree.js';
 import type { IslandSpec, WorldState } from './world.js';
@@ -379,6 +380,19 @@ export function tickVehicles(
     });
     const newState = makeInitialIslandState(target, nowMs);
     islandStates.set(target.id, newState);
+
+    // §12.4 Foundation Kit decomposition: credit recipe inputs to the colony.
+    const kitRecipe = RECIPES['kit_assembler'];
+    if (kitRecipe) {
+      for (const [r, amount] of Object.entries(kitRecipe.inputs)) {
+        const id = r as ResourceId;
+        const total = (amount ?? 0) * v.foundationKitCount;
+        if (total > 0) {
+          newState.inventory[id] = (newState.inventory[id] ?? 0) + total;
+        }
+      }
+    }
+
     arrivals.push({ targetIslandId: target.id, fromIslandId: v.from, kind: v.kind });
   }
 

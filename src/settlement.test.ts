@@ -84,6 +84,36 @@ function freshWorld(islands: IslandSpec[] = []): WorldState {
   return { islands, drones: [], routes: [], vehicles: [], revealedCells: new Set() };
 }
 
+function makeTestWorld(): {
+  world: WorldState;
+  homeSpec: IslandSpec;
+  homeState: IslandState;
+  targetSpec: IslandSpec;
+  islandStates: Map<string, IslandState>;
+} {
+  const homeSpec = makeIslandSpec({
+    id: 'home',
+    cx: 0,
+    cy: 0,
+    populated: true,
+    discovered: true,
+    buildings: [{ id: 'sy', defId: 'shipyard', x: 0, y: 0 }],
+  });
+  const targetSpec = makeIslandSpec({
+    id: 'target',
+    cx: 30,
+    cy: 0,
+    populated: false,
+    discovered: true,
+  });
+  const world = freshWorld([homeSpec, targetSpec]);
+  const homeState = makeIslandState({ id: 'home' });
+  homeState.inventory.biofuel = 50;
+  homeState.inventory.foundation_kit = 3;
+  const islandStates = new Map<string, IslandState>([['home', homeState]]);
+  return { world, homeSpec, homeState, targetSpec, islandStates };
+}
+
 beforeEach(() => {
   _resetVehicleIdCounter();
 });
@@ -630,5 +660,36 @@ describe('mechanical failure §12.5', () => {
     expect(tickResult.failures.length).toBe(0);
     expect(tickResult.arrivals.length).toBe(1);
     expect(target.populated).toBe(true);
+  });
+});
+
+describe('§12.4 foundation kit decomposition', () => {
+  it('credits kit recipe inputs to the new colony on arrival', () => {
+    const { world, homeSpec, homeState, targetSpec, islandStates } = makeTestWorld();
+    homeState.inventory.foundation_kit = 1;
+    homeState.inventory.biofuel = 10;
+    const r = dispatchVehicle(world, homeSpec, homeState, targetSpec, 'ship', 5, 1, 0);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    tickVehicles(world, islandStates, r.vehicle.expectedArrivalTime + 1);
+    const newState = islandStates.get(targetSpec.id);
+    expect(newState).toBeDefined();
+    // kit_assembler inputs: { iron_ingot: 5, wood: 10, bolt: 5 }
+    // startingInventory seeds wood=40, foundation_kit=1.
+    expect(newState!.inventory.iron_ingot).toBe(5);
+    expect(newState!.inventory.wood).toBe(50);
+    expect(newState!.inventory.bolt).toBe(5);
+  });
+
+  it('multiplies decomposition by foundationKitCount', () => {
+    const { world, homeSpec, homeState, targetSpec, islandStates } = makeTestWorld();
+    homeState.inventory.foundation_kit = 2;
+    homeState.inventory.biofuel = 10;
+    const r = dispatchVehicle(world, homeSpec, homeState, targetSpec, 'ship', 5, 2, 0);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    tickVehicles(world, islandStates, r.vehicle.expectedArrivalTime + 1);
+    const newState = islandStates.get(targetSpec.id);
+    expect(newState!.inventory.iron_ingot).toBe(10);
   });
 });
