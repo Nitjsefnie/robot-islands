@@ -59,7 +59,8 @@ describe('RESOURCE_STORAGE_CATEGORY (§4.6)', () => {
     expect(RESOURCE_STORAGE_CATEGORY.aviation_kerosene).toBe('liquid_gas');
     expect(RESOURCE_STORAGE_CATEGORY.plasma_charge).toBe('liquid_gas');
 
-    // Temp-sensitive — cryo_coolant.
+    // Temp-sensitive — cryo_coolant is the sole live member until
+    // cryogenic_compound / liquid_nitrogen / plastics are catalogued.
     expect(RESOURCE_STORAGE_CATEGORY.cryo_coolant).toBe('temp_sensitive');
 
     // Components — manufactured T2/T3 parts.
@@ -81,10 +82,8 @@ describe('RESOURCE_STORAGE_CATEGORY (§4.6)', () => {
   it('every category has at least one assigned resource (except temp_sensitive may be sparse)', () => {
     // Sanity: each non-empty category in the spec must have at least one
     // member in the current catalog so the corresponding specialized
-    // storage building (Silo, Tank, Component Warehouse, Vault) actually
-    // does something on placement. `temp_sensitive` is the exception —
-    // its full spec members (cryogenic_compound, liquid_nitrogen) aren't
-    // catalogued yet so this category may legitimately be near-empty.
+    // storage building actually does something on placement.
+    // temp_sensitive currently has one live member (cryo_coolant).
     const counts: Record<StorageCategory, number> = {
       dry_goods: 0,
       liquid_gas: 0,
