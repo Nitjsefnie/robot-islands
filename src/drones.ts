@@ -371,11 +371,12 @@ export function tickDrones(
       apexTime,
       CELL_SIZE_TILES,
     );
-    // Deduplicate cells that appear in both legs (e.g., origin cell).
+    // Concatenate outbound + return legs. Dedup only exact (cell, time)
+    // duplicates so both legs are evaluated by rollVehicleDestruction.
     const seen = new Set<string>();
     const path: Array<{ cx: number; cy: number; entryMs: number }> = [];
     for (const p of [...outboundPath, ...returnPath]) {
-      const key = `${p.cx},${p.cy}`;
+      const key = `${p.cx},${p.cy},${p.entryMs}`;
       if (seen.has(key)) continue;
       seen.add(key);
       path.push(p);

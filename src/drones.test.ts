@@ -548,9 +548,11 @@ describe('drone weather destruction §2.6', () => {
   function findClearSeed(): string {
     for (let i = 0; i < 1000; i++) {
       const seed = `clear-${i}`;
-      const path = rasterizePath(0, 0, 1, 0, 20, 0.5, 0, 16);
+      const outboundPath = rasterizePath(0, 0, 1, 0, 20, 0.5, 0, 16);
+      const apexTime = (20 / 0.5) * 1000;
+      const returnPath = rasterizePath(20, 0, -1, 0, 20, 0.5, apexTime, 16);
       let allClear = true;
-      for (const p of path) {
+      for (const p of [...outboundPath, ...returnPath]) {
         if (weather(seed, p.cx, p.cy, p.entryMs).state !== 'clear') {
           allClear = false;
           break;
