@@ -92,8 +92,7 @@ export const ROLE_DEFS: Readonly<Record<RoleId, RoleDef>> = {
     id: 'logistics_hub',
     displayName: 'Logistics Hub',
     description:
-      'Logistics recipes ×2.0 and storage caps ×1.5; ×0.75 on all other production. ' +
-      'Route capacity doubling (§9.4) is deferred — wires when routes carry a per-route base capacity.',
+      'Logistics recipes ×2.0, storage caps ×1.5, and route capacity ×2.0; ×0.75 on all other production.',
     buffCategory: 'logistics',
     buffMultiplier: 2.0,
     penaltyMultiplier: 0.75,
@@ -196,6 +195,12 @@ export const IDENTITY_SPECIALIZATION: SpecializationMultipliers = blankSpecMulti
  *
  * Null role → identity bundle (no buff, no penalty).
  */
+/** §9.4 route capacity multiplier for an origin island's specialization.
+ *  Returns 2.0 for logistics_hub, 1.0 otherwise. */
+export function routeCapacityMultiplier(role: RoleId | null): number {
+  return role === 'logistics_hub' ? 2.0 : 1.0;
+}
+
 export function effectiveSpecializationMultipliers(
   role: RoleId | null,
 ): SpecializationMultipliers {

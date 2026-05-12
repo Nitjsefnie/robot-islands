@@ -63,6 +63,17 @@ function makeWorld(routes: Route[] = []): WorldState {
   return { islands: stub, drones: [], routes, vehicles: [], revealedCells: new Set() };
 }
 
+function makeTwoIslandWorld(): { world: WorldState; states: Map<string, IslandState> } {
+  const src = makeState('island-a');
+  const dst = makeState('island-b');
+  const world = makeWorld();
+  const states = new Map([
+    ['island-a', src],
+    ['island-b', dst],
+  ]);
+  return { world, states };
+}
+
 function cargoRoute(
   from: string,
   to: string,
@@ -383,5 +394,50 @@ describe('tickRoutes — instant transit (T4 teleporter equivalent)', () => {
     expect(src.inventory.iron_ore).toBeCloseTo(9, 9);
     expect(dst.inventory.iron_ore).toBeCloseTo(1, 9);
     expect(r.inFlight.length).toBe(0);
+  });
+});
+
+
+describe('§9.4 logistics hub route capacity doubling', () => {
+  it('doubles capacity for routes from a logistics_hub island', () => {
+    const { world, states } = makeTwoIslandWorld();
+    const fromState = states.get('island-a')!;
+    fromState.specializationRole = 'logistics_hub';
+    world.routes.push({
+      id: 'r-1',
+      from: 'island-a',
+      to: 'island-b',
+      type: 'cargo',
+      capacityPerSec: 1,
+      filter: 'stone',
+      priorityList: [],
+      transitTimeSec: 10,
+      inFlight: [],
+    });
+    fromState.inventory.stone = 100;
+    const result = dispatchAttempt(world, states, 0, 1);
+    expect(result.length).toBe(1);
+    expect(result[0]!.amount).toBe(2); // 1 * 2 (doubled)
+  });
+
+  it('keeps base capacity for non-logistics-hub origin', () => {
+    const { world, states } = makeTwoIslandWorld();
+    const fromState = states.get('island-a')!;
+    fromState.specializationRole = null; // generalist
+    world.routes.push({
+      id: 'r-1',
+      from: 'island-a',
+      to: 'island-b',
+      type: 'cargo',
+      capacityPerSec: 1,
+      filter: 'stone',
+      priorityList: [],
+      transitTimeSec: 10,
+      inFlight: [],
+    });
+    fromState.inventory.stone = 100;
+    const result = dispatchAttempt(world, states, 0, 1);
+    expect(result.length).toBe(1);
+    expect(result[0]!.amount).toBe(1); // base capacity
   });
 });

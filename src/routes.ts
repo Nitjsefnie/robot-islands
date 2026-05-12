@@ -21,6 +21,7 @@
 
 import { cap, inv, type IslandState } from './economy.js';
 import { XP_WEIGHT, type ResourceId } from './recipes.js';
+import { routeCapacityMultiplier } from './specialization.js';
 import type { WorldState } from './world.js';
 
 /** Transport tier per §2.4. Step 7 only emits `cargo` routes; the field
@@ -305,7 +306,8 @@ function dispatchPhase(
     if (!srcState) continue;
     const r = selectResource(world, states, route);
     if (r === null) continue;
-    const capDemand = route.capacityPerSec * elapsedSec;
+    const capacityMul = routeCapacityMultiplier(srcState.specializationRole);
+    const capDemand = route.capacityPerSec * capacityMul * elapsedSec;
     const headroom = destinationHeadroom(world, states, route.to, r);
     const desired = Math.min(capDemand, headroom);
     if (desired <= 0) continue;
