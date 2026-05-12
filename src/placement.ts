@@ -16,9 +16,8 @@
 //        per-frame buff computation is still a future step).
 //
 // Other deferrals documented at the call sites:
-//   - Terrain-tile requirements per §4.3 (Mine "should" need ore vein, Logger
-//     a tree tile, etc.) — DEFERRED. No current BuildingDef carries a
-//     `requiredTile` field; step 2.5 accepts any in-island tile.
+//   - Terrain-tile requirements per §4.3 / §8.1 are implemented.
+//     `validatePlacement` checks `def.requiredTile` against `spec.terrainAt`.
 //   - Adjacency effects (§4.5) — DEFERRED.
 //   - Placement-time material cost — DEFERRED. Placement is free in step 2.5;
 //     real costs land in step 14 alongside the cost-curve work.

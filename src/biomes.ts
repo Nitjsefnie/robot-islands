@@ -88,7 +88,7 @@ export const BIOME_DEFS: Readonly<Record<Biome, BiomeDef>> = {
     initialMinorRadius: 7,
     powerSource: 'wind',
     defaultTerrain: 'sand',
-    rareTerrain: ['water', 'water', 'ore'],
+    rareTerrain: ['water', 'water', 'ore', 'oil_well', 'gas_seep'],
     displayName: 'Coast',
   },
   volcanic: {
@@ -97,7 +97,7 @@ export const BIOME_DEFS: Readonly<Record<Biome, BiomeDef>> = {
     initialMinorRadius: 7,
     powerSource: 'geothermal',
     defaultTerrain: 'stone',
-    rareTerrain: ['magma_vent', 'coal', 'ore'],
+    rareTerrain: ['magma_vent', 'coal', 'ore', 'gas_seep', 'helium_vent'],
     displayName: 'Volcanic',
   },
   desert: {
@@ -106,7 +106,7 @@ export const BIOME_DEFS: Readonly<Record<Biome, BiomeDef>> = {
     initialMinorRadius: 12,
     powerSource: 'solar',
     defaultTerrain: 'sand',
-    rareTerrain: ['stone', 'ore'],
+    rareTerrain: ['stone', 'ore', 'oil_well'],
     displayName: 'Desert',
   },
   arctic: {
@@ -116,7 +116,7 @@ export const BIOME_DEFS: Readonly<Record<Biome, BiomeDef>> = {
     powerSource: 'cryogenic',
     defaultTerrain: 'stone',
     // Arctic uses `ice` as scattered cryo deposit (cryo recipes not implemented).
-    rareTerrain: ['ice', 'ice', 'stone'],
+    rareTerrain: ['ice', 'ice', 'stone', 'helium_vent'],
     displayName: 'Arctic',
   },
 };

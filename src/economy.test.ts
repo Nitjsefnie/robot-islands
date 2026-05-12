@@ -33,11 +33,12 @@ import {
   type DefCatalog,
   type IslandState,
 } from './economy.js';
-import { placeBuilding } from './placement.js';
+import { placeBuilding, validatePlacement } from './placement.js';
 import { ALL_RESOURCES, XP_WEIGHT, type ResourceId } from './recipes.js';
 import { effectiveSpecializationMultipliers } from './specialization.js';
 import { RESOURCE_STORAGE_CATEGORY } from './storage-categories.js';
 import { aggregateStorageCaps } from './world.js';
+import type { TerrainKind } from './island.js';
 
 const MINE: PlacedBuilding = { id: 'b-mine', defId: 'mine', x: 0, y: 0 };
 const WORKSHOP: PlacedBuilding = { id: 'b-workshop', defId: 'workshop', x: 0, y: 0 };
@@ -1731,5 +1732,57 @@ describe('accrueXp funnel provenance §10.1', () => {
     state.funnelPending.iron_ore = 100;
     accrueXp(state, { iron_ore: 5 }, { iron_ore: 5 }, 1);
     expect(state.funnelPending.iron_ore).toBe(100);
+  });
+});
+
+
+describe('extractor tile gating §8.1', () => {
+  const makeSpecWithTerrain = (terrain: string) => ({
+    id: 'test-island',
+    name: 'test',
+    biome: 'plains' as const,
+    cx: 0,
+    cy: 0,
+    majorRadius: 14,
+    minorRadius: 14,
+    populated: true,
+    discovered: true,
+    buildings: [],
+    terrainAt: (_x: number, _y: number) => terrain as TerrainKind,
+    modifiers: ['stable'] as const,
+  });
+
+  const makeStateForPlacement = (level = 1): IslandState =>
+    makeState({
+      level,
+      inventory: { ...blankInventory(), stone: 1000, wood: 1000, iron_ingot: 1000 },
+    });
+
+  it('allows logger on tree tile', () => {
+    const spec = makeSpecWithTerrain('tree');
+    const result = validatePlacement(spec, makeStateForPlacement(), 'logger', 0, 0, 0);
+    expect(result.ok).toBe(true);
+  });
+
+  it('rejects logger on grass tile', () => {
+    const spec = makeSpecWithTerrain('grass');
+    const result = validatePlacement(spec, makeStateForPlacement(), 'logger', 0, 0, 0);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.reason).toBe('tile-requirement-not-met');
+  });
+
+  it('rejects pump_jack on stone tile', () => {
+    const spec = makeSpecWithTerrain('stone');
+    const result = validatePlacement(spec, makeStateForPlacement(15), 'pump_jack', 0, 0, 0);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.reason).toBe('tile-requirement-not-met');
+  });
+
+  it('stalls logger production when placed on non-tree terrain', () => {
+    const state = makeState({
+      buildings: [{ id: 'b1', defId: 'logger', x: 0, y: 0 }],
+    });
+    const rates = computeRates(state, { terrainAt: () => 'grass' });
+    expect(rates.production.wood ?? 0).toBe(0);
   });
 });

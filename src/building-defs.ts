@@ -286,9 +286,8 @@ export interface BuildingDef {
    *  per §4.3 ("Mine requires every cell of its footprint to be on an
    *  ore/coal vein"). Undefined / empty = no tile requirement (any in-island
    *  tile accepted). `validatePlacement` in placement.ts is the canonical
-   *  gate. Currently honored by: `mine` (ore or coal). Other §8.1 entries
-   *  (Logger → tree, Quarry → stone, Well → water) are documented in their
-   *  def comments with `requiredTile` unset until those buildings ship. */
+   *  gate. Honored by all extractors (mine, logger, quarry, sand_pit, well,
+   *  coastal_pump, quartz_mine, pump_jack, gas_extractor, drilling_rig). */
   readonly requiredTile?: ReadonlyArray<TerrainKind>;
   /** Visual polish: a 1-2 character glyph stamped centred on the building
    *  footprint at render time (see `renderBuildings`). Chosen from the
@@ -456,10 +455,7 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     height: 1,
     fill: 0x2f5e2c,
     stroke: 0x0f2a0c,
-    // §8.1: requires a `tree` tile. Placement isn't built (step 2.5) so the
-    // tile requirement is unenforced for step 9 — Logger placed on forest-ne
-    // produces wood without a `tree` adjacency check.
-    // §14 placeholder — tune in Appendix A.
+    requiredTile: ['tree'],
     placementCost: { stone: 15, wood: 5 },
     glyph: '⌬',
   },
@@ -1230,9 +1226,8 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
   // -------------------------------------------------------------------------
   // One defId per recipe. Step-18 prioritises COVERAGE (every recipe input
   // has a producer) over balance — cycle times, power draws, and footprints
-  // are placeholders pending the rebalance pass. Tile gates from §8.1
-  // (Quarry → stone tile, Well → water tile, Pump Jack → oil_well, etc.)
-  // are DEFERRED — these buildings run on any in-island tile.
+  // are placeholders pending the rebalance pass. §8.1 tile-gating is now
+  // live for all extractors.
 
   // T1 extraction (§8.1 raws).
   quarry: {
@@ -1245,8 +1240,7 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0xa8a094, // pale stone-grey
     stroke: 0x403828,
     power: { consumes: 30 },
-    // §8.1: requires `stone` tile. Tile gating DEFERRED.
-    // §14 placeholder — tune in Appendix A.
+    requiredTile: ['stone'],
     placementCost: { stone: 25, wood: 15 },
     glyph: '▣',
   },
@@ -1260,8 +1254,7 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0xe0c878, // dune-tan
     stroke: 0x6a5028,
     power: { consumes: 20 },
-    // §8.1: requires `sand` tile. Tile gating DEFERRED.
-    // §14 placeholder — tune in Appendix A.
+    requiredTile: ['sand'],
     placementCost: { stone: 25, wood: 15 },
     glyph: '▣',
   },
@@ -1275,8 +1268,7 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0x4a8ac0, // freshwater blue
     stroke: 0x1a3a60,
     power: { consumes: 10 },
-    // §8.1: requires `water` tile (freshwater). Tile gating DEFERRED.
-    // §14 placeholder — tune in Appendix A.
+    requiredTile: ['water'],
     placementCost: { stone: 10, wood: 5 },
     glyph: '◌',
   },
@@ -1290,9 +1282,7 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0x2a7090, // brine-teal
     stroke: 0x0a2030,
     power: { consumes: 15 },
-    // §8.1 / §3.2: spec restricts to Coast biome / `water` tile.
-    // Biome+tile gating DEFERRED.
-    // §14 placeholder — tune in Appendix A.
+    requiredTile: ['water'],
     placementCost: { stone: 15, wood: 5 },
     glyph: '⛽',
   },
@@ -1306,8 +1296,7 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0xb0b8d0, // pale silica-grey
     stroke: 0x484858,
     power: { consumes: 30 },
-    // §8.1: spec calls for a `quartz` outcrop tile. Tile gating DEFERRED.
-    // §14 placeholder — tune in Appendix A.
+    requiredTile: ['stone'],
     placementCost: { stone: 30, wood: 15 },
     glyph: '⛏',
   },
@@ -1398,8 +1387,7 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0x2a1a14, // crude-oil black-brown
     stroke: 0x080404,
     power: { consumes: 80 },
-    // §8.1: requires `oil_well` terrain tile. Tile gating DEFERRED.
-    // §14 placeholder — tune in Appendix A.
+    requiredTile: ['oil_well'],
     placementCost: { stone: 80, iron_ingot: 30, wood: 10 },
     glyph: '⛽',
   },
@@ -1413,8 +1401,7 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0x707a40, // sulfur-yellow-grey
     stroke: 0x2a2810,
     power: { consumes: 70 },
-    // §8.1: requires `gas_seep` terrain tile. Tile gating DEFERRED.
-    // §14 placeholder — tune in Appendix A.
+    requiredTile: ['gas_seep'],
     placementCost: { stone: 80, iron_ingot: 30, wood: 10 },
     glyph: '◇',
   },
@@ -1586,10 +1573,7 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0xa07050, // rig-rust brown
     stroke: 0x401810,
     power: { consumes: 400 },
-    // §8.1 catalog: spec calls for `helium_vent` / deep-extraction tile.
-    // Tile gating DEFERRED — the rig closes the helium_3 producer gap
-    // without a terrain prerequisite.
-    // §14 placeholder — tune in Appendix A.
+    requiredTile: ['helium_vent'],
     placementCost: { steel: 150, microchip: 50, stone: 30 },
     glyph: '⛏',
   },

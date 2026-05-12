@@ -17,13 +17,15 @@ export type TerrainKind =
   | 'ore'
   | 'coal'
   | 'water'
-  // Step 8 biome palette additions. None of these tiles drive recipes yet
-  // (Logger / Wind Turbine / Cryo Generator / Geothermal Vent are deferred);
-  // they exist purely so non-Plains biomes look biome-distinct.
+  // Step 8 biome palette additions.
   | 'tree'
   | 'sand'
   | 'ice'
-  | 'magma_vent';
+  | 'magma_vent'
+  // Step 4A — new terrain kinds for extractors
+  | 'oil_well'
+  | 'gas_seep'
+  | 'helium_vent';
 
 export interface Tile {
   /** Tile grid x. The tile occupies the unit square [x, x+1) × [y, y+1). */
@@ -46,6 +48,10 @@ const TERRAIN_COLOR: Readonly<Record<TerrainKind, number>> = {
   sand: 0xc4a062,        // tan
   ice: 0xc8e6f0,         // pale blue
   magma_vent: 0xd04020,  // orange-red
+  // Step 4A — new terrain colors
+  oil_well: 0x1a0f05,     // near-black crude
+  gas_seep: 0x8a9a4a,     // sulfur-green
+  helium_vent: 0xc0c8e0,  // pale helium-grey
 };
 
 /**

@@ -36,6 +36,7 @@ import type { PlacedBuilding } from './buildings.js';
 import { nextPhaseBoundaryMs, solarMultiplier } from './daynight.js';
 import { resolveHeatAssignments, type HeatAssignments } from './heat.js';
 import type { TerrainKind } from './island.js';
+import { footprintTiles } from './placement.js';
 import {
   accrueOperatingTime,
   maintenanceFactor,
@@ -425,6 +426,23 @@ export function computeRates(
     if (def.requiresHeat && heat.hasHeat.get(b.id) !== true) {
       tentative.push({ building: b, recipe, baseRate: 0, buffStack });
       continue;
+    }
+    // §8.1 tile-gating stall: if any footprint tile is outside the allowed
+    // set, we zero baseRate so effectiveRate becomes 0 in pass 4. Power/heat
+    // draw is preserved by pass 3's existing active-building check.
+    if (def.requiredTile && def.requiredTile.length > 0 && terrainAt) {
+      let tileOk = true;
+      for (const t of footprintTiles(def.width, def.height, b.x, b.y, (b.rotation ?? 0) as 0 | 1 | 2 | 3)) {
+        const k = terrainAt(t.x, t.y);
+        if (!def.requiredTile.includes(k)) {
+          tileOk = false;
+          break;
+        }
+      }
+      if (!tileOk) {
+        tentative.push({ building: b, recipe, baseRate: 0, buffStack });
+        continue;
+      }
     }
     const oa = outputAvail(state, recipe);
     if (oa === 0) {

@@ -831,8 +831,8 @@ export const RECIPES: Partial<Record<RecipeId, Recipe>> = {
     inputs: {},
     outputs: { helium_3: 1 },
     category: 'extraction',
-    // §8.1: Drilling Rig spec calls for `helium_vent` / deep terrain
-    // tile. Tile gating DEFERRED — runs anywhere on T3+ islands.
+    // §8.1: Drilling Rig requires `helium_vent` tile. Tile gating is
+    // implemented — `validatePlacement` enforces this via `requiredTile`.
     // Closes the helium_3 producer gap: previously seeded as 50 on
     // forest-ne but with no replenishment.
   },

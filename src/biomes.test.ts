@@ -21,7 +21,7 @@ import {
   terrainAtForBiome,
   type ModifierId,
 } from './biomes.js';
-import { defaultTerrainAt, tileInscribedInEllipse } from './island.js';
+import { defaultTerrainAt, tileInscribedInEllipse, type TerrainKind } from './island.js';
 import type { Biome } from './world.js';
 
 const ALL_BIOMES: ReadonlyArray<Biome> = [
@@ -348,5 +348,25 @@ describe('terrainAtForBiome', () => {
       }
     }
     expect(differences).toBeGreaterThan(50);
+  });
+
+  it('includes new terrain kinds (oil_well, gas_seep, helium_vent) in appropriate biomes', () => {
+    // Sample many tiles across multiple island ids to hit rareTerrain
+    // entries. We only assert that each new kind shows up SOMEWHERE
+    // in its expected biome, not at a specific coordinate.
+    const findAny = (biome: Biome, kind: TerrainKind) => {
+      for (let y = -12; y <= 12; y++) {
+        for (let x = -12; x <= 12; x++) {
+          if (terrainAtForBiome(biome, `scan-${kind}`, x, y) === kind) return true;
+        }
+      }
+      return false;
+    };
+    expect(findAny('desert', 'oil_well')).toBe(true);
+    expect(findAny('coast', 'oil_well')).toBe(true);
+    expect(findAny('coast', 'gas_seep')).toBe(true);
+    expect(findAny('volcanic', 'gas_seep')).toBe(true);
+    expect(findAny('volcanic', 'helium_vent')).toBe(true);
+    expect(findAny('arctic', 'helium_vent')).toBe(true);
   });
 });
