@@ -15,10 +15,9 @@
 //   - Auto-routing at the 10-island NC milestone (§9.6 Auto-Patronage,
 //     §12.7) DEFERRED.
 //   - Coastal-tile placement check on Shipyard DEFERRED.
-//   - Foundation Kit "starter inventory grace cap" + decomposition on
-//     arrival (§12.4) DEFERRED — step 12 consumes the kit on dispatch
-//     and grants no starter inventory. The colony arrives with a Cargo
-//     Dock / Helipad and the standard fresh-island state.
+//   - Foundation Kit "starter inventory grace cap" (§12.4) remains
+//     DEFERRED — step 12 consumes the kit on dispatch. Decomposition
+//     into raw recipe inputs on arrival is implemented in tickVehicles.
 //
 // Fuel grade matches the launching island's tier per §11.7 — resolved at
 // dispatch via `fuelForTier(tierForLevel(originState.level))` and stored on
