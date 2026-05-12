@@ -88,13 +88,13 @@ describe('MODIFIER_DEFS catalog', () => {
       expect(def.displayName.length).toBeGreaterThan(0);
     }
   });
-  it('marks the four step-8 placeholders as placeholder=true', () => {
-    expect(MODIFIER_DEFS.high_wind.placeholder).toBe(true);
+  it('marks the three step-8 placeholders as placeholder=true', () => {
     expect(MODIFIER_DEFS.geothermal_active.placeholder).toBe(true);
     expect(MODIFIER_DEFS.aetheric_anomaly.placeholder).toBe(true);
     expect(MODIFIER_DEFS.frozen_core.placeholder).toBe(true);
   });
-  it('marks the four wired modifiers as placeholder=false', () => {
+  it('marks the five wired modifiers as placeholder=false', () => {
+    expect(MODIFIER_DEFS.high_wind.placeholder).toBe(false);
     expect(MODIFIER_DEFS.mineral_rich.placeholder).toBe(false);
     expect(MODIFIER_DEFS.fertile.placeholder).toBe(false);
     expect(MODIFIER_DEFS.cursed_storms.placeholder).toBe(false);
@@ -252,7 +252,6 @@ describe('effectiveModifierMultipliers', () => {
 
   it('placeholder modifiers contribute no multiplier change', () => {
     const placeholders: ModifierId[] = [
-      'high_wind',
       'geothermal_active',
       'aetheric_anomaly',
       'frozen_core',
@@ -260,6 +259,14 @@ describe('effectiveModifierMultipliers', () => {
     const m = effectiveModifierMultipliers(placeholders);
     expect(m.globalRecipeRate).toBe(1);
     for (const c of Object.values(m.recipeRateByCategory)) expect(c).toBe(1);
+    expect(m.outputVariance).toBe(false);
+  });
+
+  it('high_wind sets outputVariance=true and leaves rates unchanged', () => {
+    const m = effectiveModifierMultipliers(['high_wind']);
+    expect(m.globalRecipeRate).toBe(1);
+    for (const c of Object.values(m.recipeRateByCategory)) expect(c).toBe(1);
+    expect(m.outputVariance).toBe(true);
   });
 
   it('mineral_rich + fertile compose multiplicatively on extraction (1.25 × 1.5)', () => {
@@ -278,6 +285,7 @@ describe('effectiveModifierMultipliers', () => {
     for (const c of Object.values(IDENTITY_MODIFIER_MULTIPLIERS.recipeRateByCategory)) {
       expect(c).toBe(1);
     }
+    expect(IDENTITY_MODIFIER_MULTIPLIERS.outputVariance).toBe(false);
   });
 });
 

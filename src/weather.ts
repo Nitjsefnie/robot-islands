@@ -1,3 +1,4 @@
+import { dayPhaseName } from './daynight.js';
 import { makeSeededRng } from './rng.js';
 import type { Biome, WorldState } from './world.js';
 
@@ -131,7 +132,19 @@ export function weather(
   biome?: Biome,
 ): WeatherCell {
   const rng = makeSeededRng(`${seed}_weather_${cx}_${cy}`);
-  const weights = biome ? biomeWeatherWeights(biome) : BASE_WEIGHTS;
+  let weights = biome ? biomeWeatherWeights(biome) : BASE_WEIGHTS;
+  // §2.7: severe-storm formation rate increases ~25% during Night and Dawn.
+  const phase = dayPhaseName(nowMs);
+  const boost = phase === 'night' || phase === 'dawn' ? 1.25 : 1;
+  if (boost !== 1) {
+    const mutable: WeightEntry[] = weights.map((e) => ({ state: e.state, weight: e.weight }));
+    for (const e of mutable) {
+      if (e.state === 'severe_storm' || e.state === 'catastrophic') {
+        e.weight *= boost;
+      }
+    }
+    weights = mutable;
+  }
   let t = 0;
   const MAX_ITERATIONS = 1_000_000;
   for (let i = 0; i < MAX_ITERATIONS; i++) {

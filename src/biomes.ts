@@ -168,7 +168,7 @@ export const MODIFIER_DEFS: Readonly<Record<ModifierId, ModifierDef>> = {
     description: 'Wind power +50%, but all output has ±20% random variance.',
     weight: 10,
     biomeRestriction: [],
-    placeholder: true, // Wind Turbine and variance machinery not built yet.
+    placeholder: false, // Variance machinery wired; wind-power +50% deferred.
     category: 'warning',
   },
   geothermal_active: {
@@ -270,12 +270,14 @@ export interface ModifierMultipliers {
   readonly globalRecipeRate: number;
   /** Per-category multiplier composed on top of `globalRecipeRate`. */
   readonly recipeRateByCategory: Readonly<Record<RecipeCategory, number>>;
+  /** If true, apply ±20% variance to all recipe outputs. */
+  readonly outputVariance: boolean;
 }
 
 function blankModifierMultipliers(): ModifierMultipliers {
   const recipeRateByCategory = {} as Record<RecipeCategory, number>;
   for (const c of ALL_RECIPE_CATEGORIES) recipeRateByCategory[c] = 1;
-  return { globalRecipeRate: 1, recipeRateByCategory };
+  return { globalRecipeRate: 1, recipeRateByCategory, outputVariance: false };
 }
 
 /** Identity bundle, exported so callers (`computeRates`, tests) have a
@@ -292,6 +294,7 @@ export const IDENTITY_MODIFIER_MULTIPLIERS: ModifierMultipliers = blankModifierM
  *                    (composes with mineral_rich; both target extraction)
  *   - cursed_storms → globalRecipeRate × 0.90
  *   - stable        → no-op (recorded for future event-system gates)
+ *   - high_wind     → outputVariance = true
  *
  * Placeholder modifiers contribute nothing.
  */
@@ -302,6 +305,7 @@ export function effectiveModifierMultipliers(
   // Mutable view — readonly is the consumer contract, not the local builder.
   const cat = out.recipeRateByCategory as Record<RecipeCategory, number>;
   let global = out.globalRecipeRate;
+  let outputVariance = out.outputVariance;
   for (const id of modifiers) {
     switch (id) {
       case 'mineral_rich':
@@ -313,9 +317,11 @@ export function effectiveModifierMultipliers(
       case 'cursed_storms':
         global *= 0.9;
         break;
-      // Stable + placeholders: no economic multiplier change.
-      case 'stable':
       case 'high_wind':
+        outputVariance = true;
+        break;
+      // Stable + remaining placeholders: no economic multiplier change.
+      case 'stable':
       case 'geothermal_active':
       case 'aetheric_anomaly':
       case 'frozen_core':
@@ -329,7 +335,7 @@ export function effectiveModifierMultipliers(
       }
     }
   }
-  return { globalRecipeRate: global, recipeRateByCategory: cat };
+  return { globalRecipeRate: global, recipeRateByCategory: cat, outputVariance };
 }
 
 // ---------------------------------------------------------------------------

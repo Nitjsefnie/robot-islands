@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { DAY_DURATION_MS } from './daynight.js';
 import {
   weather,
   biomeWeatherWeights,
@@ -74,6 +75,58 @@ describe('biomeWeatherWeights', () => {
       }
     }
     expect(volcanicStorms).toBeGreaterThan(plainsStorms);
+  });
+});
+
+describe('§2.7 — night/dawn severe-storm boost', () => {
+  // dayPhaseName(0) → 'day' (phase 0.375).
+  // night boundary at phase 0.75 → nowMs = 0.375 * DAY_DURATION_MS.
+  // dawn boundary at phase 0.0 → nowMs = 0.625 * DAY_DURATION_MS.
+  const dayTime = 0;
+  const nightTime = Math.floor(0.375 * DAY_DURATION_MS);
+  const dawnTime = Math.floor(0.625 * DAY_DURATION_MS);
+
+  it('night boosts severe_storm/catastrophic frequency over a large sample', () => {
+    let daySevere = 0;
+    let nightSevere = 0;
+    const samples = 800;
+    for (let x = 0; x < samples; x++) {
+      const d = weather('seed', x, 0, dayTime, 'plains');
+      const n = weather('seed', x, 0, nightTime, 'plains');
+      if (d.state === 'severe_storm' || d.state === 'catastrophic') daySevere++;
+      if (n.state === 'severe_storm' || n.state === 'catastrophic') nightSevere++;
+    }
+    expect(nightSevere).toBeGreaterThan(daySevere);
+  });
+
+  it('dawn boosts severe_storm/catastrophic frequency over a large sample', () => {
+    let daySevere = 0;
+    let dawnSevere = 0;
+    const samples = 800;
+    for (let x = 0; x < samples; x++) {
+      const d = weather('seed', x, 0, dayTime, 'plains');
+      const a = weather('seed', x, 0, dawnTime, 'plains');
+      if (d.state === 'severe_storm' || d.state === 'catastrophic') daySevere++;
+      if (a.state === 'severe_storm' || a.state === 'catastrophic') dawnSevere++;
+    }
+    expect(dawnSevere).toBeGreaterThan(daySevere);
+  });
+
+  it('day and dusk do not boost severe weather', () => {
+    // dusk boundary at phase 0.5 → nowMs = 0.125 * DAY_DURATION_MS.
+    const duskTime = Math.floor(0.125 * DAY_DURATION_MS);
+    let daySevere = 0;
+    let duskSevere = 0;
+    const samples = 800;
+    for (let x = 0; x < samples; x++) {
+      const d = weather('seed', x, 0, dayTime, 'plains');
+      const u = weather('seed', x, 0, duskTime, 'plains');
+      if (d.state === 'severe_storm' || d.state === 'catastrophic') daySevere++;
+      if (u.state === 'severe_storm' || u.state === 'catastrophic') duskSevere++;
+    }
+    // Dusk should not be systematically higher than day; we only assert it
+    // is not greater (it may be equal or lower by chance).
+    expect(duskSevere).toBeLessThanOrEqual(daySevere + 50);
   });
 });
 

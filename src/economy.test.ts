@@ -735,14 +735,31 @@ describe('modifier integration in computeRates / advanceIsland (§3.5)', () => {
     expect(state.inventory.bolt).toBeCloseTo(0.9, 9);
   });
 
-  it('placeholder modifier (high_wind) does not change rates', () => {
-    // Sanity check: placeholders contribute 1× and the result is identical
-    // to the no-modifier path. (rebalanced step #19: use 100s)
-    const stateA = makeState({ buildings: [MINE], inventory: blankInventory() });
-    const stateB = makeState({ buildings: [MINE], inventory: blankInventory() });
-    advanceIsland(stateA, 100_000, { defs: POWER_FREE });
-    advanceIsland(stateB, 100_000, { modifierMul: effectiveModifierMultipliers(['high_wind']), defs: POWER_FREE });
-    expect(stateA.inventory.iron_ore).toBeCloseTo(stateB.inventory.iron_ore, 12);
+  it('high_wind applies ±20% variance to recipe rates', () => {
+    // Base Mine rate = 0.02/s. With high_wind the effective rate must be
+    // within [0.016, 0.024] for any deterministic RNG draw.
+    const state = makeState({ buildings: [MINE], inventory: blankInventory() });
+    const mul = effectiveModifierMultipliers(['high_wind']);
+    const { byBuilding } = computeRates(state, { modifierMul: mul, defs: POWER_FREE }, 0);
+    const rate = byBuilding[0]!.effectiveRate;
+    expect(rate).toBeGreaterThanOrEqual(0.02 * 0.8);
+    expect(rate).toBeLessThanOrEqual(0.02 * 1.2);
+  });
+
+  it('high_wind variance is deterministic for the same (islandId, second)', () => {
+    const state = makeState({ buildings: [MINE], inventory: blankInventory() });
+    const mul = effectiveModifierMultipliers(['high_wind']);
+    const a = computeRates(state, { modifierMul: mul, defs: POWER_FREE }, 0);
+    const b = computeRates(state, { modifierMul: mul, defs: POWER_FREE }, 0);
+    expect(a.byBuilding[0]!.effectiveRate).toBeCloseTo(b.byBuilding[0]!.effectiveRate, 12);
+  });
+
+  it('high_wind variance does NOT affect power production', () => {
+    // Solar panel produces 50W regardless of high_wind variance.
+    const state = makeState({ buildings: [SOLAR], inventory: blankInventory() });
+    const mul = effectiveModifierMultipliers(['high_wind']);
+    const { power } = computeRates(state, { modifierMul: mul }, 0);
+    expect(power.produced).toBe(50);
   });
 
   it('computeRates with modifierMul matches advanceIsland integration', () => {

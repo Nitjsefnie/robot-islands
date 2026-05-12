@@ -43,6 +43,7 @@ import {
   nextMaintenanceBoundaryMs,
   tryAutoMaintain,
 } from './maintenance.js';
+import { makeSeededRng } from './rng.js';
 import { resolveRecipe, XP_WEIGHT, type Recipe, type ResourceId } from './recipes.js';
 import { effectiveSkillMultipliers, type NodeId, type SubPathId } from './skilltree.js';
 import {
@@ -505,7 +506,12 @@ export function computeRates(
         tentative.push({ building: b, recipe: syntheticRecipe, baseRate: 0, buffStack: 1 });
         continue;
       }
-      const baseRate = 1 / GENESIS_CYCLE_SEC;
+      let baseRate = 1 / GENESIS_CYCLE_SEC;
+      if (modifierMul.outputVariance) {
+        const varianceRng = makeSeededRng(`${state.id}_variance_${Math.floor((nowMs ?? state.lastTick) / 1000)}`);
+        const varianceFactor = 0.8 + varianceRng() * 0.4; // ±20%
+        baseRate *= varianceFactor;
+      }
       tentative.push({ building: b, recipe: syntheticRecipe, baseRate, buffStack: 1 });
       tentSupply[target] = (tentSupply[target] ?? 0) + baseRate;
       continue;
@@ -584,7 +590,12 @@ export function computeRates(
       (specMul.recipeRateByCategory[recipe.category] ?? 1) *
       specMul.globalRecipeRate *
       ncBuff;
-    const baseRate = (1 / recipe.cycleSec) * buffStack * rateMul;
+    let baseRate = (1 / recipe.cycleSec) * buffStack * rateMul;
+    if (modifierMul.outputVariance) {
+      const varianceRng = makeSeededRng(`${state.id}_variance_${Math.floor((nowMs ?? state.lastTick) / 1000)}`);
+      const varianceFactor = 0.8 + varianceRng() * 0.4; // ±20%
+      baseRate *= varianceFactor;
+    }
     tentative.push({ building: b, recipe, baseRate, buffStack });
     for (const [r, yld] of Object.entries(recipe.outputs)) {
       const id = r as ResourceId;
