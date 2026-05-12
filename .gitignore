@@ -4,3 +4,4 @@ dist/
 *.log
 *.tsbuildinfo
 .claude/scheduled_tasks.lock
+.worktrees/
