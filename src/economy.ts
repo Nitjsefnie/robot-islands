@@ -709,10 +709,10 @@ function applyRates(state: IslandState, net: Record<ResourceId, number>, dtSec: 
  * funnel credits continue to drain even after the island crosses the
  * tier cap (only further accumulation stops, per §10 literal reading).
  */
-function accrueXp(
+export function accrueXp(
   state: IslandState,
-  production: Record<ResourceId, number>,
-  consumption: Record<ResourceId, number>,
+  production: Partial<Record<ResourceId, number>>,
+  consumption: Partial<Record<ResourceId, number>>,
   dtSec: number,
   xpMul: number = 1,
 ): void {
@@ -727,17 +727,19 @@ function accrueXp(
   // balance holds units of XP (already multiplied by xp_weight × bonus at
   // delivery time), so each consumed unit costs `xp_weight × bonus` of
   // credit and returns the same amount as XP.
-  // FIXME(§10.1): drain treats any consumption of `r` as if it came from
-  // imports. Real spec requires per-batch provenance tracking — when local
-  // production also consumes `r`, this overcounts the funnel bonus. Invisible
-  // in step 7 because the demo has only one consumer per resource per island.
+  // §10.1 funnel provenance: we approximate per-batch tracking by draining
+  // only net consumption (local production shields local use). True batch
+  // provenance is deferred because the current model has no inventory lots.
   for (const r of Object.keys(consumption) as ResourceId[]) {
-    const rate = consumption[r] ?? 0;
-    if (rate <= 0) continue;
-    const consumed = rate * dtSec;
+    const consRate = consumption[r] ?? 0;
+    if (consRate <= 0) continue;
+    const prodRate = production[r] ?? 0;
+    const netRate = Math.max(0, consRate - prodRate);
+    if (netRate <= 0) continue;
+    const netConsumed = netRate * dtSec;
     const pending = state.funnelPending[r] ?? 0;
     if (pending <= 0) continue;
-    const want = consumed * (XP_WEIGHT[r] ?? 0) * FUNNELING_BONUS_PERCENT_FOR_DRAIN;
+    const want = netConsumed * (XP_WEIGHT[r] ?? 0) * FUNNELING_BONUS_PERCENT_FOR_DRAIN;
     const drawn = Math.min(want, pending);
     state.funnelPending[r] = pending - drawn;
     gain += drawn;

@@ -26,6 +26,7 @@ import {
 } from './building-defs.js';
 import type { PlacedBuilding } from './buildings.js';
 import {
+  accrueXp,
   advanceIsland,
   computeRates,
   xpForLevel,
@@ -33,7 +34,7 @@ import {
   type IslandState,
 } from './economy.js';
 import { placeBuilding } from './placement.js';
-import { ALL_RESOURCES, type ResourceId } from './recipes.js';
+import { ALL_RESOURCES, XP_WEIGHT, type ResourceId } from './recipes.js';
 import { effectiveSpecializationMultipliers } from './specialization.js';
 import { RESOURCE_STORAGE_CATEGORY } from './storage-categories.js';
 import { aggregateStorageCaps } from './world.js';
@@ -1697,5 +1698,38 @@ describe('day-night solar modulation (§2.7)', () => {
     //   [21h, 24h) Day rate 0.02 → 0.02 × 10800 = 216
     // Total 972.
     expect(state.inventory.iron_ore).toBeCloseTo(972, 3);
+  });
+});
+
+
+describe('accrueXp funnel provenance §10.1', () => {
+  it('does not drain funnel for consumption covered by local production', () => {
+    const state = makeState({ buildings: [] });
+    // Seed funnel credit for iron_ore.
+    state.funnelPending.iron_ore = 100;
+    // Local production of iron_ore = 5 / sec.
+    // Local consumption of iron_ore = 3 / sec (e.g. smelter).
+    // Net consumption is negative (production > consumption), so NO funnel
+    // drain should occur.
+    accrueXp(state, { iron_ore: 5 }, { iron_ore: 3 }, 1);
+    expect(state.funnelPending.iron_ore).toBe(100);
+    expect(state.xp).toBeGreaterThan(0); // production XP still accrues
+  });
+
+  it('drains funnel only for net imported consumption', () => {
+    const state = makeState({ buildings: [] });
+    state.funnelPending.iron_ore = 100;
+    // Local production = 2 / sec, consumption = 5 / sec.
+    // Net consumption = 3 / sec → drain 3 * XP_WEIGHT.iron_ore * 0.5.
+    accrueXp(state, { iron_ore: 2 }, { iron_ore: 5 }, 1);
+    const expectedDrain = 3 * XP_WEIGHT.iron_ore * 0.5;
+    expect(state.funnelPending.iron_ore).toBeCloseTo(100 - expectedDrain, 6);
+  });
+
+  it('does not drain funnel when production exactly equals consumption', () => {
+    const state = makeState({ buildings: [] });
+    state.funnelPending.iron_ore = 100;
+    accrueXp(state, { iron_ore: 5 }, { iron_ore: 5 }, 1);
+    expect(state.funnelPending.iron_ore).toBe(100);
   });
 });
