@@ -449,6 +449,7 @@ export function computeRates(
   /** Gross production by resource from all tentatively-running buildings. */
   const tentSupply: Record<ResourceId, number> = {} as Record<ResourceId, number>;
   for (const b of state.buildings) {
+    if (b.invalid) continue;
     // §13.3 Genesis Chamber — free creation of a player-chosen T1-T4 resource.
     // Handled before the normal recipe path because genesis_chamber has no
     // static RECIPES entry.
@@ -622,6 +623,7 @@ export function computeRates(
   let powerProduced = 0;
   let powerConsumed = 0;
   for (const b of state.buildings) {
+    if (b.invalid) continue;
     const def = defs[b.defId];
     // §13.3 Genesis Chamber power is handled below with tier-based draw.
     if (b.defId === 'genesis_chamber') continue;
@@ -661,6 +663,7 @@ export function computeRates(
   }
   // §13.3 Genesis Chamber tier-based power draw (converted kW → W).
   for (const b of state.buildings) {
+    if (b.invalid) continue;
     if (b.defId !== 'genesis_chamber') continue;
     if (!isBuildingActive(b)) continue;
     if (!state.genesisTarget) continue;

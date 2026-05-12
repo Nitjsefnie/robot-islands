@@ -297,6 +297,18 @@ describe('computeRates', () => {
     const { byBuilding } = computeRates(state, { defs: POWER_FREE });
     expect(byBuilding[0]?.effectiveRate).toBe(0);
   });
+
+  it('skips invalid buildings entirely', () => {
+    const mineInvalid: PlacedBuilding = { id: 'b-mine', defId: 'mine', x: 0, y: 0, invalid: true };
+    const state = makeState({
+      buildings: [mineInvalid],
+      inventory: blankInventory(),
+    });
+    const { production, net, byBuilding } = computeRates(state, { defs: POWER_FREE });
+    expect(production.iron_ore ?? 0).toBe(0);
+    expect(net.iron_ore ?? 0).toBe(0);
+    expect(byBuilding.length).toBe(0);
+  });
 });
 
 // -----------------------------------------------------------------------

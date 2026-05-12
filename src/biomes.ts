@@ -31,6 +31,7 @@ import type { Biome } from './world.js';
 import { defaultTerrainAt, type TerrainKind } from './island.js';
 import type { RecipeCategory } from './recipes.js';
 import { ALL_RECIPE_CATEGORIES } from './recipes.js';
+import { makeSeededRng } from './rng.js';
 
 // ---------------------------------------------------------------------------
 // Biome catalog
@@ -155,6 +156,9 @@ export interface ModifierDef {
   readonly placeholder: boolean;
   /** UI category for chip colour. */
   readonly category: ModifierCategory;
+  /** True for modifiers that can only appear on natural (non-artificial) islands
+   *  and are excluded from Reality Forge rerolls. */
+  readonly naturalOnly?: boolean;
 }
 
 export const MODIFIER_DEFS: Readonly<Record<ModifierId, ModifierDef>> = {
@@ -221,6 +225,7 @@ export const MODIFIER_DEFS: Readonly<Record<ModifierId, ModifierDef>> = {
     biomeRestriction: [],
     placeholder: true, // T5 extraction not implemented.
     category: 'exotic',
+    naturalOnly: true,
   },
   frozen_core: {
     id: 'frozen_core',
@@ -230,6 +235,7 @@ export const MODIFIER_DEFS: Readonly<Record<ModifierId, ModifierDef>> = {
     biomeRestriction: ['arctic'],
     placeholder: true, // Cryo recipes not implemented.
     category: 'exotic',
+    naturalOnly: true,
   },
   fertile: {
     id: 'fertile',
@@ -469,6 +475,16 @@ function tileHash01(islandId: string, x: number, y: number): number {
  * + biome. The function does NOT take an IslandSpec to keep the dependency
  * arrow `world.ts → biomes.ts` (not the other way).
  */
+/**
+ * Reroll modifiers for a biome change via Reality Forge. Excludes natural-only
+ * modifiers (aetheric_anomaly, frozen_core) per §13.3.
+ */
+export function rerollModifiers(seed: string, biome: Biome): ModifierId[] {
+  const rng = makeSeededRng(`${seed}_reroll_${biome}_${Date.now()}`);
+  const result = rollModifiers(seed, biome, rng);
+  return result.filter((id) => !MODIFIER_DEFS[id].naturalOnly);
+}
+
 export function terrainAtForBiome(
   biome: Biome,
   islandId: string,

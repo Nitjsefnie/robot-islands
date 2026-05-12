@@ -22,19 +22,20 @@
 
 import { Container } from 'pixi.js';
 
+import { rerollModifiers, terrainAtForBiome } from './biomes.js';
 import type { ModifierId } from './biomes.js';
-import { terrainAtForBiome } from './biomes.js';
 import { BUILDING_DEFS } from './building-defs.js';
 import type { PlacedBuilding } from './buildings.js';
 import { renderBuildings } from './buildings.js';
 import { islandCells } from './discovery.js';
 import type { IslandState } from './economy.js';
-import type { Tile, TerrainKind } from './island.js';
+import { regenerateTerrain, type TerrainKind, type Tile } from './island.js';
 import {
   computeIslandTiles,
   renderIslandTiles,
   TILE_PX,
 } from './island.js';
+import { footprintTiles } from './shape-mask.js';
 import { ALL_RESOURCES, type ResourceId } from './recipes.js';
 import type { Route } from './routes.js';
 import { RESOURCE_STORAGE_CATEGORY } from './storage-categories.js';
@@ -118,7 +119,7 @@ export interface IslandSpec {
    *  UI surface that shows the island to the player; `id` remains the
    *  internal lookup key (routes, save files, log lines, etc.). */
   name: string;
-  readonly biome: Biome;
+  biome: Biome;
   /** Centre of the island in world-tile coordinates. */
   readonly cx: number;
   readonly cy: number;
@@ -149,7 +150,7 @@ export interface IslandSpec {
   /** Active modifiers on this island per §3.5. Step 8 hard-codes the demo
    *  set on `DEMO_ISLANDS`; future steps roll from `rollModifiers` at
    *  generation. Empty array means no modifiers active. */
-  readonly modifiers: ReadonlyArray<ModifierId>;
+  modifiers: ReadonlyArray<ModifierId>;
   /** §2.5: islands built via Platform Constructor are flagged so future
    *  systems can deny natural-only content (rare-biome modifiers per §3.5,
    *  biome-locked uniques per §9.5). For step 11 the flag is metadata only —
@@ -267,6 +268,46 @@ export function renameIsland(spec: IslandSpec, name: string): RenameIslandResult
   if (!v.ok) return { ok: false, reason: v.reason };
   spec.name = v.name;
   return { ok: true };
+}
+
+/**
+ * §13.3 Reality Forge — reassign an island's biome, regenerate terrain,
+ * reroll modifiers (excluding natural-only ones), and invalidate buildings
+ * whose footprint no longer matches the new terrain.
+ */
+export function useRealityForge(
+  world: WorldState,
+  islandId: string,
+  targetBiome: Biome,
+  _nowMs: number,
+): void {
+  const spec = world.islands.find((i) => i.id === islandId);
+  if (!spec) return;
+
+  // Regenerate terrain.
+  regenerateTerrain(spec, targetBiome, (x, y) =>
+    terrainAtForBiome(targetBiome, spec.id, x, y),
+  );
+
+  // Reroll modifiers — natural-only ones are excluded.
+  spec.modifiers = rerollModifiers(WORLD_SEED, targetBiome);
+
+  // Invalidate buildings that no longer match terrain.
+  for (const b of spec.buildings) {
+    const def = BUILDING_DEFS[b.defId];
+    const tiles = footprintTiles(def.footprint, b.x, b.y, (b.rotation ?? 0) as 0 | 1 | 2 | 3);
+    const stillValid = tiles.every((t) => {
+      const terrain = spec.terrainAt?.(t.x, t.y);
+      if (!terrain) return false;
+      if (def.requiredTile && def.requiredTile.length > 0 && !def.requiredTile.includes(terrain)) {
+        return false;
+      }
+      return true;
+    });
+    if (!stillValid) {
+      b.invalid = true;
+    }
+  }
 }
 
 /**

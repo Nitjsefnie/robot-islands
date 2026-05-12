@@ -17,6 +17,7 @@ import {
   effectiveModifierMultipliers,
   IDENTITY_MODIFIER_MULTIPLIERS,
   MODIFIER_DEFS,
+  rerollModifiers,
   rollModifiers,
   terrainAtForBiome,
   type ModifierId,
@@ -368,5 +369,30 @@ describe('terrainAtForBiome', () => {
     expect(findAny('volcanic', 'gas_seep')).toBe(true);
     expect(findAny('volcanic', 'helium_vent')).toBe(true);
     expect(findAny('arctic', 'helium_vent')).toBe(true);
+  });
+});
+
+describe('rerollModifiers', () => {
+  it('never includes natural-only modifiers', () => {
+    for (let i = 0; i < 200; i++) {
+      const mods = rerollModifiers('test', 'plains');
+      expect(mods.includes('aetheric_anomaly')).toBe(false);
+      expect(mods.includes('frozen_core')).toBe(false);
+    }
+  });
+
+  it('can still return normal modifiers', () => {
+    // Over many rolls on a biome that supports many modifiers, we should
+    // see at least one non-empty result. Vary the seed so the rng isn't
+    // identical across iterations that land in the same millisecond.
+    let sawNonEmpty = false;
+    for (let i = 0; i < 1000; i++) {
+      const mods = rerollModifiers(`test-${i}`, 'plains');
+      if (mods.length > 0) {
+        sawNonEmpty = true;
+        break;
+      }
+    }
+    expect(sawNonEmpty).toBe(true);
   });
 });

@@ -62,6 +62,8 @@ export interface PlacedBuilding {
    *  honoured wherever `maintenanceFactor` / `tryAutoMaintain` read it, but
    *  nothing in the catalog turns it on yet. */
   readonly eternalServitor?: true;
+  /** True if the building's footprint no longer matches terrain after biome change. */
+  invalid?: boolean;
 }
 
 // §3.7 cleanup: the pre-built home layout (Solar/Workshop/Mines/Dronepad/

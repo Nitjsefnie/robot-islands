@@ -10,6 +10,7 @@
 // world origin, with a hardcoded deterministic terrain assignment.
 
 import { Container, Graphics } from 'pixi.js';
+import type { Biome } from './world.js';
 
 export type TerrainKind =
   | 'grass'
@@ -182,6 +183,20 @@ export function computeIslandTiles(
  * anything — they just need to look varied and live on tiles that exist within
  * a radius-14 disk inscribed grid.
  */
+/**
+ * Mutate an island spec's biome and terrain function. The caller supplies the
+ * new `terrainAt` closure so this module avoids a runtime import cycle with
+ * `biomes.ts` (which already depends on `island.ts`).
+ */
+export function regenerateTerrain(
+  spec: { biome: Biome; terrainAt?: ((x: number, y: number) => TerrainKind) | null },
+  newBiome: Biome,
+  newTerrainAt: (x: number, y: number) => TerrainKind,
+): void {
+  (spec as { biome: Biome }).biome = newBiome;
+  (spec as { terrainAt?: ((x: number, y: number) => TerrainKind) | null }).terrainAt = newTerrainAt;
+}
+
 export function defaultTerrainAt(x: number, y: number): TerrainKind {
   // Stone outcrops — scattered.
   const stoneTiles: ReadonlyArray<readonly [number, number]> = [
