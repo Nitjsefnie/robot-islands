@@ -46,6 +46,9 @@ describe('recipe graph completeness (step 18)', () => {
 
   it('every recipe input has at least one producer recipe', () => {
     const producers = buildProducerSet();
+    // Scrap is produced by building demolition (§6.7), not by a recipe
+    // cycle, so it is exempt from the orphan-input check.
+    producers.add('scrap');
     const violations: { recipeId: string; missing: ResourceId }[] = [];
     for (const [recipeId, recipe] of Object.entries(RECIPES)) {
       if (!recipe) continue;
@@ -171,6 +174,36 @@ describe('fuelForTier (§11.7)', () => {
     for (const tier of [1, 2, 3, 4, 5, 6] as const) {
       expect(known.has(fuelForTier(tier))).toBe(true);
     }
+  });
+});
+
+describe('byproducts', () => {
+  it('electrolyzer outputs oxygen', () => {
+    expect(RECIPES.electrolyzer!.outputs.oxygen).toBeDefined();
+    expect(RECIPES.electrolyzer!.outputs.oxygen).toBeGreaterThan(0);
+  });
+
+  it('air_separator outputs argon', () => {
+    expect(RECIPES.air_separator!.outputs.argon).toBeDefined();
+    expect(RECIPES.air_separator!.outputs.argon).toBeGreaterThan(0);
+  });
+
+  it('steel_mill outputs slag', () => {
+    expect(RECIPES.steel_mill!.outputs.slag).toBeDefined();
+    expect(RECIPES.steel_mill!.outputs.slag).toBeGreaterThan(0);
+  });
+
+  it('oxygen_converter consumes oxygen and outputs 2 steel', () => {
+    expect(RECIPES.oxygen_converter!.inputs.oxygen).toBeGreaterThan(0);
+    expect(RECIPES.oxygen_converter!.outputs.steel).toBe(2);
+  });
+
+  it('XP_WEIGHT.oxygen is 3', () => {
+    expect(XP_WEIGHT.oxygen).toBe(3);
+  });
+
+  it('XP_WEIGHT.slag is 3', () => {
+    expect(XP_WEIGHT.slag).toBe(3);
   });
 });
 

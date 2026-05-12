@@ -942,7 +942,7 @@ describe('step-12 — T4 endgame production integration (§6.5)', () => {
   });
 
   it('Cryogenic Compute Center on synthetic arctic spec produces ai_core at 1/5400s', () => {
-    // Cryogenic Compute Center: 5400s cycle (rebalanced step #19: was 90s ×60), inputs { steel: 3, quantum_chip: 1 }.
+    // Cryogenic Compute Center: 5400s cycle (rebalanced step #19: was 90s ×60), inputs { steel: 3, quantum_chip: 1, argon: 1 }.
     // Over 54000s = 10 cycles.
     const CRYO: PlacedBuilding = {
       id: 'b-cryo',
@@ -958,7 +958,7 @@ describe('step-12 — T4 endgame production integration (§6.5)', () => {
     })();
     const state = makeState({
       buildings: [CRYO],
-      inventory: { ...blankInventory(), steel: 100, quantum_chip: 20 },
+      inventory: { ...blankInventory(), steel: 100, quantum_chip: 20, argon: 20 },
       storageCaps: blankCaps(10000),
       // T5 (cryogenic_compute_center) requires level ≥ 50 + aiCoreCrafted
       // per §13.1 — satisfy both gates so the §9.7 tier-band runtime check
@@ -993,7 +993,7 @@ describe('§13 core-craft auto-flip', () => {
     })();
     const state = makeState({
       buildings: [CRYO],
-      inventory: { ...blankInventory(), steel: 100, quantum_chip: 20 },
+      inventory: { ...blankInventory(), steel: 100, quantum_chip: 20, argon: 20 },
       storageCaps: blankCaps(10000),
       level: 50,
       aiCoreCrafted: false,

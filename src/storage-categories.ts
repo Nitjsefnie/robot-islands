@@ -63,6 +63,7 @@ export const RESOURCE_STORAGE_CATEGORY: Readonly<Record<ResourceId, StorageCateg
   iron_ore: 'dry_goods',
   coal: 'dry_goods',
   scrap: 'dry_goods',          // §6.7: explicitly "T1 dry-goods storage category".
+  slag: 'dry_goods',            // §6.7 byproduct — treated as dry industrial waste.
   stone: 'dry_goods',
   sand: 'dry_goods',
   salt: 'dry_goods',
@@ -74,6 +75,8 @@ export const RESOURCE_STORAGE_CATEGORY: Readonly<Record<ResourceId, StorageCateg
   crude_oil: 'liquid_gas',
   natural_gas: 'liquid_gas',
   hydrogen: 'liquid_gas',
+  oxygen: 'liquid_gas',
+  argon: 'liquid_gas',
 
   // T1 refined dry — dry_goods.
   iron_ingot: 'dry_goods',

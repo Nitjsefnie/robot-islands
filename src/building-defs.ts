@@ -94,6 +94,7 @@ export type BuildingDefId =
   | 'coke_oven'
   | 'blast_furnace'
   | 'steel_mill'
+  | 'oxygen_converter'
   | 'assembler'
   | 'tank'
   | 'cold_storage'
@@ -681,10 +682,26 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     stroke: 0x2a2e36,
     power: { consumes: 120 },
     // §7.1: spec's "Pig iron + Scrap → Steel" includes Scrap as a co-input.
-    // Scrap as a substitute/byproduct (§6.7) is deferred. Step 9 recipe is
-    // Pig Iron → Steel.
+    // The §6.7 Scrap substitution is now handled by the Oxygen Converter.
     // §14 placeholder — tune in Appendix A.
     placementCost: { stone: 150, iron_ingot: 60, wood: 20 },
+    glyph: '△',
+  },
+  // §6.7: Oxygen Converter — T3 smelting building that consumes pig iron +
+  // scrap + oxygen to produce steel at higher throughput than the Steel Mill.
+  // §5.2 heat-source adjacency required.
+  oxygen_converter: {
+    id: 'oxygen_converter',
+    displayName: 'Oxygen Converter',
+    category: 'smelting',
+    tier: 3,
+    width: 2,
+    height: 2,
+    fill: 0x5a7a9a,
+    stroke: 0x3a5a7a,
+    power: { consumes: 40 },
+    requiresHeat: true,
+    placementCost: { steel: 10, gear: 5 },
     glyph: '△',
   },
   assembler: {

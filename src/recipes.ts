@@ -63,6 +63,10 @@ export type ResourceId =
   | 'natural_gas'
   | 'quartz'
   | 'hydrogen'
+  // Byproducts (§6.7)
+  | 'oxygen'
+  | 'argon'
+  | 'slag'
   // T1 refined
   | 'biofuel'
   | 'iron_ingot'
@@ -162,6 +166,10 @@ export const ALL_RESOURCES: ReadonlyArray<ResourceId> = [
   'natural_gas',
   'quartz',
   'hydrogen',
+  // Byproducts (§6.7)
+  'oxygen',
+  'argon',
+  'slag',
   'biofuel',
   'iron_ingot',
   'coke',
@@ -243,6 +251,10 @@ export const XP_WEIGHT: Readonly<Record<ResourceId, number>> = {
   natural_gas: 1,
   quartz: 1,
   hydrogen: 1,
+  // Byproducts (§6.7) — T1 refined weight per spec §9.1.
+  oxygen: 3,
+  argon: 3,
+  slag: 3,
   // T1 refined
   biofuel: 3,
   iron_ingot: 3,
@@ -516,7 +528,17 @@ export const RECIPES: Partial<Record<RecipeId, Recipe>> = {
   steel_mill: {
     cycleSec: 600, // rebalanced for idle-game scale, step #19 (×40: was 15s)
     inputs: { pig_iron: 1 },
-    outputs: { steel: 1 },
+    outputs: { steel: 1, slag: 1 },
+    category: 'smelting',
+  },
+  // T3 smelting — Oxygen Converter (§6.7). Higher-throughput steel
+  // from pig iron + scrap + oxygen. Scrap substitution: 2 Scrap = 1 Pig
+  // iron's worth of steel input (per §6.7 Steel-recipe substitution).
+  // §5.2 heat-source adjacency required.
+  oxygen_converter: {
+    cycleSec: 20,
+    inputs: { pig_iron: 1, scrap: 1, oxygen: 2 },
+    outputs: { steel: 2 },
     category: 'smelting',
   },
 
@@ -586,7 +608,7 @@ export const RECIPES: Partial<Record<RecipeId, Recipe>> = {
   // draw (deferred — modelled at static 1200W in step 12).
   cryogenic_compute_center: {
     cycleSec: 5400, // rebalanced for idle-game scale, step #19 (×60: was 90s)
-    inputs: { steel: 3, quantum_chip: 1 },
+    inputs: { steel: 3, quantum_chip: 1, argon: 1 },
     outputs: { ai_core: 1 },
     category: 'electronics',
   },
@@ -705,10 +727,8 @@ export const RECIPES: Partial<Record<RecipeId, Recipe>> = {
   electrolyzer: {
     cycleSec: 100, // rebalanced for idle-game scale, step #19 (×10: was 10s)
     inputs: { fresh_water: 1 },
-    outputs: { hydrogen: 1 },
+    outputs: { hydrogen: 1, oxygen: 1 },
     category: 'chemistry',
-    // §6.2 byproduct `oxygen` deferred — Electrolyzer outputs hydrogen
-    // only until an oxygen consumer lands.
   },
   biofuel_plant: {
     cycleSec: 150, // rebalanced for idle-game scale, step #19 (×10: was 15s)
@@ -798,10 +818,8 @@ export const RECIPES: Partial<Record<RecipeId, Recipe>> = {
   air_separator: {
     cycleSec: 600, // rebalanced for idle-game scale, step #19 (×20: was 30s)
     inputs: {},
-    outputs: { nitrogen: 1 },
+    outputs: { nitrogen: 1, oxygen: 1, argon: 1 },
     category: 'chemistry',
-    // §7.5 byproducts (oxygen, argon) DEFERRED — Air Separator outputs
-    // nitrogen only until oxygen/argon consumers land.
   },
   cryo_lab: {
     cycleSec: 1200, // rebalanced for idle-game scale, step #19 (×20: was 60s)

@@ -54,6 +54,8 @@ export const RESOURCE_CATEGORY: Readonly<Record<ResourceId, ResourceCategory>> =
   crude_oil: 'liquid',
   natural_gas: 'liquid',
   hydrogen: 'liquid',
+  oxygen: 'liquid',
+  argon: 'liquid',
   // T1 refined
   iron_ingot: 'refined',
   coke: 'refined',
@@ -106,6 +108,7 @@ export const RESOURCE_CATEGORY: Readonly<Record<ResourceId, ResourceCategory>> =
   orbital_insertion_package: 'components', // §14.7 T6 Foundation-Kit equivalent
   // Misc
   scrap: 'misc',
+  slag: 'misc',
 };
 
 /** Filter chips shown above the resource list. `'all'` is the default. */
