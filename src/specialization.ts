@@ -195,12 +195,6 @@ export const IDENTITY_SPECIALIZATION: SpecializationMultipliers = blankSpecMulti
  *
  * Null role → identity bundle (no buff, no penalty).
  */
-/** §9.4 route capacity multiplier for an origin island's specialization.
- *  Returns 2.0 for logistics_hub, 1.0 otherwise. */
-export function routeCapacityMultiplier(role: RoleId | null): number {
-  return role === 'logistics_hub' ? 2.0 : 1.0;
-}
-
 export function effectiveSpecializationMultipliers(
   role: RoleId | null,
 ): SpecializationMultipliers {
@@ -254,4 +248,10 @@ export function effectiveSpecializationMultipliers(
       return out;
     }
   }
+}
+
+/** §9.4 route capacity multiplier for an origin island's specialization.
+ *  Returns 2.0 for logistics_hub, 1.0 otherwise. */
+export function routeCapacityMultiplier(role: RoleId | null): number {
+  return role === 'logistics_hub' ? 2.0 : 1.0;
 }

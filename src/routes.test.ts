@@ -403,17 +403,7 @@ describe('§9.4 logistics hub route capacity doubling', () => {
     const { world, states } = makeTwoIslandWorld();
     const fromState = states.get('island-a')!;
     fromState.specializationRole = 'logistics_hub';
-    world.routes.push({
-      id: 'r-1',
-      from: 'island-a',
-      to: 'island-b',
-      type: 'cargo',
-      capacityPerSec: 1,
-      filter: 'stone',
-      priorityList: [],
-      transitTimeSec: 10,
-      inFlight: [],
-    });
+    world.routes.push(cargoRoute('island-a', 'island-b', 'stone', [], 1, 10));
     fromState.inventory.stone = 100;
     const result = dispatchAttempt(world, states, 0, 1);
     expect(result.length).toBe(1);
@@ -424,17 +414,7 @@ describe('§9.4 logistics hub route capacity doubling', () => {
     const { world, states } = makeTwoIslandWorld();
     const fromState = states.get('island-a')!;
     fromState.specializationRole = null; // generalist
-    world.routes.push({
-      id: 'r-1',
-      from: 'island-a',
-      to: 'island-b',
-      type: 'cargo',
-      capacityPerSec: 1,
-      filter: 'stone',
-      priorityList: [],
-      transitTimeSec: 10,
-      inFlight: [],
-    });
+    world.routes.push(cargoRoute('island-a', 'island-b', 'stone', [], 1, 10));
     fromState.inventory.stone = 100;
     const result = dispatchAttempt(world, states, 0, 1);
     expect(result.length).toBe(1);
