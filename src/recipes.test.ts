@@ -251,6 +251,82 @@ describe('microchip chain', () => {
   });
 });
 
+describe('T6 orbital recipes (§14.10)', () => {
+  it('scanner_sat_assembly has correct inputs, outputs, and cycleSec', () => {
+    const r = RECIPES.scanner_sat_assembly!;
+    expect(r.outputs.scanner_sat).toBe(1);
+    expect(r.inputs.exotic_alloy).toBe(4);
+    expect(r.inputs.ai_core).toBe(2);
+    expect(r.inputs.spacetime_fragment).toBe(1);
+    expect(r.inputs.steel).toBe(50);
+    expect(r.inputs.orbital_insertion_package).toBe(1);
+    expect(r.cycleSec).toBe(3600);
+    expect(r.category).toBe('manufacturing');
+  });
+
+  it('comm_sat_assembly has correct inputs, outputs, and cycleSec', () => {
+    const r = RECIPES.comm_sat_assembly!;
+    expect(r.outputs.comm_sat).toBe(1);
+    expect(r.inputs.exotic_alloy).toBe(6);
+    expect(r.inputs.ai_core).toBe(1);
+    expect(r.inputs.wire).toBe(200);
+    expect(r.inputs.orbital_insertion_package).toBe(1);
+    expect(r.cycleSec).toBe(3600);
+    expect(r.category).toBe('manufacturing');
+  });
+
+  it('sweeper_sat_assembly has correct inputs, outputs, and cycleSec', () => {
+    const r = RECIPES.sweeper_sat_assembly!;
+    expect(r.outputs.sweeper_sat).toBe(1);
+    expect(r.inputs.exotic_alloy).toBe(4);
+    expect(r.inputs.ai_core).toBe(1);
+    expect(r.inputs.steel).toBe(100);
+    expect(r.inputs.gear).toBe(20);
+    expect(r.inputs.orbital_insertion_package).toBe(1);
+    expect(r.cycleSec).toBe(3600);
+    expect(r.category).toBe('manufacturing');
+  });
+
+  it('orbital_insertion_assembly has correct inputs, outputs, and cycleSec', () => {
+    const r = RECIPES.orbital_insertion_assembly!;
+    expect(r.outputs.orbital_insertion_package).toBe(1);
+    expect(r.inputs.iron_ingot).toBe(100);
+    expect(r.inputs.stone).toBe(30);
+    expect(r.inputs.glass).toBe(20);
+    expect(r.inputs.pcb).toBe(10);
+    expect(r.inputs.ai_core).toBe(5);
+    expect(r.cycleSec).toBe(1800);
+    expect(r.category).toBe('manufacturing');
+  });
+
+  it('repair_pack_assembly has correct inputs, outputs, and cycleSec', () => {
+    const r = RECIPES.repair_pack_assembly!;
+    expect(r.outputs.repair_pack).toBe(1);
+    expect(r.inputs.steel).toBe(50);
+    expect(r.inputs.gear).toBe(10);
+    expect(r.inputs.exotic_alloy).toBe(2);
+    expect(r.inputs.microchip).toBe(5);
+    expect(r.cycleSec).toBe(1800);
+    expect(r.category).toBe('manufacturing');
+  });
+
+  it('antimatter_refinery recipe is unchanged', () => {
+    const r = RECIPES.antimatter_refinery!;
+    expect(r.outputs.antimatter_propellant).toBe(1);
+    expect(r.inputs.exotic_alloy).toBe(1);
+    expect(r.inputs.reality_anchor).toBe(1);
+    expect(r.inputs.casimir_energy).toBe(2);
+    expect(r.cycleSec).toBe(7200);
+    expect(r.category).toBe('manufacturing');
+  });
+
+  it('XP_WEIGHT for new T6 resources is correct', () => {
+    expect(XP_WEIGHT.sweeper_sat).toBe(1000);
+    expect(XP_WEIGHT.repair_drone).toBe(1000);
+    expect(XP_WEIGHT.repair_pack).toBe(300);
+  });
+});
+
 describe('nextRotateOutputBoundaryMs', () => {
   const rotatingRecipe = {
     cycleSec: 10,

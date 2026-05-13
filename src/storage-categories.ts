@@ -146,4 +146,7 @@ export const RESOURCE_STORAGE_CATEGORY: Readonly<Record<ResourceId, StorageCateg
   scanner_sat: 'rare',
   comm_sat: 'rare',
   orbital_insertion_package: 'rare',
+  sweeper_sat: 'rare',
+  repair_drone: 'rare',
+  repair_pack: 'rare',
 };

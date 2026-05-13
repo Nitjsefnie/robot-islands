@@ -146,6 +146,8 @@ export type BuildingDefId =
   | 'scanner_sat_assembly'
   | 'comm_sat_assembly'
   | 'orbital_insertion_assembly'
+  | 'sweeper_sat_assembly'
+  | 'repair_pack_assembly'
   // Step-18 recipe-graph closure (§7.1-§7.12). One defId per recipe
   // since the engine's 1:1 recipe-per-defId model doesn't support
   // multi-recipe-per-building selection without infra changes.
@@ -1276,6 +1278,36 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     power: { consumes: 1500 },
     // §14 placeholder — tune in Appendix A.
     placementCost: { antimatter_propellant: 75, steel: 150, reality_anchor: 75 },
+    glyph: '⚙',
+  },
+  // §14.3 / §14.10: Sweeper Sat Assembly — produces Sweeper Sat payloads
+  // for §14.8 debris-field / Kessler-cascade clearing.
+  sweeper_sat_assembly: {
+    id: 'sweeper_sat_assembly',
+    displayName: 'Sweeper Sat Assembly',
+    category: 'manufacturing',
+    tier: 6,
+    footprint: SHAPES.square3,
+    fill: 0x80a0a0, // pale teal
+    stroke: 0x203030,
+    power: { consumes: 2000 },
+    // §14 placeholder — tune in Appendix A.
+    placementCost: { antimatter_propellant: 75, steel: 150, reality_anchor: 75 },
+    glyph: '◇',
+  },
+  // §14.12 / §14.10: Repair Pack Assembly — produces Repair Pack consumables
+  // for orbital drone repair operations.
+  repair_pack_assembly: {
+    id: 'repair_pack_assembly',
+    displayName: 'Repair Pack Assembly',
+    category: 'manufacturing',
+    tier: 6,
+    footprint: SHAPES.square2,
+    fill: 0xc08060, // warm copper
+    stroke: 0x402818,
+    power: { consumes: 1200 },
+    // §14 placeholder — tune in Appendix A.
+    placementCost: { antimatter_propellant: 50, steel: 100, reality_anchor: 50 },
     glyph: '⚙',
   },
   // -------------------------------------------------------------------------
