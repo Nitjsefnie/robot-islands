@@ -695,6 +695,10 @@ export interface WorldState {
    *  scan-corridor cells to this set each tick. Persisted as a sorted array
    *  of strings. Replaces the per-island-center-flip discovery model. */
   revealedCells: Set<string>;
+  /** Runtime island states keyed by island id. Not persisted as part of the
+   *  world snapshot (serialization keeps it separate for schema stability);
+   *  set by `main.ts` after init and by `deserializeWorld` on load. */
+  islandStates?: Map<string, IslandState>;
 
 }
 

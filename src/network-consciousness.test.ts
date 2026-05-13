@@ -1,13 +1,14 @@
 // Pure tests for `computeNcState` per SPEC §9.6.
 //
-// Covers the four buff thresholds (3/5/10/20), the no-milestone case, and
-// the T3-gate semantics (only level ≥ 15 islands count).
+// Covers the four buff thresholds (3/5/10/20), the no-milestone case, the
+// T3-gate semantics, and route-graph reachability from home.
 
 import { describe, expect, it } from 'vitest';
 
 import type { IslandState } from './economy.js';
-import { computeNcState } from './network-consciousness.js';
+import { computeNcState, networkedIslandIds } from './network-consciousness.js';
 import { ALL_RESOURCES, type ResourceId } from './recipes.js';
+import type { WorldState } from './world.js';
 
 function blankInventory(): Record<ResourceId, number> {
   const inv = {} as Record<ResourceId, number>;
@@ -54,102 +55,288 @@ function makeState(id: string, level: number): IslandState {
   };
 }
 
-function mapOf(states: ReadonlyArray<IslandState>): Map<string, IslandState> {
-  const m = new Map<string, IslandState>();
-  for (const s of states) m.set(s.id, s);
-  return m;
+function makeWorld(opts: {
+  islands: Array<{ id: string; populated: boolean; level: number }>;
+  routes?: Array<{ from: string; to: string }>;
+}): WorldState {
+  const islandSpecs = opts.islands.map((i) => ({
+    id: i.id,
+    name: i.id,
+    biome: 'plains' as const,
+    cx: 0,
+    cy: 0,
+    majorRadius: 10,
+    minorRadius: 10,
+    populated: i.populated,
+    discovered: i.populated,
+    buildings: [],
+    modifiers: [] as const,
+  }));
+
+  const islandStates = new Map<string, IslandState>();
+  for (const i of opts.islands) {
+    islandStates.set(i.id, makeState(i.id, i.level));
+  }
+
+  const routes: import('./routes.js').Route[] = (opts.routes ?? []).map((r, idx) => ({
+    id: `route-${idx}`,
+    from: r.from,
+    to: r.to,
+    type: 'cargo',
+    capacityPerSec: 1,
+    filter: null,
+    priorityList: [],
+    transitTimeSec: 1,
+    inFlight: [],
+  }));
+
+  return {
+    islands: islandSpecs,
+    seed: 'test',
+    drones: [],
+    routes,
+    vehicles: [],
+    revealedCells: new Set(),
+    islandStates,
+  };
 }
 
+// ---------------------------------------------------------------------------
+// networkedIslandIds
+// ---------------------------------------------------------------------------
+
+describe('networkedIslandIds', () => {
+  it('home island is always networked', () => {
+    const world = makeWorld({
+      islands: [{ id: 'home', populated: true, level: 1 }],
+    });
+    expect(networkedIslandIds(world)).toEqual(new Set(['home']));
+  });
+
+  it('island with no route is not networked', () => {
+    const world = makeWorld({
+      islands: [
+        { id: 'home', populated: true, level: 1 },
+        { id: 'alpha', populated: true, level: 1 },
+      ],
+    });
+    expect(networkedIslandIds(world)).toEqual(new Set(['home']));
+  });
+
+  it('chain of routes: A→B→C, all networked', () => {
+    const world = makeWorld({
+      islands: [
+        { id: 'home', populated: true, level: 1 },
+        { id: 'b', populated: true, level: 1 },
+        { id: 'c', populated: true, level: 1 },
+      ],
+      routes: [
+        { from: 'home', to: 'b' },
+        { from: 'b', to: 'c' },
+      ],
+    });
+    expect(networkedIslandIds(world)).toEqual(new Set(['home', 'b', 'c']));
+  });
+
+  it('disconnected island not counted even if T3+', () => {
+    const world = makeWorld({
+      islands: [
+        { id: 'home', populated: true, level: 15 },
+        { id: 'alone', populated: true, level: 20 },
+      ],
+    });
+    expect(networkedIslandIds(world)).toEqual(new Set(['home']));
+    const nc = computeNcState(world);
+    expect(nc.tier3PlusCount).toBe(1);
+    expect(nc.milestone).toBe(0);
+  });
+
+  it('undirected connectivity: inbound route counts', () => {
+    const world = makeWorld({
+      islands: [
+        { id: 'home', populated: true, level: 1 },
+        { id: 'b', populated: true, level: 1 },
+      ],
+      routes: [{ from: 'b', to: 'home' }],
+    });
+    expect(networkedIslandIds(world)).toEqual(new Set(['home', 'b']));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// computeNcState — threshold tests
+// ---------------------------------------------------------------------------
+
 describe('computeNcState — Network Consciousness thresholds per §9.6', () => {
-  it('empty map → milestone 0 / buff 1.0 / count 0', () => {
-    const nc = computeNcState(new Map());
+  it('empty world → milestone 0 / buff 1.0 / count 0', () => {
+    const world = makeWorld({ islands: [] });
+    const nc = computeNcState(world);
     expect(nc.tier3PlusCount).toBe(0);
     expect(nc.milestone).toBe(0);
     expect(nc.globalProductionBuff).toBe(1);
   });
 
   it('1 island at T3+ → milestone 0 (below threshold)', () => {
-    const nc = computeNcState(mapOf([makeState('a', 15)]));
+    const world = makeWorld({
+      islands: [{ id: 'home', populated: true, level: 15 }],
+    });
+    const nc = computeNcState(world);
     expect(nc.tier3PlusCount).toBe(1);
     expect(nc.milestone).toBe(0);
     expect(nc.globalProductionBuff).toBe(1);
   });
 
   it('2 islands at T3+ → milestone 0 (still below threshold)', () => {
-    const nc = computeNcState(mapOf([makeState('a', 20), makeState('b', 16)]));
+    const world = makeWorld({
+      islands: [
+        { id: 'home', populated: true, level: 20 },
+        { id: 'a', populated: true, level: 16 },
+      ],
+      routes: [{ from: 'home', to: 'a' }],
+    });
+    const nc = computeNcState(world);
     expect(nc.tier3PlusCount).toBe(2);
     expect(nc.milestone).toBe(0);
     expect(nc.globalProductionBuff).toBe(1);
   });
 
   it('3 islands at T3+ → milestone 1 / buff 1.05', () => {
-    const nc = computeNcState(
-      mapOf([makeState('a', 15), makeState('b', 17), makeState('c', 22)]),
-    );
+    const world = makeWorld({
+      islands: [
+        { id: 'home', populated: true, level: 15 },
+        { id: 'b', populated: true, level: 17 },
+        { id: 'c', populated: true, level: 22 },
+      ],
+      routes: [
+        { from: 'home', to: 'b' },
+        { from: 'home', to: 'c' },
+      ],
+    });
+    const nc = computeNcState(world);
     expect(nc.tier3PlusCount).toBe(3);
     expect(nc.milestone).toBe(1);
     expect(nc.globalProductionBuff).toBeCloseTo(1.05, 12);
   });
 
   it('5 islands at T3+ → milestone 2 / buff 1.10', () => {
-    const states: IslandState[] = [];
-    for (let i = 0; i < 5; i++) states.push(makeState(`a${i}`, 15));
-    const nc = computeNcState(mapOf(states));
+    const islands = Array.from({ length: 5 }, (_, i) => ({
+      id: `a${i}`,
+      populated: true as const,
+      level: 15,
+    }));
+    const routes = islands.slice(1).map((i) => ({ from: 'a0', to: i.id }));
+    const world = makeWorld({ islands, routes });
+    const nc = computeNcState(world);
     expect(nc.tier3PlusCount).toBe(5);
     expect(nc.milestone).toBe(2);
     expect(nc.globalProductionBuff).toBeCloseTo(1.10, 12);
   });
 
   it('10 islands at T3+ → milestone 3 / buff 1.25', () => {
-    const states: IslandState[] = [];
-    for (let i = 0; i < 10; i++) states.push(makeState(`a${i}`, 15));
-    const nc = computeNcState(mapOf(states));
+    const islands = Array.from({ length: 10 }, (_, i) => ({
+      id: `a${i}`,
+      populated: true as const,
+      level: 15,
+    }));
+    const routes = islands.slice(1).map((i) => ({ from: 'a0', to: i.id }));
+    const world = makeWorld({ islands, routes });
+    const nc = computeNcState(world);
     expect(nc.tier3PlusCount).toBe(10);
     expect(nc.milestone).toBe(3);
     expect(nc.globalProductionBuff).toBeCloseTo(1.25, 12);
   });
 
   it('20 islands at T3+ → milestone 4 / buff 1.25', () => {
-    const states: IslandState[] = [];
-    for (let i = 0; i < 20; i++) states.push(makeState(`a${i}`, 15));
-    const nc = computeNcState(mapOf(states));
+    const islands = Array.from({ length: 20 }, (_, i) => ({
+      id: `a${i}`,
+      populated: true as const,
+      level: 15,
+    }));
+    const routes = islands.slice(1).map((i) => ({ from: 'a0', to: i.id }));
+    const world = makeWorld({ islands, routes });
+    const nc = computeNcState(world);
     expect(nc.tier3PlusCount).toBe(20);
     expect(nc.milestone).toBe(4);
     expect(nc.globalProductionBuff).toBeCloseTo(1.25, 12);
   });
 
   it('non-T3 islands are not counted (level 14 just below)', () => {
-    const states: IslandState[] = [];
-    // 5 islands at level 14 (T2), should produce milestone 0.
-    for (let i = 0; i < 5; i++) states.push(makeState(`a${i}`, 14));
-    const nc = computeNcState(mapOf(states));
+    const islands = Array.from({ length: 5 }, (_, i) => ({
+      id: `a${i}`,
+      populated: true as const,
+      level: 14,
+    }));
+    const routes = islands.slice(1).map((i) => ({ from: 'a0', to: i.id }));
+    const world = makeWorld({ islands, routes });
+    const nc = computeNcState(world);
     expect(nc.tier3PlusCount).toBe(0);
     expect(nc.milestone).toBe(0);
     expect(nc.globalProductionBuff).toBe(1);
   });
 
   it('mixed-tier population: only T3+ count toward the milestone', () => {
-    const states: IslandState[] = [
-      makeState('home', 30),      // T4 → counts
-      makeState('a', 15),         // T3 boundary → counts
-      makeState('b', 14),         // T2 → does NOT count
-      makeState('c', 1),          // T1 → does NOT count
-      makeState('d', 17),         // T3 → counts
-    ];
-    const nc = computeNcState(mapOf(states));
+    const world = makeWorld({
+      islands: [
+        { id: 'home', populated: true, level: 30 }, // T4 → counts
+        { id: 'a', populated: true, level: 15 },    // T3 boundary → counts
+        { id: 'b', populated: true, level: 14 },    // T2 → does NOT count
+        { id: 'c', populated: true, level: 1 },     // T1 → does NOT count
+        { id: 'd', populated: true, level: 17 },    // T3 → counts
+      ],
+      routes: [
+        { from: 'home', to: 'a' },
+        { from: 'home', to: 'b' },
+        { from: 'home', to: 'c' },
+        { from: 'home', to: 'd' },
+      ],
+    });
+    const nc = computeNcState(world);
     expect(nc.tier3PlusCount).toBe(3);
     expect(nc.milestone).toBe(1);
     expect(nc.globalProductionBuff).toBeCloseTo(1.05, 12);
   });
 
   it('level 15 is the T3 boundary (inclusive)', () => {
-    const states: IslandState[] = [
-      makeState('a', 15),
-      makeState('b', 15),
-      makeState('c', 15),
-    ];
-    const nc = computeNcState(mapOf(states));
+    const world = makeWorld({
+      islands: [
+        { id: 'home', populated: true, level: 15 },
+        { id: 'a', populated: true, level: 15 },
+        { id: 'b', populated: true, level: 15 },
+      ],
+      routes: [
+        { from: 'home', to: 'a' },
+        { from: 'home', to: 'b' },
+      ],
+    });
+    const nc = computeNcState(world);
     expect(nc.tier3PlusCount).toBe(3);
     expect(nc.milestone).toBe(1);
+  });
+
+  it('unpopulated islands never count, even if T3+ and routed', () => {
+    const world = makeWorld({
+      islands: [
+        { id: 'home', populated: true, level: 15 },
+        { id: 'ghost', populated: false, level: 20 },
+      ],
+      routes: [{ from: 'home', to: 'ghost' }],
+    });
+    const nc = computeNcState(world);
+    expect(nc.tier3PlusCount).toBe(1);
+    expect(nc.milestone).toBe(0);
+  });
+
+  it('disconnected T3+ island is excluded from count', () => {
+    const world = makeWorld({
+      islands: [
+        { id: 'home', populated: true, level: 15 },
+        { id: 'remote', populated: true, level: 20 },
+        { id: 'linked', populated: true, level: 20 },
+      ],
+      routes: [{ from: 'home', to: 'linked' }],
+    });
+    const nc = computeNcState(world);
+    expect(nc.tier3PlusCount).toBe(2); // home + linked
+    expect(nc.milestone).toBe(0);
   });
 });

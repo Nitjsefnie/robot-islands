@@ -609,6 +609,7 @@ async function main(): Promise<void> {
   if (!islandStates.get('home')) {
     throw new Error('main: home island state missing after init');
   }
+  worldState.islandStates = islandStates;
   // Spec lookup by id — also needed by routes UI later. Built once; spec
   // identity is stable across the session (drones flip discovered, but
   // spec objects themselves aren't replaced).
@@ -1098,7 +1099,7 @@ async function main(): Promise<void> {
     // island set. §9.6 buff applies only to T3+ islands; per-island gating
     // happens at the call site below (not inside advanceIsland) so the
     // pure economy doesn't take a dependency on `tierForLevel`.
-    const ncState = computeNcState(islandStates);
+    const ncState = computeNcState(worldState);
     // Specialization multipliers depend only on `state.specializationRole`,
     // which is mutable from the UI. Recompute per-island per-frame; the
     // fold is constant-cost and pre-baking it would require invalidation

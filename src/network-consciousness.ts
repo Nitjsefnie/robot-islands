@@ -1,21 +1,11 @@
 // Network Consciousness milestone per SPEC §9.6. Pure logic — no PixiJS,
-// no DOM. Counts the player's T3+ islands and resolves the active milestone
-// into a global production buff applied per frame in `main.ts`.
+// no DOM. Counts the player's networked T3+ islands and resolves the active
+// milestone into a global production buff applied per frame in `main.ts`.
 //
-// Step-10 simplification: §9.6 defines the buff target set as "networked T3+
-// islands" — islands route-graph-connected back to home (see §2.4). Step 10
-// drops the "networked" qualifier and treats every populated island at T3+
-// as participating. The route graph exists (`routes.ts`) but threading the
-// reachability check here would dilute the focus of the step; the relaxation
-// is documented and flagged for re-tightening once the route system carries
-// the connectedness flag natively. Same approach as the §10.1 funnel
-// provenance FIXME in `economy.ts`.
-//
-// FIXME(§9.6): "Networked" is currently simplified to "populated at T3+",
-// which over-rewards: an isolated T3 colony with no inbound route still
-// receives the global NC buff. Spec requires route-graph reachability to
-// home. Lands in step 11 (settlement vehicles) — until then this is
-// player-observable behavioral debt, not an internal-only simplification.
+// "Networked" means route-graph-reachable from home (§2.4). The BFS walks
+// undirected edges: a route A→B makes B reachable from A and vice-versa.
+// Only populated islands that are both T3+ and in the networked set count
+// toward the milestone thresholds.
 //
 // Thresholds and buff magnitudes are per §9.6:
 //   ≥3 T3+ islands  → milestone 1 / +5%
@@ -30,14 +20,14 @@
 // design memo restricts application to T3+ islands, computed per-frame using
 // `tierForLevel(state.level) >= 3`).
 
-import type { IslandState } from './economy.js';
 import { tierForLevel } from './skilltree.js';
+import type { WorldState } from './world.js';
 
 /** Active milestone level. 0 = below all thresholds. */
 export type NcMilestone = 0 | 1 | 2 | 3 | 4;
 
 export interface NetworkConsciousnessState {
-  /** Number of populated islands at level ≥ 15 (T3+). */
+  /** Number of populated, networked islands at level ≥ 15 (T3+). */
   readonly tier3PlusCount: number;
   /** Active milestone derived from `tier3PlusCount`. */
   readonly milestone: NcMilestone;
@@ -62,19 +52,63 @@ const MILESTONE_TABLE: ReadonlyArray<MilestoneRow> = [
 ];
 
 /**
- * Aggregate per-island state into the network-consciousness summary.
+ * BFS over the route graph starting from the (first) populated island
+ * treated as home. Returns the set of island ids that are reachable.
  *
- * Pure: no mutation, no DOM, no rendering. Iterates the supplied island map
- * once and reads `state.level` to gate the T3+ count. The caller passes
- * `islandStates` exactly as it is held in `main.ts`; the function does not
- * need (and does not consume) `IslandSpec`.
+ * The graph is treated as undirected for connectivity: a route A→B
+ * connects both ends.
  */
-export function computeNcState(
-  islandStates: ReadonlyMap<string, IslandState>,
-): NetworkConsciousnessState {
+export function networkedIslandIds(world: WorldState): Set<string> {
+  const home = world.islands.find(i => i.populated);
+  if (!home) return new Set();
+
+  const visited = new Set<string>();
+  const queue = [home.id];
+  visited.add(home.id);
+
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+    // Find all routes from current
+    const outbound = world.routes.filter(r => r.from === current);
+    for (const route of outbound) {
+      if (!visited.has(route.to)) {
+        visited.add(route.to);
+        queue.push(route.to);
+      }
+    }
+    // Also find inbound (graph is undirected for connectivity)
+    const inbound = world.routes.filter(r => r.to === current);
+    for (const route of inbound) {
+      if (!visited.has(route.from)) {
+        visited.add(route.from);
+        queue.push(route.from);
+      }
+    }
+  }
+
+  return visited;
+}
+
+/**
+ * Aggregate world state into the network-consciousness summary.
+ *
+ * Pure: no mutation, no DOM, no rendering. Computes the route-graph-reachable
+ * set from home, then counts populated islands in that set whose level is T3+.
+ */
+export function computeNcState(world: WorldState): NetworkConsciousnessState {
+  const islandStates = world.islandStates;
+  if (!islandStates) {
+    throw new Error('computeNcState: world.islandStates is missing');
+  }
+  const networked = networkedIslandIds(world);
   let tier3PlusCount = 0;
-  for (const state of islandStates.values()) {
-    if (tierForLevel(state.level) >= 3) tier3PlusCount += 1;
+  for (const island of world.islands) {
+    if (!island.populated) continue;
+    if (!networked.has(island.id)) continue;
+    const state = islandStates.get(island.id);
+    if (state && tierForLevel(state.level) >= 3) {
+      tier3PlusCount += 1;
+    }
   }
   for (const row of MILESTONE_TABLE) {
     if (tier3PlusCount >= row.threshold) {
