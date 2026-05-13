@@ -919,6 +919,35 @@ describe('satellite buffer persistence', () => {
   });
 });
 
+describe('repair drone persistence', () => {
+  it('round-trips repairDrones with all fields preserved', () => {
+    const world = makeInitialWorld(0);
+    world.repairDrones.push({
+      id: 'repair-1',
+      targetSatId: 'sat1',
+      launchTime: 1234,
+      expectedArrivalTime: 5678,
+    });
+    const snap = serializeWorld(world, new Map(), 0, 0);
+    const json = JSON.parse(JSON.stringify(snap)) as SaveSnapshot;
+    const { world: restored } = deserializeWorld(json, 0, 0);
+    expect(restored.repairDrones).toHaveLength(1);
+    const d = restored.repairDrones[0]!;
+    expect(d.id).toBe('repair-1');
+    expect(d.targetSatId).toBe('sat1');
+    expect(d.launchTime).toBe(1234);
+    expect(d.expectedArrivalTime).toBe(5678);
+  });
+
+  it('backfills missing repairDrones on a legacy save to []', () => {
+    const baseSnap = serializeWorld(makeInitialWorld(0), new Map(), 0, 0);
+    const legacy = JSON.parse(JSON.stringify(baseSnap)) as SaveSnapshot;
+    delete (legacy.world as { repairDrones?: unknown }).repairDrones;
+    const { world: restored } = deserializeWorld(legacy, 0, 0);
+    expect(restored.repairDrones).toEqual([]);
+  });
+});
+
 describe('with a full demo world', () => {
   it('round-trips makeInitialWorld + per-island makeInitialIslandState', () => {
     const world = makeInitialWorld(0);
