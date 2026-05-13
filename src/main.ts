@@ -82,6 +82,8 @@ import { makeIslandScreenPosResolver, mountRoutesUi } from './routes-ui.js';
 import { tickRoutes } from './routes.js';
 import { mountSettlementUi } from './settlement-ui.js';
 import { tickVehicles } from './settlement.js';
+import { checkObjectives } from './tutorial.js';
+import { renderTutorialBanner } from './tutorial-ui.js';
 
 /** Pan speed for keyboard input, in screen-pixels-per-frame. */
 const PAN_PX_PER_TICK = 8;
@@ -1146,6 +1148,22 @@ async function main(): Promise<void> {
       });
       islandNets.set(s.id, net);
       islandPower.set(s.id, power);
+    }
+    // Task 3: tutorial objective banner — check completion after every
+    // economy advance so placement / level-up events are reflected immediately.
+    if (worldState.tutorialState) {
+      const newlyCompleted = checkObjectives(worldState.tutorialState, worldState);
+      if (newlyCompleted.length > 0) {
+        // Optional: flash completion briefly
+      }
+      const banner = renderTutorialBanner(worldState.tutorialState);
+      const old = document.getElementById('tutorial-banner');
+      if (old) {
+        if (banner) old.replaceWith(banner);
+        else old.remove();
+      } else if (banner) {
+        document.body.appendChild(banner);
+      }
     }
     // §3.6 Island Joining: AFTER economy advances, walk pairs of populated
     // islands for ellipse overlaps. At most ONE merge runs per tick — the

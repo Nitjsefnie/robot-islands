@@ -706,6 +706,9 @@ export interface WorldState {
   /** §14.12 T6 Repair Drone fleet. Mutable: grows on dispatch, shrinks on
    *  arrival resolution. Same type-only-import discipline. */
   repairDrones: import('./orbital.js').RepairDrone[];
+  /** Tutorial onboarding state. Optional so legacy saves and test fixtures
+   *  compile without change; `makeInitialWorld` always seeds it. */
+  tutorialState?: import('./tutorial.js').TutorialState;
 
 }
 
@@ -765,7 +768,7 @@ export function makeInitialWorld(_nowMs: number): WorldState {
     if (!spec.populated && !spec.discovered) continue;
     for (const k of islandCells(spec)) revealedCells.add(k);
   }
-  return { islands, drones: [], routes: [], vehicles: [], revealedCells, seed: WORLD_SEED, satellites: [], repairDrones: [] };
+  return { islands, drones: [], routes: [], vehicles: [], revealedCells, seed: WORLD_SEED, satellites: [], repairDrones: [], tutorialState: { completed: new Set(), current: 'place_solar' } };
 }
 
 // ---------------------------------------------------------------------------

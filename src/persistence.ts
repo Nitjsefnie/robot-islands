@@ -52,6 +52,7 @@ import type { Route } from './routes.js';
 import { _seedRouteIdCounter } from './routes.js';
 import type { SettlementVehicle } from './settlement.js';
 import { SAT_BUFFER_CAP, type Satellite } from './orbital.js';
+import type { ObjectiveId } from './tutorial.js';
 import { _seedVehicleIdCounter, tuningFor } from './settlement.js';
 import { ALL_RESOURCES, type ResourceId } from './recipes.js';
 import type { NodeId, SubPathId } from './skilltree.js';
@@ -147,6 +148,8 @@ export interface SerializedWorld {
   readonly satellites?: ReadonlyArray<import('./orbital.js').Satellite>;
   /** §14.12 T6 Repair Drone fleet. Backfilled to `[]` on legacy saves. */
   readonly repairDrones?: ReadonlyArray<import('./orbital.js').RepairDrone>;
+  /** Tutorial onboarding state. Backfilled on legacy saves. */
+  readonly tutorialState?: { completed: ObjectiveId[]; current: ObjectiveId | null };
 }
 
 /** Top-level snapshot. The `v` field is the schema-version anchor: this
@@ -228,6 +231,11 @@ export function serializeWorld(
       satellites: [...world.satellites],
       // §14.12 repair drones: shallow copy of the mutable array.
       repairDrones: [...world.repairDrones],
+      // Tutorial onboarding state.
+      tutorialState: {
+        completed: Array.from(world.tutorialState?.completed ?? []),
+        current: world.tutorialState?.current ?? null,
+      },
     },
     islandStates: stateEntries,
   };
@@ -409,6 +417,14 @@ export function deserializeWorld(
     // §14.12 repair drone fleet backfill: legacy v3 saves predate `repairDrones`.
     // Default to an empty array so the world loads cleanly.
     repairDrones: [...(snapshot.world.repairDrones ?? [])],
+    // Tutorial onboarding state backfill: legacy saves predate the field.
+    // Default to the fresh-game starting objective.
+    tutorialState: snapshot.world.tutorialState
+      ? {
+          completed: new Set(snapshot.world.tutorialState.completed),
+          current: snapshot.world.tutorialState.current,
+        }
+      : { completed: new Set(), current: 'place_solar' },
   };
 
   const islandStates = new Map<string, IslandState>();
