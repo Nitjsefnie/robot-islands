@@ -82,7 +82,7 @@ import { makeIslandScreenPosResolver, mountRoutesUi } from './routes-ui.js';
 import { tickRoutes } from './routes.js';
 import { mountSettlementUi } from './settlement-ui.js';
 import { tickVehicles } from './settlement.js';
-import { checkObjectives } from './tutorial.js';
+import { checkObjectives, type ObjectiveId } from './tutorial.js';
 import { renderTutorialBanner } from './tutorial-ui.js';
 
 /** Pan speed for keyboard input, in screen-pixels-per-frame. */
@@ -1086,6 +1086,7 @@ async function main(): Promise<void> {
   // `advanceIsland`'s piecewise integration handles whatever elapsed interval
   // the frame brings (matters on tab-blur catch-up).
   let lastFrameMs = performance.now();
+  let lastRenderedObjective: ObjectiveId | null = null;
   app.ticker.add(() => {
     let dx = 0;
     let dy = 0;
@@ -1153,16 +1154,19 @@ async function main(): Promise<void> {
     // economy advance so placement / level-up events are reflected immediately.
     if (worldState.tutorialState) {
       const newlyCompleted = checkObjectives(worldState.tutorialState, worldState);
-      if (newlyCompleted.length > 0) {
-        // Optional: flash completion briefly
-      }
-      const banner = renderTutorialBanner(worldState.tutorialState);
-      const old = document.getElementById('tutorial-banner');
-      if (old) {
-        if (banner) old.replaceWith(banner);
-        else old.remove();
-      } else if (banner) {
-        document.body.appendChild(banner);
+      const current = worldState.tutorialState.current;
+      const needsUpdate = newlyCompleted.length > 0 || lastRenderedObjective !== current;
+
+      if (needsUpdate) {
+        lastRenderedObjective = current;
+        const banner = renderTutorialBanner(worldState.tutorialState);
+        const old = document.getElementById('tutorial-banner');
+        if (old) {
+          if (banner) old.replaceWith(banner);
+          else old.remove();
+        } else if (banner) {
+          document.body.appendChild(banner);
+        }
       }
     }
     // §3.6 Island Joining: AFTER economy advances, walk pairs of populated
