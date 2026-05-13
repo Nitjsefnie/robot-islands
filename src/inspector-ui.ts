@@ -29,7 +29,9 @@ import {
   BUILDING_DEFS,
   type BuildingCategory,
   type BuildingDefId,
+  type GateRequirement,
 } from './building-defs.js';
+import { gateSatisfied } from './adjacency.js';
 import { shapeHeight, shapeWidth } from './shape-mask.js';
 import { placementCostFor } from './placement.js';
 import type { PlacedBuilding } from './buildings.js';
@@ -91,6 +93,16 @@ const STORAGE_CATEGORY_LABEL: Readonly<Record<StorageCategory, string>> = {
   components: 'Components',
   rare: 'Rare / Valuable',
 };
+
+function gateLabel(gate: GateRequirement): string {
+  switch (gate.matchType) {
+    case 'heat_source': return 'Heat Source';
+    case 'cooling_tower': return 'Cooling Tower';
+    case 'same_def': return 'Same Type';
+    case 'same_category': return gate.category ?? 'Same Category';
+    case 'def_id': return BUILDING_DEFS[gate.defId!]?.displayName ?? gate.defId!;
+  }
+}
 
 function styled(el: HTMLElement, css: string): void {
   el.style.cssText = css;
@@ -594,6 +606,9 @@ export function mountInspectorUi(
   );
   powerSection.body.appendChild(powerLine);
 
+  // Gate section (only shown when def.gates exists)
+  const gateSection = makeSection('Gates');
+
   // Storage section (only shown when def.storage exists)
   const storageSection = makeSection('Storage');
   const storageLine = document.createElement('span');
@@ -953,6 +968,7 @@ export function mountInspectorUi(
   // section visually — append a thin spacer + row to the recipe section body.
   recipeSection.body.appendChild(effectiveRow);
   body.appendChild(powerSection.wrap);
+  body.appendChild(gateSection.wrap);
   body.appendChild(storageSection.wrap);
   body.appendChild(heatSection.wrap);
   body.appendChild(maintenanceSection.wrap);
@@ -1124,6 +1140,32 @@ export function mountInspectorUi(
       powerLine.textContent = parts.join('  ·  ');
       powerLine.style.color = FG;
       powerSection.wrap.style.display = '';
+    }
+
+    // Gate status section
+    if (def.gates && def.gates.length > 0) {
+      while (gateSection.body.firstChild) {
+        gateSection.body.removeChild(gateSection.body.firstChild);
+      }
+      for (const gate of def.gates) {
+        const satisfied = gateSatisfied(building, gate, state.buildings, BUILDING_DEFS);
+        const pill = document.createElement('span');
+        pill.className = 'gate-pill';
+        pill.textContent = gateLabel(gate);
+        styled(pill, [
+          'display: inline-block',
+          'padding: 2px 6px',
+          'border-radius: 4px',
+          'font-size: 11px',
+          'margin-right: 4px',
+          'margin-bottom: 4px',
+          satisfied ? 'background: #1a5c1a; color: #88ff88' : 'background: #5c1a1a; color: #ff8888',
+        ].join(';'));
+        gateSection.body.appendChild(pill);
+      }
+      gateSection.wrap.style.display = '';
+    } else {
+      gateSection.wrap.style.display = 'none';
     }
 
     // Storage section — §4.6 categorized routing. Specialized buildings

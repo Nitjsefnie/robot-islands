@@ -182,6 +182,34 @@ export interface GateResult {
  * `{ satisfied: false, effectiveMul: 0 }` immediately. Soft gates
  * accumulate the minimum `degradeMul` across all unmet requirements.
  */
+export function gateSatisfied(
+  building: PlacedBuilding,
+  gate: GateRequirement,
+  all: ReadonlyArray<PlacedBuilding>,
+  defs: Readonly<Record<BuildingDefId, BuildingDef>> = BUILDING_DEFS,
+): boolean {
+  const def = defs[building.defId];
+  if (!def) return true;
+  const fp = footprintKeySet(building, defs);
+  const border = borderTiles(fp);
+  const neighbors: PlacedBuilding[] = [];
+  const seen = new Set<string>();
+  for (const other of all) {
+    if (other.id === building.id) continue;
+    if (seen.has(other.id)) continue;
+    if (!touchesBorder(other, border, defs)) continue;
+    seen.add(other.id);
+    neighbors.push(other);
+  }
+  let matches = 0;
+  for (const n of neighbors) {
+    const nd = defs[n.defId];
+    if (!nd) continue;
+    if (matchesGate(nd, gate, building.defId)) matches++;
+  }
+  return matches >= (gate.minCount ?? 1);
+}
+
 export function checkGates(
   building: PlacedBuilding,
   all: ReadonlyArray<PlacedBuilding>,
@@ -221,7 +249,7 @@ export function checkGates(
   return { satisfied: minMul >= 1, effectiveMul: minMul };
 }
 
-function matchesGate(nd: BuildingDef, gate: GateRequirement, focalDefId: BuildingDefId): boolean {
+export function matchesGate(nd: BuildingDef, gate: GateRequirement, focalDefId: BuildingDefId): boolean {
   switch (gate.matchType) {
     case 'same_def':
       return nd.id === focalDefId;
