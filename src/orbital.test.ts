@@ -2,7 +2,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { launchSatellite, type SatelliteVariant } from './orbital.js';
+import { launchSatellite, upgradeSpaceport, type SatelliteVariant } from './orbital.js';
 import { ALL_RESOURCES, type ResourceId } from './recipes.js';
 import {
   makeInitialWorld,
@@ -283,5 +283,86 @@ describe('satellite launch resource consumption', () => {
     expect(state.inventory.scanner_sat).toBe(0);
     expect(state.inventory.orbital_insertion_package).toBe(0);
     expect(state.inventory.antimatter_propellant).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Spaceport upgrade
+// ---------------------------------------------------------------------------
+
+function stockUpgradeResourcesTier1(state: IslandState): void {
+  state.inventory.phase_converter = 5;
+  state.inventory.eldritch_processor = 2;
+  state.inventory.cryogenic_hydrogen = 50;
+}
+
+function stockUpgradeResourcesTier2(state: IslandState): void {
+  state.inventory.reality_anchor = 10;
+  state.inventory.eldritch_processor = 5;
+  state.inventory.antimatter_propellant = 100;
+}
+
+describe('spaceport upgrade', () => {
+  it('upgrades spaceport I -> II with correct cost consumption', () => {
+    const world = makeWorld();
+    const state = makeIslandState({ id: 'home' });
+    addSpaceport(state, 1);
+    stockUpgradeResourcesTier1(state);
+    world.islandStates = new Map([['home', state]]);
+    const result = upgradeSpaceport(world, 'home');
+    expect(result.ok).toBe(true);
+    const sp = state.buildings.find(b => b.defId === 'spaceport');
+    expect(sp?.tier).toBe(2);
+    expect(state.inventory.phase_converter).toBe(0);
+    expect(state.inventory.eldritch_processor).toBe(0);
+    expect(state.inventory.cryogenic_hydrogen).toBe(0);
+  });
+
+  it('upgrades spaceport II -> III with correct cost consumption', () => {
+    const world = makeWorld();
+    const state = makeIslandState({ id: 'home' });
+    addSpaceport(state, 2);
+    stockUpgradeResourcesTier2(state);
+    world.islandStates = new Map([['home', state]]);
+    const result = upgradeSpaceport(world, 'home');
+    expect(result.ok).toBe(true);
+    const sp = state.buildings.find(b => b.defId === 'spaceport');
+    expect(sp?.tier).toBe(3);
+    expect(state.inventory.reality_anchor).toBe(0);
+    expect(state.inventory.eldritch_processor).toBe(0);
+    expect(state.inventory.antimatter_propellant).toBe(0);
+  });
+
+  it('rejects upgrade beyond III', () => {
+    const world = makeWorld();
+    const state = makeIslandState({ id: 'home' });
+    addSpaceport(state, 3);
+    world.islandStates = new Map([['home', state]]);
+    const result = upgradeSpaceport(world, 'home');
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.reason).toBe('max-tier');
+  });
+
+  it('rejects upgrade without spaceport', () => {
+    const world = makeWorld();
+    const state = makeIslandState({ id: 'home' });
+    world.islandStates = new Map([['home', state]]);
+    const result = upgradeSpaceport(world, 'home');
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.reason).toBe('no-spaceport');
+  });
+
+  it('rejects upgrade with insufficient resources', () => {
+    const world = makeWorld();
+    const state = makeIslandState({ id: 'home' });
+    addSpaceport(state, 1);
+    // Deliberately leave inventory empty.
+    world.islandStates = new Map([['home', state]]);
+    const result = upgradeSpaceport(world, 'home');
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.reason).toBe('insufficient-resources');
   });
 });

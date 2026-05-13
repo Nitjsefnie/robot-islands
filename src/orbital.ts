@@ -5,6 +5,7 @@
 //
 // §14.2 Spaceport + §14.7 launch success rolls with failure modes.
 
+import { inv } from './economy.js';
 import { makeSeededRng } from './rng.js';
 import type { ResourceId } from './recipes.js';
 import type { WorldState } from './world.js';
@@ -129,4 +130,31 @@ export function launchSatellite(
 
   world.satellites.push(sat);
   return { ok: true, sat };
+}
+
+export function upgradeSpaceport(
+  world: WorldState,
+  islandId: string
+): { ok: true } | { ok: false; reason: string } {
+  const state = world.islandStates?.get(islandId);
+  if (!state) return { ok: false, reason: 'no-island' };
+  const sp = state.buildings.find(b => b.defId === 'spaceport');
+  if (!sp) return { ok: false, reason: 'no-spaceport' };
+  const currentTier = sp.tier ?? 1;
+  if (currentTier >= 3) return { ok: false, reason: 'max-tier' };
+
+  const costs = currentTier === 1
+    ? { phase_converter: 5, eldritch_processor: 2, cryogenic_hydrogen: 50 }
+    : { reality_anchor: 10, eldritch_processor: 5, antimatter_propellant: 100 };
+
+  // Check inventory
+  for (const [r, amt] of Object.entries(costs)) {
+    if (inv(state, r as ResourceId) < amt) return { ok: false, reason: 'insufficient-resources' };
+  }
+  // Consume
+  for (const [r, amt] of Object.entries(costs)) {
+    state.inventory[r as ResourceId] = inv(state, r as ResourceId) - amt;
+  }
+  (sp as { tier?: number }).tier = currentTier + 1;
+  return { ok: true };
 }
