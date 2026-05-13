@@ -1,0 +1,192 @@
+import { describe, expect, it } from 'vitest';
+import {
+  computeLatticeActive,
+  isLatticeActive,
+  latticeIslands,
+  LATTICE_ACTIVATION_THRESHOLD,
+} from './lattice.js';
+import { makeInitialIslandState, makeInitialWorld } from './world.js';
+
+function makeTestWorld() {
+  const world = makeInitialWorld(0);
+  const map = new Map();
+  for (const spec of world.islands) {
+    map.set(spec.id, makeInitialIslandState(spec, 0));
+  }
+  (world as typeof world & { islandStates: typeof map }).islandStates = map;
+  return world as typeof world & { islandStates: typeof map };
+}
+
+describe('computeLatticeActive', () => {
+  it('returns false when no lattice nodes exist', () => {
+    const world = makeTestWorld();
+    expect(computeLatticeActive(world)).toBe(false);
+    expect(world.latticeActive).toBe(false);
+    expect(world.latticeNodeIslands).toEqual([]);
+  });
+
+  it('returns false below threshold even with T5 islands', () => {
+    const world = makeTestWorld();
+    for (let i = 0; i < LATTICE_ACTIVATION_THRESHOLD - 1; i++) {
+      world.islands.push({
+        id: `t5-${i}`,
+        name: `t5-${i}`,
+        biome: 'plains',
+        cx: 100 + i * 10,
+        cy: 0,
+        majorRadius: 10,
+        minorRadius: 10,
+        populated: true,
+        discovered: true,
+        buildings: [{ id: `node-${i}`, defId: 'lattice_node', x: 0, y: 0 }],
+        modifiers: [],
+      });
+      const s = makeInitialIslandState(world.islands[world.islands.length - 1]!, 0);
+      s.level = 50;
+      s.aiCoreCrafted = true;
+      world.islandStates.set(`t5-${i}`, s);
+    }
+    expect(computeLatticeActive(world)).toBe(false);
+    expect(world.latticeActive).toBe(false);
+  });
+
+  it('activates at exactly the threshold', () => {
+    const world = makeTestWorld();
+    for (let i = 0; i < LATTICE_ACTIVATION_THRESHOLD; i++) {
+      world.islands.push({
+        id: `t5-${i}`,
+        name: `t5-${i}`,
+        biome: 'plains',
+        cx: 100 + i * 10,
+        cy: 0,
+        majorRadius: 10,
+        minorRadius: 10,
+        populated: true,
+        discovered: true,
+        buildings: [{ id: `node-${i}`, defId: 'lattice_node', x: 0, y: 0 }],
+        modifiers: [],
+      });
+      const s = makeInitialIslandState(world.islands[world.islands.length - 1]!, 0);
+      s.level = 50;
+      s.aiCoreCrafted = true;
+      world.islandStates.set(`t5-${i}`, s);
+    }
+    expect(computeLatticeActive(world)).toBe(true);
+    expect(world.latticeActive).toBe(true);
+    expect(world.latticeNodeIslands.length).toBe(LATTICE_ACTIVATION_THRESHOLD);
+  });
+
+  it('ignores non-T5 islands with lattice nodes', () => {
+    const world = makeTestWorld();
+    for (let i = 0; i < LATTICE_ACTIVATION_THRESHOLD; i++) {
+      world.islands.push({
+        id: `t5-${i}`,
+        name: `t5-${i}`,
+        biome: 'plains',
+        cx: 100 + i * 10,
+        cy: 0,
+        majorRadius: 10,
+        minorRadius: 10,
+        populated: true,
+        discovered: true,
+        buildings: [{ id: `node-${i}`, defId: 'lattice_node', x: 0, y: 0 }],
+        modifiers: [],
+      });
+      const s = makeInitialIslandState(world.islands[world.islands.length - 1]!, 0);
+      // level 1, no aiCoreCrafted — NOT T5-mastered
+      world.islandStates.set(`t5-${i}`, s);
+    }
+    expect(computeLatticeActive(world)).toBe(false);
+  });
+
+  it('ignores invalid lattice nodes', () => {
+    const world = makeTestWorld();
+    for (let i = 0; i < LATTICE_ACTIVATION_THRESHOLD; i++) {
+      world.islands.push({
+        id: `t5-${i}`,
+        name: `t5-${i}`,
+        biome: 'plains',
+        cx: 100 + i * 10,
+        cy: 0,
+        majorRadius: 10,
+        minorRadius: 10,
+        populated: true,
+        discovered: true,
+        buildings: [{ id: `node-${i}`, defId: 'lattice_node', x: 0, y: 0, invalid: true }],
+        modifiers: [],
+      });
+      const s = makeInitialIslandState(world.islands[world.islands.length - 1]!, 0);
+      s.level = 50;
+      s.aiCoreCrafted = true;
+      world.islandStates.set(`t5-${i}`, s);
+    }
+    expect(computeLatticeActive(world)).toBe(false);
+  });
+
+  it('remains active once triggered', () => {
+    const world = makeTestWorld();
+    world.latticeActive = true;
+    world.latticeNodeIslands = ['home'];
+    expect(computeLatticeActive(world)).toBe(true);
+    expect(world.latticeNodeIslands).toEqual(['home']);
+  });
+
+  it('counts only islands with both T5 mastery and a node', () => {
+    const world = makeTestWorld();
+    // Mix: some T5 with node, some T5 without node, some non-T5 with node
+    for (let i = 0; i < LATTICE_ACTIVATION_THRESHOLD + 5; i++) {
+      const hasNode = i % 2 === 0;
+      const isT5 = i < LATTICE_ACTIVATION_THRESHOLD + 2;
+      world.islands.push({
+        id: `mix-${i}`,
+        name: `mix-${i}`,
+        biome: 'plains',
+        cx: 200 + i * 10,
+        cy: 0,
+        majorRadius: 10,
+        minorRadius: 10,
+        populated: true,
+        discovered: true,
+        buildings: hasNode
+          ? [{ id: `node-${i}`, defId: 'lattice_node', x: 0, y: 0 }]
+          : [],
+        modifiers: [],
+      });
+      const s = makeInitialIslandState(world.islands[world.islands.length - 1]!, 0);
+      if (isT5) {
+        s.level = 50;
+        s.aiCoreCrafted = true;
+      }
+      world.islandStates.set(`mix-${i}`, s);
+    }
+    // Even indices < 22 have both T5 and node = 11 islands (0,2,4,6,8,10,12,14,16,18,20)
+    // Wait, 0,2,4,...,20 is 11 islands. That exceeds threshold 20? No, 11 < 20.
+    // Let's adjust: we need 20. Indices 0..39 even = 20 islands.
+    // But we only have 25 islands. Even indices 0,2,4,...,24 = 13 islands, but only
+    // indices < 22 are T5, so even indices 0,2,4,...,20 = 11 islands.
+    expect(computeLatticeActive(world)).toBe(false);
+  });
+});
+
+describe('latticeIslands', () => {
+  it('returns empty set when inactive', () => {
+    const world = makeTestWorld();
+    expect(latticeIslands(world).size).toBe(0);
+  });
+
+  it('returns the node islands when active', () => {
+    const world = makeTestWorld();
+    world.latticeActive = true;
+    world.latticeNodeIslands = ['a', 'b'];
+    expect(latticeIslands(world)).toEqual(new Set(['a', 'b']));
+  });
+});
+
+describe('isLatticeActive', () => {
+  it('reads the world flag', () => {
+    const world = makeTestWorld();
+    expect(isLatticeActive(world)).toBe(false);
+    world.latticeActive = true;
+    expect(isLatticeActive(world)).toBe(true);
+  });
+});

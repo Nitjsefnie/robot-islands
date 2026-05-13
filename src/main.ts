@@ -80,6 +80,7 @@ import { tickDrones } from './drones.js';
 import { findNextMerge, performMerge } from './island-merge.js';
 import { makeIslandScreenPosResolver, mountRoutesUi } from './routes-ui.js';
 import { tickRoutes } from './routes.js';
+import { computeLatticeActive } from './lattice.js';
 import { mountSettlementUi } from './settlement-ui.js';
 import { tickVehicles } from './settlement.js';
 import { checkObjectives, type ObjectiveId } from './tutorial.js';
@@ -530,6 +531,29 @@ async function main(): Promise<void> {
     { label: 'Construct (C)', action: 'toggle-construction' },
     { label: 'Settings (S)', action: 'toggle-settings' },
   ]);
+
+  // §13.3 Omniscient Lattice banner — shown globally when latticeActive.
+  const latticeBanner = document.createElement('div');
+  latticeBanner.id = 'lattice-banner';
+  latticeBanner.textContent = 'OMNISCIENT LATTICE ACTIVE';
+  latticeBanner.style.cssText = `
+    position: fixed;
+    top: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 9999;
+    background: rgba(128, 240, 192, 0.15);
+    color: #80f0c0;
+    border: 1px solid #80f0c0;
+    border-radius: 4px;
+    padding: 4px 12px;
+    font-family: monospace;
+    font-size: 12px;
+    letter-spacing: 1px;
+    pointer-events: none;
+    display: none;
+  `;
+  document.body.appendChild(latticeBanner);
 
   // -----------------------------------------------------------------------
   // Economy state — multi-island
@@ -1127,6 +1151,10 @@ async function main(): Promise<void> {
     // get consumed (and the funnel-pending credit drained) on that frame.
     // Each island's modifier set composes its own recipe-rate multipliers,
     // so we look up the precomputed bundle by id and pass it through.
+    // §13.3 evaluate Omniscient Lattice activation after all economy advances
+    // so newly placed nodes on this frame are counted.
+    computeLatticeActive(worldState);
+
     const islandPower = new Map<string, PowerBalance>();
     const islandNets = new Map<string, Record<ResourceId, number>>();
     for (const s of islandStates.values()) {
@@ -1286,6 +1314,8 @@ async function main(): Promise<void> {
       activeIslandId,
       islandPower,
     );
+    // §13.3 Omniscient Lattice banner visibility.
+    latticeBanner.style.display = worldState.latticeActive ? 'block' : 'none';
     // Skill tree only repaints while visible — DOM writes are wasted
     // otherwise. show() also forces a paint on transition so we don't
     // strictly need a per-frame call, but level-up while the panel is open
