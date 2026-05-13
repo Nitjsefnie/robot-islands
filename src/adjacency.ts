@@ -131,6 +131,7 @@ export function computeBuffStack(
   b: PlacedBuilding,
   buildings: ReadonlyArray<PlacedBuilding>,
   defs: Readonly<Record<BuildingDefId, BuildingDef>> = BUILDING_DEFS,
+  crossIsland?: ReadonlyArray<PlacedBuilding>,
 ): number {
   const def = defs[b.defId];
   const buffs = def.adjacencyBuffs;
@@ -152,6 +153,16 @@ export function computeBuffStack(
     if (!touchesBorder(other, border, defs)) continue;
     seen.add(other.id);
     neighbors.push(other);
+  }
+  // §13.3 Omniscient Lattice: cross-island buildings count as neighbors
+  // despite physical distance. Added unconditionally when provided.
+  if (crossIsland) {
+    for (const other of crossIsland) {
+      if (other.id === b.id) continue;
+      if (seen.has(other.id)) continue;
+      seen.add(other.id);
+      neighbors.push(other);
+    }
   }
 
   let stack = 1;
@@ -186,6 +197,7 @@ export function collectNeighbors(
   building: PlacedBuilding,
   all: ReadonlyArray<PlacedBuilding>,
   defs: Readonly<Record<BuildingDefId, BuildingDef>> = BUILDING_DEFS,
+  crossIsland?: ReadonlyArray<PlacedBuilding>,
 ): PlacedBuilding[] {
   const fp = footprintKeySet(building, defs);
   const border = borderTiles(fp);
@@ -198,6 +210,16 @@ export function collectNeighbors(
     seen.add(other.id);
     neighbors.push(other);
   }
+  // §13.3 Omniscient Lattice: cross-island buildings count as neighbors
+  // despite physical distance.
+  if (crossIsland) {
+    for (const other of crossIsland) {
+      if (other.id === building.id) continue;
+      if (seen.has(other.id)) continue;
+      seen.add(other.id);
+      neighbors.push(other);
+    }
+  }
   return neighbors;
 }
 
@@ -207,11 +229,12 @@ export function gateSatisfied(
   all: ReadonlyArray<PlacedBuilding>,
   defs: Readonly<Record<BuildingDefId, BuildingDef>> = BUILDING_DEFS,
   geothermalActive: boolean = false,
+  crossIsland?: ReadonlyArray<PlacedBuilding>,
 ): boolean {
   const def = defs[building.defId];
   if (!def) return true;
   if (geothermalActive && gate.matchType === 'heat_source') return true;
-  const neighbors = collectNeighbors(building, all, defs);
+  const neighbors = collectNeighbors(building, all, defs, crossIsland);
   let matches = 0;
   for (const n of neighbors) {
     const nd = defs[n.defId];
@@ -226,13 +249,14 @@ export function checkGates(
   all: ReadonlyArray<PlacedBuilding>,
   defs: Readonly<Record<BuildingDefId, BuildingDef>> = BUILDING_DEFS,
   geothermalActive: boolean = false,
+  crossIsland?: ReadonlyArray<PlacedBuilding>,
 ): GateResult {
   const def = defs[building.defId];
   if (!def.gates || def.gates.length === 0) {
     return { satisfied: true, effectiveMul: 1 };
   }
 
-  const neighbors = collectNeighbors(building, all, defs);
+  const neighbors = collectNeighbors(building, all, defs, crossIsland);
 
   let minMul = 1;
   for (const gate of def.gates) {

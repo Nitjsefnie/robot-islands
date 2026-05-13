@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   computeLatticeActive,
+  crossIslandNeighbors,
   isLatticeActive,
   latticeIslands,
   LATTICE_ACTIVATION_THRESHOLD,
@@ -188,5 +189,80 @@ describe('isLatticeActive', () => {
     expect(isLatticeActive(world)).toBe(false);
     world.latticeActive = true;
     expect(isLatticeActive(world)).toBe(true);
+  });
+});
+
+describe('crossIslandNeighbors', () => {
+  it('returns undefined when lattice is inactive', () => {
+    const world = makeTestWorld();
+    expect(crossIslandNeighbors(world, 'home')).toBeUndefined();
+  });
+
+  it('returns undefined for a non-lattice island', () => {
+    const world = makeTestWorld();
+    world.latticeActive = true;
+    world.latticeNodeIslands = ['other'];
+    expect(crossIslandNeighbors(world, 'home')).toBeUndefined();
+  });
+
+  it('returns buildings on other lattice islands', () => {
+    const world = makeTestWorld();
+    world.islands.push({
+      id: 'remote',
+      name: 'remote',
+      biome: 'plains',
+      cx: 100,
+      cy: 0,
+      majorRadius: 10,
+      minorRadius: 10,
+      populated: true,
+      discovered: true,
+      buildings: [
+        { id: 'remote-mine', defId: 'mine', x: 0, y: 0 },
+        { id: 'remote-workshop', defId: 'workshop', x: 2, y: 0 },
+      ],
+      modifiers: [],
+    });
+    world.latticeActive = true;
+    world.latticeNodeIslands = ['home', 'remote'];
+    const neighbors = crossIslandNeighbors(world, 'home');
+    expect(neighbors).toBeDefined();
+    expect(neighbors!.length).toBe(2);
+    expect(neighbors!.map((b) => b.id)).toContain('remote-mine');
+    expect(neighbors!.map((b) => b.id)).toContain('remote-workshop');
+  });
+
+  it('excludes invalid buildings', () => {
+    const world = makeTestWorld();
+    world.islands.push({
+      id: 'remote',
+      name: 'remote',
+      biome: 'plains',
+      cx: 100,
+      cy: 0,
+      majorRadius: 10,
+      minorRadius: 10,
+      populated: true,
+      discovered: true,
+      buildings: [
+        { id: 'remote-mine', defId: 'mine', x: 0, y: 0 },
+        { id: 'remote-bad', defId: 'workshop', x: 2, y: 0, invalid: true },
+      ],
+      modifiers: [],
+    });
+    world.latticeActive = true;
+    world.latticeNodeIslands = ['home', 'remote'];
+    const neighbors = crossIslandNeighbors(world, 'home');
+    expect(neighbors!.length).toBe(1);
+    expect(neighbors![0]!.id).toBe('remote-mine');
+  });
+
+  it('excludes the queried island itself', () => {
+    const world = makeTestWorld();
+    world.latticeActive = true;
+    world.latticeNodeIslands = ['home'];
+    const neighbors = crossIslandNeighbors(world, 'home');
+    expect(neighbors).toBeDefined();
+    expect(neighbors!.length).toBe(0);
   });
 });

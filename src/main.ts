@@ -80,7 +80,7 @@ import { tickDrones } from './drones.js';
 import { findNextMerge, performMerge } from './island-merge.js';
 import { makeIslandScreenPosResolver, mountRoutesUi } from './routes-ui.js';
 import { tickRoutes } from './routes.js';
-import { computeLatticeActive, latticeInventory } from './lattice.js';
+import { computeLatticeActive, crossIslandNeighbors, latticeInventory } from './lattice.js';
 import { mountSettlementUi } from './settlement-ui.js';
 import { tickVehicles } from './settlement.js';
 import { checkObjectives, type ObjectiveId } from './tutorial.js';
@@ -1157,6 +1157,15 @@ async function main(): Promise<void> {
     // §13.3 unified inventory — computed once per tick and threaded to every
     // Lattice island's rate computation so consumers see stockpile on siblings.
     const unifiedInv = latticeInventory(worldState);
+    // §13.3 cross-island adjacency — precompute once per tick for each
+    // lattice island so computeRates can treat remote buildings as neighbors.
+    const crossIslandById = new Map<string, PlacedBuilding[]>();
+    if (worldState.latticeActive) {
+      for (const id of worldState.latticeNodeIslands) {
+        const neighbors = crossIslandNeighbors(worldState, id);
+        if (neighbors) crossIslandById.set(id, neighbors);
+      }
+    }
 
     const islandPower = new Map<string, PowerBalance>();
     const islandNets = new Map<string, Record<ResourceId, number>>();
@@ -1167,12 +1176,14 @@ async function main(): Promise<void> {
       // every recomputeRates call within the tick.
       const spec = islandSpecsById.get(s.id);
       const isLatticeIsland = unifiedInv !== undefined && worldState.latticeNodeIslands.includes(s.id);
+      const crossIsland = crossIslandById.get(s.id);
       advanceIsland(s, now, {
         modifierMul: modifierMulFor(s.id),
         specMul: specMulFor(s),
         ncBuff: ncBuffFor(s),
         terrainAt: spec?.terrainAt,
         inventory: isLatticeIsland ? unifiedInv : undefined,
+        crossIsland,
       });
       const { net, power } = computeRates(s, {
         modifierMul: modifierMulFor(s.id),
@@ -1180,6 +1191,7 @@ async function main(): Promise<void> {
         ncBuff: ncBuffFor(s),
         terrainAt: spec?.terrainAt,
         inventory: isLatticeIsland ? unifiedInv : undefined,
+        crossIsland,
       });
       islandNets.set(s.id, net);
       islandPower.set(s.id, power);
@@ -1290,6 +1302,7 @@ async function main(): Promise<void> {
       ncBuff: ncBuffFor(postTickActiveS),
       terrainAt: postTickActiveP?.terrainAt,
       inventory: postTickLattice ? unifiedInv : undefined,
+      crossIsland: crossIslandById.get(postTickActiveS.id),
     });
     islandNets.set(activeIslandId, postNet);
     islandPower.set(activeIslandId, postPower);
@@ -1311,6 +1324,7 @@ async function main(): Promise<void> {
         ncBuff: ncBuffFor(activeS),
         terrainAt: activeP?.terrainAt,
         inventory: unifiedInv,
+        crossIsland: crossIslandById.get(activeS.id),
       });
       islandNets.set(activeS.id, activeNet);
       islandPower.set(activeS.id, activePower);

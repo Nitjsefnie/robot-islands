@@ -305,5 +305,34 @@ describe('checkGates — §4.5 gating adjacency', () => {
     expect(checkGates(focal, [focal, neighbor], softDefs)).toEqual({ satisfied: false, effectiveMul: 0.25 });
   });
 
+  it('§13.3 cross-island: remote building counts as neighbor for buff', () => {
+    // Focal mine has no local same_def neighbors, but a remote mine on
+    // another island is passed as crossIsland → should count.
+    const defs = withBuffs('mine', [
+      { matchKind: 'same_def', percentPerMatch: 10, maxMatches: 2 },
+    ]);
+    const focal: PlacedBuilding = { id: 'a', defId: 'mine', x: 0, y: 0 };
+    const remote: PlacedBuilding = { id: 'remote', defId: 'mine', x: 999, y: 999 };
+    expect(computeBuffStack(focal, [focal], defs, [remote])).toBeCloseTo(1.1, 9);
+  });
 
+  it('§13.3 cross-island: remote building satisfies hard gate', () => {
+    const defs = withGates('coke_oven', [{ matchType: 'heat_source', hard: true }]);
+    const focal: PlacedBuilding = { id: 'c', defId: 'coke_oven', x: 0, y: 0 };
+    const remoteHeater: PlacedBuilding = { id: 'h-remote', defId: 'coal_furnace', x: 999, y: 999 };
+    expect(checkGates(focal, [focal], defs, false, [remoteHeater])).toEqual({
+      satisfied: true,
+      effectiveMul: 1,
+    });
+  });
+
+  it('§13.3 cross-island: self-id in crossIsland is ignored', () => {
+    // A remote building with the same id as focal should not count.
+    const defs = withBuffs('mine', [
+      { matchKind: 'same_def', percentPerMatch: 10, maxMatches: 2 },
+    ]);
+    const focal: PlacedBuilding = { id: 'a', defId: 'mine', x: 0, y: 0 };
+    const remoteSameId: PlacedBuilding = { id: 'a', defId: 'mine', x: 999, y: 999 };
+    expect(computeBuffStack(focal, [focal], defs, [remoteSameId])).toBe(1);
+  });
 });

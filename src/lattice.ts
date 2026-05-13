@@ -3,6 +3,7 @@
 // No PixiJS, no DOM. Activation mutates WorldState in place (sets
 // latticeActive + latticeNodeIslands) but does not touch economy state.
 
+import type { PlacedBuilding } from './buildings.js';
 import type { ResourceId } from './recipes.js';
 import type { WorldState } from './world.js';
 
@@ -55,6 +56,40 @@ export function latticeIslands(world: WorldState): Set<string> {
 /** Pure read — is the Lattice currently active? */
 export function isLatticeActive(world: WorldState): boolean {
   return world.latticeActive;
+}
+
+/**
+ * §13.3 Cross-island adjacency — all valid buildings on OTHER lattice islands.
+ *
+ * Returns a fresh array of every non-invalid building on lattice islands
+ * other than `islandId`. When passed into `computeRates` as
+ * `RatesContext.crossIsland`, these buildings count as neighbors for buff
+ * and gate adjacency despite physical distance.
+ *
+ * Returns `undefined` when the Lattice is inactive or `islandId` is not a
+ * Lattice island, so callers can use `?? undefined` without branching.
+ */
+export function crossIslandNeighbors(
+  world: WorldState,
+  islandId: string,
+): PlacedBuilding[] | undefined {
+  if (!world.latticeActive) return undefined;
+  if (!world.latticeNodeIslands.includes(islandId)) return undefined;
+
+  const out: PlacedBuilding[] = [];
+  const seen = new Set<string>();
+  for (const otherId of world.latticeNodeIslands) {
+    if (otherId === islandId) continue;
+    const otherSpec = world.islands.find((i) => i.id === otherId);
+    if (!otherSpec) continue;
+    for (const b of otherSpec.buildings) {
+      if (b.invalid) continue;
+      if (seen.has(b.id)) continue;
+      seen.add(b.id);
+      out.push(b);
+    }
+  }
+  return out;
 }
 
 /**
