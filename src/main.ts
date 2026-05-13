@@ -1158,7 +1158,6 @@ async function main(): Promise<void> {
       const needsUpdate = newlyCompleted.length > 0 || lastRenderedObjective !== current;
 
       if (needsUpdate) {
-        lastRenderedObjective = current;
         const banner = renderTutorialBanner(worldState.tutorialState);
         const old = document.getElementById('tutorial-banner');
         if (old) {
@@ -1167,6 +1166,7 @@ async function main(): Promise<void> {
         } else if (banner) {
           document.body.appendChild(banner);
         }
+        lastRenderedObjective = current;
       }
     }
     // §3.6 Island Joining: AFTER economy advances, walk pairs of populated
