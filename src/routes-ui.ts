@@ -24,6 +24,7 @@ import { TILE_PX } from './island.js';
 import { ALL_RESOURCES, type ResourceId } from './recipes.js';
 import {
   nextRouteId,
+  reorderPriorityList,
   transitTimeForDistance,
   T1_CARGO_CAPACITY_UNITS_PER_SEC,
   type Route,
@@ -550,7 +551,10 @@ export function mountRoutesUi(parentEl: HTMLElement, deps: RouteUiDeps): RouteUi
   }
 
   // ---- Ledger renderer -------------------------------------------------------
+  let isDraggingPriority = false;
+
   function repaintLedger(nowMs: number): void {
+    if (isDraggingPriority) return;
     ledgerList.replaceChildren();
     if (deps.world.routes.length === 0) {
       ledgerList.appendChild(ledgerEmpty);
@@ -691,6 +695,7 @@ export function mountRoutesUi(parentEl: HTMLElement, deps: RouteUiDeps): RouteUi
         'border-radius: 2px',
       ].join(';');
       li.addEventListener('dragstart', (e) => handleDragStart(e));
+      li.addEventListener('dragend', (e) => handleDragEnd(e));
       li.addEventListener('dragover', (e) => handleDragOver(e));
       li.addEventListener('drop', (e) => handleDrop(e, route, rerender));
       li.addEventListener('dragenter', (e) => { e.preventDefault(); li.style.borderColor = '#7dd3e8'; });
@@ -701,9 +706,16 @@ export function mountRoutesUi(parentEl: HTMLElement, deps: RouteUiDeps): RouteUi
   }
 
   function handleDragStart(e: DragEvent) {
+    isDraggingPriority = true;
     const li = e.currentTarget as HTMLElement;
     li.style.opacity = '0.5';
     e.dataTransfer?.setData('text/plain', li.dataset.index!);
+  }
+
+  function handleDragEnd(e: DragEvent) {
+    isDraggingPriority = false;
+    const li = e.currentTarget as HTMLElement;
+    li.style.opacity = '1';
   }
 
   function handleDragOver(e: DragEvent) {
@@ -717,11 +729,8 @@ export function mountRoutesUi(parentEl: HTMLElement, deps: RouteUiDeps): RouteUi
     const dst = Number(dstLi.dataset.index);
     if (src === dst || Number.isNaN(src) || Number.isNaN(dst)) return;
 
-    const list = [...route.priorityList];
-    const [moved] = list.splice(src, 1);
-    if (moved === undefined) return;
-    list.splice(dst, 0, moved);
-    (route as any).priorityList = list;
+    const list = reorderPriorityList(route.priorityList, src, dst);
+    (route as unknown as { priorityList: ResourceId[] }).priorityList = list;
 
     rerender();
   }

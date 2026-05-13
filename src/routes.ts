@@ -479,3 +479,14 @@ export function transitTimeForDistance(distanceTiles: number, speedTilesPerSec =
   if (speedTilesPerSec <= 0) return 0;
   return distanceTiles / speedTilesPerSec;
 }
+
+/** Pure helper: reorder a priority list by moving the element at `srcIndex`
+ *  to `dstIndex`. Returns a new array; the input is not modified. */
+export function reorderPriorityList(list: ReadonlyArray<ResourceId>, srcIndex: number, dstIndex: number): ResourceId[] {
+  if (srcIndex === dstIndex) return [...list];
+  const result = [...list];
+  const [moved] = result.splice(srcIndex, 1);
+  if (moved === undefined) return result;
+  result.splice(dstIndex, 0, moved);
+  return result;
+}

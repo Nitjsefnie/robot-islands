@@ -13,6 +13,7 @@ import {
   FUNNELING_BONUS_PERCENT,
   FUNNELING_TIER_CAP,
   nextRouteId,
+  reorderPriorityList,
   tickRoutes,
   type Route,
 } from './routes.js';
@@ -584,6 +585,41 @@ describe('§2.6 dispatch weather capacity reduction', () => {
 
     const dispatches = dispatchAttempt(world, states, 0, 1);
     expect(dispatches.length).toBe(0);
+  });
+});
+
+describe('reorderPriorityList', () => {
+  it('returns a new array with the element moved from src to dst', () => {
+    const list: ResourceId[] = ['iron_ore', 'coal', 'stone', 'bolt'];
+    const result = reorderPriorityList(list, 0, 2);
+    expect(result).toEqual(['coal', 'stone', 'iron_ore', 'bolt']);
+    // Original unchanged
+    expect(list).toEqual(['iron_ore', 'coal', 'stone', 'bolt']);
+  });
+
+  it('returns a shallow copy when src === dst', () => {
+    const list: ResourceId[] = ['iron_ore', 'coal', 'stone'];
+    const result = reorderPriorityList(list, 1, 1);
+    expect(result).toEqual(['iron_ore', 'coal', 'stone']);
+    expect(result).not.toBe(list);
+  });
+
+  it('handles moving the last element to the first position', () => {
+    const list: ResourceId[] = ['iron_ore', 'coal', 'stone'];
+    const result = reorderPriorityList(list, 2, 0);
+    expect(result).toEqual(['stone', 'iron_ore', 'coal']);
+  });
+
+  it('handles moving the first element to the last position', () => {
+    const list: ResourceId[] = ['iron_ore', 'coal', 'stone'];
+    const result = reorderPriorityList(list, 0, 2);
+    expect(result).toEqual(['coal', 'stone', 'iron_ore']);
+  });
+
+  it('returns a copy unchanged when src is out of bounds', () => {
+    const list: ResourceId[] = ['iron_ore', 'coal'];
+    const result = reorderPriorityList(list, 5, 0);
+    expect(result).toEqual(['iron_ore', 'coal']);
   });
 });
 
