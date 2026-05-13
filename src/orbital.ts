@@ -10,6 +10,8 @@ import { makeSeededRng } from './rng.js';
 import type { ResourceId } from './recipes.js';
 import type { WorldState } from './world.js';
 
+export const SAT_BUFFER_CAP = 100;
+
 export type SatelliteVariant = 'scanner' | 'sweeper' | 'comm';
 
 export interface SatBufferEntry {
@@ -202,7 +204,7 @@ export function connectedSatellites(world: WorldState): Satellite[] {
 // ---------------------------------------------------------------------------
 
 export function appendSatBuffer(sat: Satellite, entry: SatBufferEntry): void {
-  if (sat.buffer.length >= 100) {
+  if (sat.buffer.length >= SAT_BUFFER_CAP) {
     sat.buffer.shift();
   }
   sat.buffer.push(entry);
