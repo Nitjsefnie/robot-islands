@@ -80,7 +80,7 @@ import { tickDrones } from './drones.js';
 import { findNextMerge, performMerge } from './island-merge.js';
 import { makeIslandScreenPosResolver, mountRoutesUi } from './routes-ui.js';
 import { tickRoutes } from './routes.js';
-import { computeLatticeActive } from './lattice.js';
+import { computeLatticeActive, latticeInventory } from './lattice.js';
 import { mountSettlementUi } from './settlement-ui.js';
 import { tickVehicles } from './settlement.js';
 import { checkObjectives, type ObjectiveId } from './tutorial.js';
@@ -1154,6 +1154,9 @@ async function main(): Promise<void> {
     // §13.3 evaluate Omniscient Lattice activation after all economy advances
     // so newly placed nodes on this frame are counted.
     computeLatticeActive(worldState);
+    // §13.3 unified inventory — computed once per tick and threaded to every
+    // Lattice island's rate computation so consumers see stockpile on siblings.
+    const unifiedInv = latticeInventory(worldState);
 
     const islandPower = new Map<string, PowerBalance>();
     const islandNets = new Map<string, Record<ResourceId, number>>();
@@ -1163,17 +1166,20 @@ async function main(): Promise<void> {
       // Spec lookup is cheap (Map.get); the closure itself is reused across
       // every recomputeRates call within the tick.
       const spec = islandSpecsById.get(s.id);
+      const isLatticeIsland = unifiedInv !== undefined && worldState.latticeNodeIslands.includes(s.id);
       advanceIsland(s, now, {
         modifierMul: modifierMulFor(s.id),
         specMul: specMulFor(s),
         ncBuff: ncBuffFor(s),
         terrainAt: spec?.terrainAt,
+        inventory: isLatticeIsland ? unifiedInv : undefined,
       });
       const { net, power } = computeRates(s, {
         modifierMul: modifierMulFor(s.id),
         specMul: specMulFor(s),
         ncBuff: ncBuffFor(s),
         terrainAt: spec?.terrainAt,
+        inventory: isLatticeIsland ? unifiedInv : undefined,
       });
       islandNets.set(s.id, net);
       islandPower.set(s.id, power);
@@ -1277,11 +1283,13 @@ async function main(): Promise<void> {
     // and the multi-island bar show current data.
     const postTickActiveS = activeState();
     const postTickActiveP = activeSpec();
+    const postTickLattice = unifiedInv !== undefined && worldState.latticeNodeIslands.includes(postTickActiveS.id);
     const { net: postNet, power: postPower } = computeRates(postTickActiveS, {
       modifierMul: modifierMulFor(postTickActiveS.id),
       specMul: specMulFor(postTickActiveS),
       ncBuff: ncBuffFor(postTickActiveS),
       terrainAt: postTickActiveP?.terrainAt,
+      inventory: postTickLattice ? unifiedInv : undefined,
     });
     islandNets.set(activeIslandId, postNet);
     islandPower.set(activeIslandId, postPower);
@@ -1293,6 +1301,20 @@ async function main(): Promise<void> {
     // HUD on the next frame.
     const activeS = activeState();
     const activeP = activeSpec();
+    const activeLattice = unifiedInv !== undefined && worldState.latticeNodeIslands.includes(activeS.id);
+    if (activeLattice) {
+      // Refresh the active island's net/power with unified inventory so the HUD
+      // reads the same cross-island state that advanceIsland used.
+      const { net: activeNet, power: activePower } = computeRates(activeS, {
+        modifierMul: modifierMulFor(activeS.id),
+        specMul: specMulFor(activeS),
+        ncBuff: ncBuffFor(activeS),
+        terrainAt: activeP?.terrainAt,
+        inventory: unifiedInv,
+      });
+      islandNets.set(activeS.id, activeNet);
+      islandPower.set(activeS.id, activePower);
+    }
     const net = islandNets.get(activeS.id)!;
     const power = islandPower.get(activeS.id)!;
     const saveAgeSec =

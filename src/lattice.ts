@@ -3,6 +3,7 @@
 // No PixiJS, no DOM. Activation mutates WorldState in place (sets
 // latticeActive + latticeNodeIslands) but does not touch economy state.
 
+import type { ResourceId } from './recipes.js';
 import type { WorldState } from './world.js';
 
 /** §13.3 Network Consciousness threshold for Omniscient Lattice activation. */
@@ -54,4 +55,28 @@ export function latticeIslands(world: WorldState): Set<string> {
 /** Pure read — is the Lattice currently active? */
 export function isLatticeActive(world: WorldState): boolean {
   return world.latticeActive;
+}
+
+/**
+ * §13.3 Unified inventory across all Lattice islands.
+ *
+ * Returns a fresh Record summing every ResourceId across the inventories of
+ * islands in `world.latticeNodeIslands`. Returns `undefined` when the Lattice
+ * is inactive so callers can use `?? state.inventory` without branching.
+ *
+ * The sum is recomputed each call — cheap for the typical ~20-island Lattice.
+ */
+export function latticeInventory(
+  world: WorldState,
+): Record<ResourceId, number> | undefined {
+  if (!world.latticeActive) return undefined;
+  const unified: Record<ResourceId, number> = {} as Record<ResourceId, number>;
+  for (const id of world.latticeNodeIslands) {
+    const state = world.islandStates?.get(id);
+    if (!state) continue;
+    for (const [r, amt] of Object.entries(state.inventory)) {
+      unified[r as ResourceId] = (unified[r as ResourceId] ?? 0) + (amt ?? 0);
+    }
+  }
+  return unified;
 }

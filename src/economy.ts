@@ -81,6 +81,10 @@ export interface RatesContext {
   readonly worldSeed?: string;
   /** §3.5 Geothermal Active: free heat for all requiresHeat buildings on this island. */
   readonly geothermalActive?: boolean;
+  /** §13.3 Omniscient Lattice: unified inventory override. When provided,
+   *  `inputAvail` stockpile checks read from this map instead of the local
+   *  island inventory, enabling cross-island consumption. */
+  readonly inventory?: Record<ResourceId, number>;
 }
 
 /**
@@ -332,11 +336,15 @@ function inputAvail(
   recipe: Recipe,
   externalSupply: Record<ResourceId, number>,
   baseRate: number,
+  inventory?: Record<ResourceId, number>,
 ): number {
   let factor = 1;
   for (const [r, needPerCycle] of Object.entries(recipe.inputs)) {
     const id = r as ResourceId;
-    if (inv(state, id) > 0) continue; // stockpile satisfies demand
+    // §13.3 Omniscient Lattice: when an inventory override is provided,
+    // stockpile checks read from the unified pool instead of local state.
+    const stock = inventory?.[id] ?? state.inventory[id] ?? 0;
+    if (stock > 0) continue; // stockpile satisfies demand
     const demand = (needPerCycle ?? 0) * baseRate;
     if (demand <= 0) continue;
     const supply = externalSupply[id] ?? 0;
@@ -659,7 +667,7 @@ export function computeRates(
         externalSupply[id] = (externalSupply[id] ?? 0) - (yld ?? 0) * te.baseRate;
       }
     }
-    inputAvailByIdx[i] = inputAvail(state, te.recipe, externalSupply, nominalRate);
+    inputAvailByIdx[i] = inputAvail(state, te.recipe, externalSupply, nominalRate, ctx?.inventory);
   }
 
   // Pass 3: power balance. A building is `active` for §5.1 iff:

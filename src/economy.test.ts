@@ -352,6 +352,43 @@ describe('computeRates', () => {
     expect(mineRate?.effectiveRate).toBeCloseTo(0.01, 9);
     expect(net.iron_ore ?? 0).toBeCloseTo(0.01, 9);
   });
+
+  it('§13.3 unified inventory: consumer runs when override has stockpile', () => {
+    // Local island has 0 iron_ore, but unified inventory has 50.
+    // Workshop should run because inputAvail sees the unified stockpile.
+    const state = makeState({
+      buildings: [WORKSHOP],
+      inventory: { ...blankInventory(), coal: 50 },
+    });
+    const unified = { ...blankInventory(), iron_ore: 50, coal: 50 };
+    const { byBuilding } = computeRates(state, { defs: POWER_FREE, inventory: unified });
+    expect(byBuilding[0]?.effectiveRate).toBeGreaterThan(0);
+  });
+
+  it('§13.3 unified inventory: consumer stalls when override lacks stock', () => {
+    // Local and unified both lack iron_ore; no external supply.
+    const state = makeState({
+      buildings: [WORKSHOP],
+      inventory: { ...blankInventory(), coal: 50 },
+    });
+    const unified = { ...blankInventory(), coal: 50 };
+    const { byBuilding } = computeRates(state, { defs: POWER_FREE, inventory: unified });
+    expect(byBuilding[0]?.effectiveRate).toBe(0);
+  });
+
+  it('§13.3 unified inventory: flow-through from local supply still works', () => {
+    // Local island has a Mine producing iron_ore and a Workshop consuming it.
+    // Unified inventory has coal but no iron_ore. Mine provides flow-through,
+    // so Workshop runs because externalSupply covers demand.
+    const state = makeState({
+      buildings: [MINE, WORKSHOP],
+      inventory: { ...blankInventory(), coal: 50 },
+    });
+    const unified = { ...blankInventory(), coal: 50 };
+    const { byBuilding } = computeRates(state, { defs: POWER_FREE, inventory: unified });
+    const workshopRate = byBuilding.find((b) => b.building.defId === 'workshop');
+    expect(workshopRate?.effectiveRate).toBeGreaterThan(0);
+  });
 });
 
 // -----------------------------------------------------------------------
