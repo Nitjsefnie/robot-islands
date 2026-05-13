@@ -8,6 +8,9 @@ import { ALL_RESOURCES, type ResourceId } from './recipes.js';
 import { makeSeededRng } from './rng.js';
 import type { SettlementVehicle } from './settlement.js';
 import {
+  _resetRouteIdCounter,
+} from './routes.js';
+import {
   HELICOPTER_STATS,
   SHIP_STATS,
   _resetVehicleIdCounter,
@@ -121,6 +124,7 @@ function makeTestWorld(): {
 
 beforeEach(() => {
   _resetVehicleIdCounter();
+  _resetRouteIdCounter();
 });
 
 // ---------------------------------------------------------------------------
@@ -854,5 +858,201 @@ describe('vehicle weather destruction §2.6', () => {
     expect(result.failures).toHaveLength(0);
     expect(target.populated).toBe(false);
     expect(world.vehicles[0]!.status).toBe('lost');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// §9.6 / §12.7 Auto-Patronage
+// ---------------------------------------------------------------------------
+
+function makeT3Island(id: string, cx: number, cy: number, opts: { hasPatronHub?: boolean } = {}): IslandSpec {
+  return makeIslandSpec({
+    id,
+    name: id,
+    cx,
+    cy,
+    populated: true,
+    discovered: true,
+    buildings: opts.hasPatronHub ? [{ id: `${id}-ph`, defId: 'patron_hub' as import('./building-defs.js').BuildingDefId, x: 0, y: 0 }] : [],
+  });
+}
+
+function makeT3State(id: string): IslandState {
+  return makeIslandState({ id, level: 15 });
+}
+
+function makeNetworkedWorldWithMilestone(
+  t3Count: number,
+  opts: { hasPatronHub?: boolean; extraHubs?: Array<{ id: string; cx: number; cy: number }> } = {},
+): {
+  world: WorldState;
+  homeSpec: IslandSpec;
+  homeState: IslandState;
+  targetSpec: IslandSpec;
+  islandStates: Map<string, IslandState>;
+} {
+  const homeSpec = makeIslandSpec({
+    id: 'home',
+    cx: 0,
+    cy: 0,
+    populated: true,
+    discovered: true,
+    buildings: [{ id: 'sy', defId: 'shipyard', x: 0, y: 0 }],
+  });
+  const islands: IslandSpec[] = [homeSpec];
+  const islandStates = new Map<string, IslandState>();
+  islandStates.set('home', makeIslandState({ id: 'home', level: 1 }));
+
+  const routes: import('./routes.js').Route[] = [];
+
+  for (let i = 0; i < t3Count; i++) {
+    const id = `t3-${i}`;
+    const hasHub = opts.hasPatronHub && (opts.extraHubs ? false : i === 0);
+    const cx = (i + 1) * 10;
+    const cy = 0;
+    const island = makeT3Island(id, cx, cy, { hasPatronHub: hasHub });
+    islands.push(island);
+    const state = makeT3State(id);
+    state.buildings = island.buildings;
+    islandStates.set(id, state);
+    routes.push({
+      id: `net-route-${i}`,
+      from: 'home',
+      to: id,
+      type: 'cargo',
+      capacityPerSec: 1,
+      filter: null,
+      priorityList: [],
+      transitTimeSec: 1,
+      inFlight: [],
+    });
+  }
+
+  if (opts.extraHubs) {
+    for (const h of opts.extraHubs) {
+      const hub = makeT3Island(h.id, h.cx, h.cy, { hasPatronHub: true });
+      islands.push(hub);
+      const state = makeT3State(h.id);
+      state.buildings = hub.buildings;
+      islandStates.set(h.id, state);
+      routes.push({
+        id: `net-route-hub-${h.id}`,
+        from: 'home',
+        to: h.id,
+        type: 'cargo',
+        capacityPerSec: 1,
+        filter: null,
+        priorityList: [],
+        transitTimeSec: 1,
+        inFlight: [],
+      });
+    }
+  }
+
+  const targetSpec = makeIslandSpec({
+    id: 'target',
+    cx: 5,
+    cy: 5,
+    populated: false,
+    discovered: true,
+  });
+  islands.push(targetSpec);
+
+  const homeState = islandStates.get('home')!;
+  homeState.buildings = homeSpec.buildings;
+  homeState.inventory.biofuel = 50;
+  homeState.inventory.foundation_kit = 1;
+
+  const world: WorldState = {
+    islands,
+    drones: [],
+    routes,
+    vehicles: [],
+    revealedCells: new Set(),
+    seed: 'test-seed',
+    islandStates,
+  };
+
+  return { world, homeSpec, homeState, targetSpec, islandStates };
+}
+
+describe('Auto-Patronage §9.6 / §12.7', () => {
+  it('spawns 3 routes on settlement when milestone active', () => {
+    const { world, homeSpec, homeState, targetSpec, islandStates } = makeNetworkedWorldWithMilestone(
+      10,
+      { hasPatronHub: true },
+    );
+    const routeCountBefore = world.routes.length;
+    const r = dispatchVehicle(world, homeSpec, homeState, targetSpec, 'ship', 1, 5, 1, 0);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    tickVehicles(world, islandStates, r.vehicle.expectedArrivalTime + 1);
+    expect(world.routes.length).toBe(routeCountBefore + 3);
+
+    const newRoutes = world.routes.slice(routeCountBefore);
+    expect(newRoutes.every(rt => rt.from === 't3-0')).toBe(true);
+    expect(newRoutes.every(rt => rt.to === 'target')).toBe(true);
+
+    const fuelRoute = newRoutes.find(rt => rt.filter !== null);
+    expect(fuelRoute).toBeDefined();
+    expect(fuelRoute!.filter).toBe('biofuel');
+
+    const kitRoute = newRoutes.find(
+      rt => rt.filter === null && rt.priorityList.includes('iron_ingot'),
+    );
+    expect(kitRoute).toBeDefined();
+    expect(kitRoute!.priorityList).toEqual(['iron_ingot', 'bolt', 'lumber', 'glass', 'gear']);
+
+    const rawRoute = newRoutes.find(
+      rt => rt.filter === null && rt.priorityList.includes('wood'),
+    );
+    expect(rawRoute).toBeDefined();
+    expect(rawRoute!.priorityList).toEqual(['wood', 'stone', 'coal', 'iron_ore', 'sand']);
+  });
+
+  it('no-ops when no Patron Hub exists', () => {
+    const { world, homeSpec, homeState, targetSpec, islandStates } = makeNetworkedWorldWithMilestone(
+      10,
+      { hasPatronHub: false },
+    );
+    const routeCountBefore = world.routes.length;
+    const r = dispatchVehicle(world, homeSpec, homeState, targetSpec, 'ship', 1, 5, 1, 0);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    tickVehicles(world, islandStates, r.vehicle.expectedArrivalTime + 1);
+    expect(world.routes.length).toBe(routeCountBefore);
+  });
+
+  it('no-ops when milestone below 10', () => {
+    const { world, homeSpec, homeState, targetSpec, islandStates } = makeNetworkedWorldWithMilestone(
+      5,
+      { hasPatronHub: true },
+    );
+    const routeCountBefore = world.routes.length;
+    const r = dispatchVehicle(world, homeSpec, homeState, targetSpec, 'ship', 1, 5, 1, 0);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    tickVehicles(world, islandStates, r.vehicle.expectedArrivalTime + 1);
+    expect(world.routes.length).toBe(routeCountBefore);
+  });
+
+  it('uses nearest Patron Hub by euclidean distance', () => {
+    const { world, homeSpec, homeState, targetSpec, islandStates } = makeNetworkedWorldWithMilestone(
+      10,
+      { hasPatronHub: false, extraHubs: [
+        { id: 'near-hub', cx: 0, cy: 0 },
+        { id: 'far-hub', cx: 200, cy: 0 },
+      ] },
+    );
+    const routeCountBefore = world.routes.length;
+    const r = dispatchVehicle(world, homeSpec, homeState, targetSpec, 'ship', 1, 5, 1, 0);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    tickVehicles(world, islandStates, r.vehicle.expectedArrivalTime + 1);
+    expect(world.routes.length).toBe(routeCountBefore + 3);
+
+    const newRoutes = world.routes.slice(routeCountBefore);
+    expect(newRoutes.every(rt => rt.from === 'near-hub')).toBe(true);
+    expect(newRoutes.every(rt => rt.to === 'target')).toBe(true);
   });
 });

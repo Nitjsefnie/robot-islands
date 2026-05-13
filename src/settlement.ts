@@ -27,7 +27,9 @@ import type { IslandState } from './economy.js';
 import { inv } from './economy.js';
 import type { BuildingDefId } from './building-defs.js';
 import { fuelForTier, RECIPES, type ResourceId } from './recipes.js';
+import { computeNcState } from './network-consciousness.js';
 import { makeSeededRng } from './rng.js';
+import { nextRouteId, T1_CARGO_CAPACITY_UNITS_PER_SEC, transitTimeForDistance } from './routes.js';
 import { tierForLevel } from './skilltree.js';
 import { rasterizePath, rollVehicleDestruction } from './weather.js';
 import { CELL_SIZE_TILES, makeInitialIslandState } from './world.js';
@@ -193,6 +195,93 @@ export function _resetVehicleIdCounter(): void {
  *  `_seedDroneIdCounter` / `_seedRouteIdCounter`. */
 export function _seedVehicleIdCounter(value: number): void {
   if (value > vehicleIdCounter) vehicleIdCounter = value;
+}
+
+// ---------------------------------------------------------------------------
+// Auto-Patronage helpers (§9.6 / §12.7)
+// ---------------------------------------------------------------------------
+
+function nearestPatronHub(world: WorldState, targetId: string): IslandSpec | null {
+  const islandStates = world.islandStates;
+  if (!islandStates) return null;
+
+  const hubs = world.islands.filter(spec => {
+    const state = islandStates.get(spec.id);
+    return state && state.buildings.some(b => (b.defId as string) === 'patron_hub');
+  });
+  if (hubs.length === 0) return null;
+
+  const target = world.islands.find(i => i.id === targetId);
+  if (!target) return null;
+
+  let best: IslandSpec = hubs[0]!;
+  let bestDist = Infinity;
+  for (const hub of hubs) {
+    const d = Math.hypot(hub.cx - target.cx, hub.cy - target.cy);
+    if (d < bestDist) {
+      best = hub;
+      bestDist = d;
+    }
+  }
+  return best;
+}
+
+function spawnAutoPatronageRoutes(world: WorldState, targetId: string): void {
+  const hub = nearestPatronHub(world, targetId);
+  if (!hub) return;
+
+  const islandStates = world.islandStates;
+  if (!islandStates) return;
+
+  const targetState = islandStates.get(targetId);
+  if (!targetState) return;
+
+  const targetTier = tierForLevel(targetState.level);
+  const fuel = fuelForTier(targetTier);
+
+  const targetSpec = world.islands.find(i => i.id === targetId);
+  if (!targetSpec) return;
+  const distance = Math.hypot(hub.cx - targetSpec.cx, hub.cy - targetSpec.cy);
+  const transitTime = transitTimeForDistance(distance);
+
+  // Route 1: fuel
+  world.routes.push({
+    id: nextRouteId(),
+    from: hub.id,
+    to: targetId,
+    type: 'cargo',
+    filter: fuel,
+    priorityList: [],
+    capacityPerSec: T1_CARGO_CAPACITY_UNITS_PER_SEC,
+    transitTimeSec: transitTime,
+    inFlight: [],
+  });
+
+  // Route 2: Foundation Kit components
+  world.routes.push({
+    id: nextRouteId(),
+    from: hub.id,
+    to: targetId,
+    type: 'cargo',
+    filter: null,
+    priorityList: ['iron_ingot', 'bolt', 'lumber', 'glass', 'gear'],
+    capacityPerSec: T1_CARGO_CAPACITY_UNITS_PER_SEC,
+    transitTimeSec: transitTime,
+    inFlight: [],
+  });
+
+  // Route 3: misc T1 raws
+  world.routes.push({
+    id: nextRouteId(),
+    from: hub.id,
+    to: targetId,
+    type: 'cargo',
+    filter: null,
+    priorityList: ['wood', 'stone', 'coal', 'iron_ore', 'sand'],
+    capacityPerSec: T1_CARGO_CAPACITY_UNITS_PER_SEC,
+    transitTimeSec: transitTime,
+    inFlight: [],
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -459,6 +548,14 @@ export function tickVehicles(
 
     const newState = makeInitialIslandState(target, nowMs);
     islandStates.set(target.id, newState);
+
+    // §9.6 / §12.7 Auto-Patronage: if 10-island NC milestone is active,
+    // spawn default cargo routes from the nearest Patron Hub.
+    world.islandStates = islandStates;
+    const ncState = computeNcState(world);
+    if (ncState.milestone >= 3) {
+      spawnAutoPatronageRoutes(world, target.id);
+    }
 
     // §12.4 Foundation Kit decomposition: credit recipe inputs to the colony.
     const kitRecipe = RECIPES['kit_assembler'];
