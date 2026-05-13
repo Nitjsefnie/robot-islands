@@ -145,6 +145,8 @@ export interface SerializedWorld {
   readonly revealedCells?: ReadonlyArray<string>;
   /** §14.2 satellite fleet. Backfilled to `[]` on legacy saves. */
   readonly satellites?: ReadonlyArray<import('./orbital.js').Satellite>;
+  /** §14.12 T6 Repair Drone fleet. Backfilled to `[]` on legacy saves. */
+  readonly repairDrones?: ReadonlyArray<import('./orbital.js').RepairDrone>;
 }
 
 /** Top-level snapshot. The `v` field is the schema-version anchor: this
@@ -224,6 +226,8 @@ export function serializeWorld(
       revealedCells: [...world.revealedCells].sort(),
       // §14.2 satellites: shallow copy of the mutable array.
       satellites: [...world.satellites],
+      // §14.12 repair drones: shallow copy of the mutable array.
+      repairDrones: [...world.repairDrones],
     },
     islandStates: stateEntries,
   };
@@ -402,6 +406,9 @@ export function deserializeWorld(
         ? (s as { buffer: Satellite['buffer'] }).buffer.slice(-SAT_BUFFER_CAP)
         : [],
     })),
+    // §14.12 repair drone fleet backfill: legacy v3 saves predate `repairDrones`.
+    // Default to an empty array so the world loads cleanly.
+    repairDrones: [...(snapshot.world.repairDrones ?? [])],
   };
 
   const islandStates = new Map<string, IslandState>();

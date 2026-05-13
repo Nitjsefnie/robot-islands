@@ -42,6 +42,13 @@ export interface Satellite {
   buffer: SatBufferEntry[];
 }
 
+export interface RepairDrone {
+  readonly id: string;
+  readonly targetSatId: string;
+  readonly launchTime: number;
+  readonly expectedArrivalTime: number;
+}
+
 /** Per-variant payload resource id consumed at launch time. */
 const PAYLOAD_RESOURCE: Record<SatelliteVariant, ResourceId> = {
   scanner: 'scanner_sat',
@@ -226,6 +233,72 @@ export function flushSatBuffer(sat: Satellite): SatBufferEntry[] {
  * Returns `{ ok: true }` on success, or `{ ok: false, reason }` when the island
  * or spaceport is missing, the tier is already maxed, or resources are insufficient.
  */
+export function dispatchRepairDrone(
+  world: WorldState,
+  spaceportIslandId: string,
+  targetSatId: string,
+  nowMs: number,
+): { ok: true; drone: RepairDrone } | { ok: false; reason: string } {
+  const sat = world.satellites.find((s) => s.id === targetSatId);
+  if (!sat) return { ok: false, reason: 'no-satellite' };
+  if (sat.pendingRepairDroneId) return { ok: false, reason: 'repair-pending' };
+
+  const state = world.islandStates?.get(spaceportIslandId);
+  if (!state) return { ok: false, reason: 'no-island' };
+  if (!state.buildings.some((b) => b.defId === 'spaceport')) {
+    return { ok: false, reason: 'no-spaceport' };
+  }
+
+  // Consume 1 repair_pack + 1 antimatter_propellant
+  if (inv(state, 'repair_pack') < 1) return { ok: false, reason: 'insufficient-repair-pack' };
+  if (inv(state, 'antimatter_propellant') < 1) return { ok: false, reason: 'insufficient-fuel' };
+
+  state.inventory.repair_pack = inv(state, 'repair_pack') - 1;
+  state.inventory.antimatter_propellant = inv(state, 'antimatter_propellant') - 1;
+
+  const travelTimeSec = 100; // placeholder: 100 seconds
+  const drone: RepairDrone = {
+    id: `repair_${nowMs}`,
+    targetSatId,
+    launchTime: nowMs,
+    expectedArrivalTime: nowMs + travelTimeSec * 1000,
+  };
+
+  sat.pendingRepairDroneId = drone.id;
+  world.repairDrones.push(drone);
+  return { ok: true, drone };
+}
+
+export function tickRepairDrones(world: WorldState, nowMs: number): void {
+  const remaining: RepairDrone[] = [];
+  for (const drone of world.repairDrones) {
+    if (nowMs < drone.expectedArrivalTime) {
+      remaining.push(drone);
+      continue;
+    }
+
+    const sat = world.satellites.find((s) => s.id === drone.targetSatId);
+    if (!sat) {
+      // Target destroyed before arrival — drone lost
+      continue;
+    }
+
+    // 5% mechanical failure roll
+    const rng = makeSeededRng(`${world.seed}_repair_${drone.id}`);
+    if (rng() < 0.05) {
+      // Lost in transit
+      sat.pendingRepairDroneId = null;
+      continue;
+    }
+
+    // Success: clear all lodges, refuel to full
+    sat.lodges = { scan: 0, weather: 0, comm: 0 };
+    sat.fuel = 100;
+    sat.pendingRepairDroneId = null;
+  }
+  world.repairDrones = remaining;
+}
+
 export function upgradeSpaceport(
   world: WorldState,
   islandId: string

@@ -8,6 +8,8 @@ import {
   connectedSatellites,
   appendSatBuffer,
   flushSatBuffer,
+  dispatchRepairDrone,
+  tickRepairDrones,
   type SatelliteVariant,
   type Satellite,
   type SatBufferEntry,
@@ -59,6 +61,7 @@ function makeWorld(over: Partial<WorldState> = {}): WorldState {
   return {
     ...base,
     satellites: [],
+    repairDrones: [],
     ...over,
   };
 }
@@ -84,6 +87,11 @@ function stockLaunchResources(
   state.inventory.sweeper_sat = variant === 'sweeper' ? 1 : 0;
   state.inventory.comm_sat = variant === 'comm' ? 1 : 0;
   state.inventory.orbital_insertion_package = 1;
+  state.inventory.antimatter_propellant = 1;
+}
+
+function stockRepairResources(state: IslandState): void {
+  state.inventory.repair_pack = 1;
   state.inventory.antimatter_propellant = 1;
 }
 
@@ -431,6 +439,7 @@ function makeBfsWorld(opts: {
     revealedCells: new Set(),
     seed: '0',
     satellites: opts.satellites,
+    repairDrones: [],
     islandStates: opts.islandStates,
   } as WorldState;
 }
@@ -593,5 +602,183 @@ describe('satellite buffer', () => {
     expect(flushed[0]!.type).toBe('debris');
     expect(flushed[1]!.type).toBe('discovery');
     expect(sat.buffer).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Repair Drone dispatch
+// ---------------------------------------------------------------------------
+
+describe('repair drone dispatch', () => {
+  it('rejects when target satellite does not exist', () => {
+    const world = makeWorld();
+    const state = makeIslandState({ id: 'home' });
+    addSpaceport(state);
+    stockRepairResources(state);
+    world.islandStates = new Map([['home', state]]);
+    const result = dispatchRepairDrone(world, 'home', 'missing-sat', 0);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.reason).toBe('no-satellite');
+  });
+
+  it('rejects when island does not exist', () => {
+    const world = makeWorld();
+    world.satellites.push(makeMinimalSat({ id: 'sat1', x: 0, y: 0 }));
+    const result = dispatchRepairDrone(world, 'missing', 'sat1', 0);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.reason).toBe('no-island');
+  });
+
+  it('rejects when island has no spaceport', () => {
+    const world = makeWorld();
+    world.satellites.push(makeMinimalSat({ id: 'sat1', x: 0, y: 0 }));
+    const state = makeIslandState({ id: 'home' });
+    world.islandStates = new Map([['home', state]]);
+    const result = dispatchRepairDrone(world, 'home', 'sat1', 0);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.reason).toBe('no-spaceport');
+  });
+
+  it('rejects when repair_pack is missing', () => {
+    const world = makeWorld();
+    world.satellites.push(makeMinimalSat({ id: 'sat1', x: 0, y: 0 }));
+    const state = makeIslandState({ id: 'home' });
+    addSpaceport(state);
+    state.inventory.antimatter_propellant = 1;
+    world.islandStates = new Map([['home', state]]);
+    const result = dispatchRepairDrone(world, 'home', 'sat1', 0);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.reason).toBe('insufficient-repair-pack');
+  });
+
+  it('rejects when antimatter_propellant is missing', () => {
+    const world = makeWorld();
+    world.satellites.push(makeMinimalSat({ id: 'sat1', x: 0, y: 0 }));
+    const state = makeIslandState({ id: 'home' });
+    addSpaceport(state);
+    state.inventory.repair_pack = 1;
+    world.islandStates = new Map([['home', state]]);
+    const result = dispatchRepairDrone(world, 'home', 'sat1', 0);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.reason).toBe('insufficient-fuel');
+  });
+
+  it('dispatches a drone and sets pendingRepairDroneId', () => {
+    const world = makeWorld();
+    world.satellites.push(makeMinimalSat({ id: 'sat1', x: 0, y: 0 }));
+    const state = makeIslandState({ id: 'home' });
+    addSpaceport(state);
+    stockRepairResources(state);
+    world.islandStates = new Map([['home', state]]);
+    const result = dispatchRepairDrone(world, 'home', 'sat1', 0);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(world.repairDrones).toHaveLength(1);
+    expect(world.repairDrones[0]!.targetSatId).toBe('sat1');
+    expect(world.satellites[0]!.pendingRepairDroneId).toBe(result.drone.id);
+  });
+
+  it('blocks second dispatch while repair pending', () => {
+    const world = makeWorld();
+    world.satellites.push(makeMinimalSat({ id: 'sat1', x: 0, y: 0 }));
+    const state = makeIslandState({ id: 'home' });
+    addSpaceport(state);
+    stockRepairResources(state);
+    world.islandStates = new Map([['home', state]]);
+    const first = dispatchRepairDrone(world, 'home', 'sat1', 0);
+    expect(first.ok).toBe(true);
+    const second = dispatchRepairDrone(world, 'home', 'sat1', 1);
+    expect(second.ok).toBe(false);
+    if (second.ok) return;
+    expect(second.reason).toBe('repair-pending');
+  });
+
+  it('deducts repair_pack and antimatter_propellant on dispatch', () => {
+    const world = makeWorld();
+    world.satellites.push(makeMinimalSat({ id: 'sat1', x: 0, y: 0 }));
+    const state = makeIslandState({ id: 'home' });
+    addSpaceport(state);
+    stockRepairResources(state);
+    world.islandStates = new Map([['home', state]]);
+    const result = dispatchRepairDrone(world, 'home', 'sat1', 0);
+    expect(result.ok).toBe(true);
+    expect(state.inventory.repair_pack).toBe(0);
+    expect(state.inventory.antimatter_propellant).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Repair Drone arrival
+// ---------------------------------------------------------------------------
+
+describe('repair drone arrival', () => {
+  it('clears lodges on arrival', () => {
+    const world = makeWorld({ seed: 'test-seed' });
+    const sat = makeMinimalSat({ id: 'sat1', x: 0, y: 0, lodges: { scan: 0.5, weather: 0.3, comm: 0.2 }, fuel: 20 });
+    world.satellites.push(sat);
+    const state = makeIslandState({ id: 'home' });
+    addSpaceport(state);
+    stockRepairResources(state);
+    world.islandStates = new Map([['home', state]]);
+
+    const dispatchResult = dispatchRepairDrone(world, 'home', 'sat1', 0);
+    expect(dispatchResult.ok).toBe(true);
+    if (!dispatchResult.ok) return;
+
+    // Travel time is 100 seconds = 100_000 ms.
+    tickRepairDrones(world, 100_001);
+
+    expect(sat.lodges).toEqual({ scan: 0, weather: 0, comm: 0 });
+    expect(sat.fuel).toBe(100);
+    expect(sat.pendingRepairDroneId).toBeNull();
+    expect(world.repairDrones).toHaveLength(0);
+  });
+
+  it('is lost if target sat destroyed before arrival', () => {
+    const world = makeWorld({ seed: 'test-seed' });
+    const sat = makeMinimalSat({ id: 'sat1', x: 0, y: 0, lodges: { scan: 0.5, weather: 0.3, comm: 0.2 } });
+    world.satellites.push(sat);
+    const state = makeIslandState({ id: 'home' });
+    addSpaceport(state);
+    stockRepairResources(state);
+    world.islandStates = new Map([['home', state]]);
+
+    const dispatchResult = dispatchRepairDrone(world, 'home', 'sat1', 0);
+    expect(dispatchResult.ok).toBe(true);
+    if (!dispatchResult.ok) return;
+
+    // Destroy the satellite before arrival.
+    world.satellites = [];
+
+    tickRepairDrones(world, 100_001);
+
+    expect(world.repairDrones).toHaveLength(0);
+  });
+
+  it('has 5% failure rate (deterministic failure path)', () => {
+    const world = makeWorld({ seed: 'test-seed' });
+    const sat = makeMinimalSat({ id: 'sat1', x: 0, y: 0, lodges: { scan: 0.5, weather: 0.3, comm: 0.2 } });
+    world.satellites.push(sat);
+    const state = makeIslandState({ id: 'home' });
+    addSpaceport(state);
+    stockRepairResources(state);
+    world.islandStates = new Map([['home', state]]);
+
+    // nowMs=14 yields rng≈0.0378 < 0.05 → deterministic failure.
+    const dispatchResult = dispatchRepairDrone(world, 'home', 'sat1', 14);
+    expect(dispatchResult.ok).toBe(true);
+    if (!dispatchResult.ok) return;
+
+    tickRepairDrones(world, 14 + 100_001);
+
+    // Satellite should NOT be repaired.
+    expect(sat.lodges).toEqual({ scan: 0.5, weather: 0.3, comm: 0.2 });
+    expect(sat.pendingRepairDroneId).toBeNull();
+    expect(world.repairDrones).toHaveLength(0);
   });
 });

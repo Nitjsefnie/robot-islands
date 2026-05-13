@@ -703,6 +703,9 @@ export interface WorldState {
    *  Same type-only-import discipline as drones/routes/vehicles; the runtime
    *  dependency is `orbital.ts → world.ts`. */
   satellites: import('./orbital.js').Satellite[];
+  /** §14.12 T6 Repair Drone fleet. Mutable: grows on dispatch, shrinks on
+   *  arrival resolution. Same type-only-import discipline. */
+  repairDrones: import('./orbital.js').RepairDrone[];
 
 }
 
@@ -762,7 +765,7 @@ export function makeInitialWorld(_nowMs: number): WorldState {
     if (!spec.populated && !spec.discovered) continue;
     for (const k of islandCells(spec)) revealedCells.add(k);
   }
-  return { islands, drones: [], routes: [], vehicles: [], revealedCells, seed: WORLD_SEED, satellites: [] };
+  return { islands, drones: [], routes: [], vehicles: [], revealedCells, seed: WORLD_SEED, satellites: [], repairDrones: [] };
 }
 
 // ---------------------------------------------------------------------------
