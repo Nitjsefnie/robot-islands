@@ -144,12 +144,21 @@ export function launchSatellite(
 // Comm graph BFS
 // ---------------------------------------------------------------------------
 
+function groundStationCommRange(world: WorldState, islandId: string): number {
+  const state = world.islandStates?.get(islandId);
+  const sp = state?.buildings.find((b) => b.defId === 'spaceport');
+  const tier = sp?.tier ?? 1;
+  return tier === 1 ? 200 : tier === 2 ? 300 : 400;
+}
+
 function getEntityById(
   world: WorldState,
   id: string,
 ): { x: number; y: number; commRange: number } | null {
   const island = world.islands.find((i) => i.id === id);
-  if (island) return { x: island.cx, y: island.cy, commRange: 200 }; // ground station range
+  if (island) {
+    return { x: island.cx, y: island.cy, commRange: groundStationCommRange(world, id) };
+  }
   const sat = world.satellites.find((s) => s.id === id);
   if (sat) return { x: sat.x, y: sat.y, commRange: sat.commRange };
   return null;

@@ -512,6 +512,50 @@ describe('connectedSatellites BFS', () => {
     expect(result).toHaveLength(1);
     expect(result[0]!.id).toBe('sat1');
   });
+
+  it('ground station comm range is 200 at tier 1 (default)', () => {
+    const island = makeMinimalIsland({ id: 'home', cx: 0, cy: 0, populated: true });
+    const state = makeIslandState({ id: 'home' });
+    addSpaceport(state, 1);
+    const sat = makeMinimalSat({ id: 'sat1', x: 250, y: 0, commRange: 200 });
+    const world = makeBfsWorld({
+      islands: [island],
+      islandStates: new Map([['home', state]]),
+      satellites: [sat],
+    });
+    const result = connectedSatellites(world);
+    expect(result).toHaveLength(0);
+  });
+
+  it('ground station comm range is 300 at tier 2', () => {
+    const island = makeMinimalIsland({ id: 'home', cx: 0, cy: 0, populated: true });
+    const state = makeIslandState({ id: 'home' });
+    addSpaceport(state, 2);
+    const sat = makeMinimalSat({ id: 'sat1', x: 250, y: 0, commRange: 200 });
+    const world = makeBfsWorld({
+      islands: [island],
+      islandStates: new Map([['home', state]]),
+      satellites: [sat],
+    });
+    const result = connectedSatellites(world);
+    expect(result).toHaveLength(1);
+    expect(result[0]!.id).toBe('sat1');
+  });
+
+  it('ground station comm range is 400 at tier 3', () => {
+    const island = makeMinimalIsland({ id: 'home', cx: 0, cy: 0, populated: true });
+    const state = makeIslandState({ id: 'home' });
+    addSpaceport(state, 3);
+    const sat = makeMinimalSat({ id: 'sat1', x: 350, y: 0, commRange: 200 });
+    const world = makeBfsWorld({
+      islands: [island],
+      islandStates: new Map([['home', state]]),
+      satellites: [sat],
+    });
+    const result = connectedSatellites(world);
+    expect(result).toHaveLength(1);
+    expect(result[0]!.id).toBe('sat1');
+  });
 });
 
 // ---------------------------------------------------------------------------
