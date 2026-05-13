@@ -66,7 +66,7 @@ function makeState(id: string, over: Partial<IslandState> = {}): IslandState {
   };
 }
 function makeWorld(routes: Route[] = [], islands: IslandSpec[] = []): WorldState {
-  return { islands, drones: [], routes, vehicles: [], revealedCells: new Set(), satellites: [], seed: 'test-seed' };
+  return { islands, drones: [], routes, vehicles: [], revealedCells: new Set(), satellites: [], repairDrones: [], seed: 'test-seed' };
 }
 
 function makeIslandSpec(id: string, cx: number, cy: number): IslandSpec {

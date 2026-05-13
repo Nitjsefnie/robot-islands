@@ -557,7 +557,7 @@ describe('validateIslandName', () => {
 
 describe('useRealityForge', () => {
   function makeWorld(spec: IslandSpec): WorldState {
-    return { islands: [spec], drones: [], routes: [], vehicles: [], revealedCells: new Set(), satellites: [], seed: 'test-seed' };
+    return { islands: [spec], drones: [], routes: [], vehicles: [], revealedCells: new Set(), satellites: [], repairDrones: [], seed: 'test-seed' };
   }
 
   it('changes biome and regenerates terrain', () => {

@@ -100,6 +100,7 @@ function makeWorld(opts: {
     vehicles: [],
     revealedCells: new Set(),
     satellites: [],
+    repairDrones: [],
     islandStates,
   };
 }
