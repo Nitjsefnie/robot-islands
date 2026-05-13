@@ -142,6 +142,8 @@ export interface SerializedWorld {
   readonly routes: ReadonlyArray<Route>;
   readonly vehicles: ReadonlyArray<SettlementVehicle>;
   readonly revealedCells?: ReadonlyArray<string>;
+  /** §14.2 satellite fleet. Backfilled to `[]` on legacy saves. */
+  readonly satellites?: ReadonlyArray<import('./orbital.js').Satellite>;
 }
 
 /** Top-level snapshot. The `v` field is the schema-version anchor: this
@@ -219,6 +221,8 @@ export function serializeWorld(
       // §11 telemetry: snapshot the revealed-cell set as a sorted array.
       // Sorted for deterministic blob output (diff-friendly between saves).
       revealedCells: [...world.revealedCells].sort(),
+      // §14.2 satellites: shallow copy of the mutable array.
+      satellites: [...world.satellites],
     },
     islandStates: stateEntries,
   };
@@ -389,6 +393,9 @@ export function deserializeWorld(
     // `makeInitialWorld` does the same thing; this just covers the
     // "loaded a save written before §11 landed" case.
     revealedCells: deserializeRevealedCells(islands, snapshot.world.revealedCells),
+    // §14.2 satellite fleet backfill: legacy v3 saves predate `satellites`.
+    // Default to an empty array so the world loads cleanly.
+    satellites: snapshot.world.satellites ? [...snapshot.world.satellites] : [],
   };
 
   const islandStates = new Map<string, IslandState>();

@@ -142,6 +142,7 @@ describe('dispatchDrone', () => {
       routes: [],
       vehicles: [],
       revealedCells: new Set(),
+      satellites: [],
       seed: 'test-seed',
     };
   }
@@ -255,6 +256,7 @@ describe('tickDrones (§11 telemetry: per-cell reveal in antenna range)', () => 
       routes: [],
       vehicles: [],
       revealedCells: new Set(),
+      satellites: [],
       seed: 'test-seed',
     };
   }
@@ -282,6 +284,7 @@ describe('tickDrones (§11 telemetry: per-cell reveal in antenna range)', () => 
       routes: [],
       vehicles: [],
       revealedCells: new Set(),
+      satellites: [],
       seed: 'test-seed',
     };
   }
@@ -474,6 +477,7 @@ describe('dispatchDrone — §11.7 tier-matched fuel', () => {
       routes: [],
       vehicles: [],
       revealedCells: new Set(),
+      satellites: [],
       seed: 'test-seed',
     };
   }
@@ -586,6 +590,7 @@ describe('drone weather destruction §2.6', () => {
       routes: [],
       vehicles: [],
       revealedCells: new Set(),
+      satellites: [],
       seed,
     };
     const home = makeIslandState();
@@ -606,6 +611,7 @@ describe('drone weather destruction §2.6', () => {
       routes: [],
       vehicles: [],
       revealedCells: new Set(),
+      satellites: [],
       seed,
     };
     const home = makeIslandState();
@@ -630,6 +636,7 @@ describe('T5 path-drawn drone', () => {
       routes: [],
       vehicles: [],
       revealedCells: new Set(),
+      satellites: [],
       seed: 'test-seed',
     };
   }
@@ -734,6 +741,7 @@ describe('dark-mode telemetry', () => {
       routes: [],
       vehicles: [],
       revealedCells: new Set(),
+      satellites: [],
       seed: 'test-seed',
     };
   }
@@ -804,6 +812,7 @@ describe('dark-mode telemetry', () => {
       routes: [],
       vehicles: [],
       revealedCells: new Set(),
+      satellites: [],
       seed: 'destroy-0',
     };
     // Add home island with no antenna.

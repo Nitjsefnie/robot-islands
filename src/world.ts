@@ -699,6 +699,10 @@ export interface WorldState {
    *  world snapshot (serialization keeps it separate for schema stability);
    *  set by `main.ts` after init/load. */
   islandStates?: Map<string, IslandState>;
+  /** §14.2 orbital satellite fleet. Mutable: grows on successful launch.
+   *  Same type-only-import discipline as drones/routes/vehicles; the runtime
+   *  dependency is `orbital.ts → world.ts`. */
+  satellites: import('./orbital.js').Satellite[];
 
 }
 
@@ -758,7 +762,7 @@ export function makeInitialWorld(_nowMs: number): WorldState {
     if (!spec.populated && !spec.discovered) continue;
     for (const k of islandCells(spec)) revealedCells.add(k);
   }
-  return { islands, drones: [], routes: [], vehicles: [], revealedCells, seed: WORLD_SEED };
+  return { islands, drones: [], routes: [], vehicles: [], revealedCells, seed: WORLD_SEED, satellites: [] };
 }
 
 // ---------------------------------------------------------------------------

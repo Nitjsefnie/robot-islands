@@ -138,6 +138,7 @@ describe('isWeatherVisible', () => {
       routes: [],
       vehicles: [],
       revealedCells: new Set(),
+      satellites: [],
       seed: 'test-seed',
     };
   }

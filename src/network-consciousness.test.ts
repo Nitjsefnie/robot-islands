@@ -99,6 +99,7 @@ function makeWorld(opts: {
     routes,
     vehicles: [],
     revealedCells: new Set(),
+    satellites: [],
     islandStates,
   };
 }

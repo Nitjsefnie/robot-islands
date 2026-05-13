@@ -62,6 +62,9 @@ export interface PlacedBuilding {
    *  honoured wherever `maintenanceFactor` / `tryAutoMaintain` read it, but
    *  nothing in the catalog turns it on yet. */
   readonly eternalServitor?: true;
+  /** §14.2 Spaceport tier for launch-success-rate scaling. Optional so legacy
+   *  saves and non-upgradable buildings load cleanly (undefined ≡ tier 1). */
+  readonly tier?: number;
   /** True if the building's footprint no longer matches terrain after biome change. */
   invalid?: boolean;
 }
