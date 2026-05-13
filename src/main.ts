@@ -80,7 +80,7 @@ import { tickDrones } from './drones.js';
 import { findNextMerge, performMerge } from './island-merge.js';
 import { makeIslandScreenPosResolver, mountRoutesUi } from './routes-ui.js';
 import { tickRoutes } from './routes.js';
-import { computeLatticeActive, crossIslandNeighbors, latticeInventory } from './lattice.js';
+import { computeLatticeActive, crossIslandNeighbors, latticeInventory, latticeStorageCaps } from './lattice.js';
 import { mountSettlementUi } from './settlement-ui.js';
 import { tickVehicles } from './settlement.js';
 import { checkObjectives, type ObjectiveId } from './tutorial.js';
@@ -1157,6 +1157,7 @@ async function main(): Promise<void> {
     // §13.3 unified inventory — computed once per tick and threaded to every
     // Lattice island's rate computation so consumers see stockpile on siblings.
     const unifiedInv = latticeInventory(worldState);
+    const unifiedCaps = latticeStorageCaps(worldState);
     // §13.3 cross-island adjacency — precompute once per tick for each
     // lattice island so computeRates can treat remote buildings as neighbors.
     const crossIslandById = new Map<string, PlacedBuilding[]>();
@@ -1184,6 +1185,7 @@ async function main(): Promise<void> {
         terrainAt: spec?.terrainAt,
         inventory: isLatticeIsland ? unifiedInv : undefined,
         crossIsland,
+        caps: isLatticeIsland ? unifiedCaps : undefined,
       });
       const { net, power } = computeRates(s, {
         modifierMul: modifierMulFor(s.id),
@@ -1192,6 +1194,7 @@ async function main(): Promise<void> {
         terrainAt: spec?.terrainAt,
         inventory: isLatticeIsland ? unifiedInv : undefined,
         crossIsland,
+        caps: isLatticeIsland ? unifiedCaps : undefined,
       });
       islandNets.set(s.id, net);
       islandPower.set(s.id, power);
@@ -1303,6 +1306,7 @@ async function main(): Promise<void> {
       terrainAt: postTickActiveP?.terrainAt,
       inventory: postTickLattice ? unifiedInv : undefined,
       crossIsland: crossIslandById.get(postTickActiveS.id),
+      caps: postTickLattice ? unifiedCaps : undefined,
     });
     islandNets.set(activeIslandId, postNet);
     islandPower.set(activeIslandId, postPower);
@@ -1325,6 +1329,7 @@ async function main(): Promise<void> {
         terrainAt: activeP?.terrainAt,
         inventory: unifiedInv,
         crossIsland: crossIslandById.get(activeS.id),
+        caps: unifiedCaps,
       });
       islandNets.set(activeS.id, activeNet);
       islandPower.set(activeS.id, activePower);

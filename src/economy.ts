@@ -89,6 +89,10 @@ export interface RatesContext {
    *  as neighbors for buff-adjacency and gate-adjacency despite physical
    *  distance. */
   readonly crossIsland?: ReadonlyArray<PlacedBuilding>;
+  /** §13.3 Omniscient Lattice: unified storage-cap override. When provided,
+   *  `cap()` reads from this map instead of the local island storageCaps,
+   *  enabling summed caps across the Lattice network. */
+  readonly caps?: Record<ResourceId, number>;
 }
 
 /**
@@ -250,8 +254,8 @@ export function inv(state: IslandState, r: ResourceId): number {
  * still displays nominal caps; the economy uses these effective caps. That
  * UX inconsistency is left to a later step alongside the broader storage UI.
  */
-export function cap(state: IslandState, r: ResourceId): number {
-  const nominal = state.storageCaps[r] ?? 0;
+export function cap(state: IslandState, r: ResourceId, override?: Record<ResourceId, number>): number {
+  const nominal = override?.[r] ?? state.storageCaps[r] ?? 0;
   if (nominal === 0) return 0;
   const skillMul = effectiveSkillMultipliers(state).storageCap;
   // Specialization storage multiplier (§9.4 logistics_hub) reads from state
@@ -298,11 +302,11 @@ export type DefCatalog = Readonly<Record<BuildingDefId, BuildingDef>>;
  * If any of the recipe's outputs is at or above cap, the building stalls
  * entirely (no inputs consumed, no outputs produced, no XP).
  */
-function outputAvail(state: IslandState, recipe: Recipe, nowMs: number): number {
+function outputAvail(state: IslandState, recipe: Recipe, nowMs: number, caps?: Record<ResourceId, number>): number {
   const outputs = resolveRotatingOutput(recipe, nowMs);
   for (const [r, _yield] of Object.entries(outputs)) {
     const id = r as ResourceId;
-    if (inv(state, id) >= cap(state, id)) return 0;
+    if (inv(state, id) >= cap(state, id, caps)) return 0;
   }
   return 1;
 }
@@ -532,7 +536,7 @@ export function computeRates(
         tentative.push({ building: b, recipe: syntheticRecipe, baseRate: 0, buffStack: 1 });
         continue;
       }
-      const oa = outputAvail(state, syntheticRecipe, t);
+      const oa = outputAvail(state, syntheticRecipe, t, ctx?.caps);
       if (oa === 0) {
         tentative.push({ building: b, recipe: syntheticRecipe, baseRate: 0, buffStack: 1 });
         continue;
@@ -606,7 +610,7 @@ export function computeRates(
       tentative.push({ building: b, recipe, baseRate: 0, buffStack });
       continue;
     }
-    const oa = outputAvail(state, recipe, t);
+    const oa = outputAvail(state, recipe, t, ctx?.caps);
     if (oa === 0) {
       tentative.push({ building: b, recipe, baseRate: 0, buffStack });
       continue;
@@ -866,7 +870,7 @@ export function findNextCapEvent(
     if (rate > 0) {
       // Heading toward cap. If already at/over cap (shouldn't normally
       // happen because outputAvail would have zeroed the rate), skip.
-      const capVal = cap(state, r);
+      const capVal = cap(state, r, ctx?.caps);
       const headroom = capVal - current;
       if (headroom <= 0) continue;
       timeToEventSec = headroom / rate;
@@ -907,12 +911,12 @@ export function findNextCapEvent(
  * integration segment ends exactly when the boundary is hit, but the
  * clamp guarantees no NaN-cascade if a rate calculation drifts.
  */
-function applyRates(state: IslandState, net: Record<ResourceId, number>, dtSec: number): void {
+function applyRates(state: IslandState, net: Record<ResourceId, number>, dtSec: number, caps?: Record<ResourceId, number>): void {
   for (const r of Object.keys(net) as ResourceId[]) {
     const rate = net[r] ?? 0;
     if (rate === 0) continue;
     const next = inv(state, r) + rate * dtSec;
-    const clamped = Math.min(cap(state, r), Math.max(0, next));
+    const clamped = Math.min(cap(state, r, caps), Math.max(0, next));
     state.inventory[r] = clamped;
   }
 }
@@ -1154,7 +1158,7 @@ export function advanceIsland(
     const segEndMs = Math.min(nextEventMs, nextPhaseMs, nextAccelMs, nextBatteryMs, nextRotationMs, nowMs);
     const dtSec = (segEndMs - t) / 1000;
     if (dtSec > 0) {
-      applyRates(state, net, dtSec);
+      applyRates(state, net, dtSec, ctx?.caps);
       accrueXp(state, production, consumption, dtSec, specMul.xpMul);
       // §13.3 Singularity Battery — apply charge/discharge over the segment.
       if (rawBalance > 0 && maxCap > 0) {

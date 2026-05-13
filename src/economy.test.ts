@@ -389,6 +389,32 @@ describe('computeRates', () => {
     const workshopRate = byBuilding.find((b) => b.building.defId === 'workshop');
     expect(workshopRate?.effectiveRate).toBeGreaterThan(0);
   });
+
+  it('§13.3 unified caps: outputAvail stalls when unified cap is hit', () => {
+    // Local cap is 100, unified cap is 100. Local inventory is 100 → at cap.
+    // Mine should stall because outputAvail sees unified cap.
+    const state = makeState({
+      buildings: [MINE],
+      inventory: { ...blankInventory(), iron_ore: 100 },
+      storageCaps: { ...blankCaps(100) },
+    });
+    const unifiedCaps = { ...blankCaps(100) };
+    const { byBuilding } = computeRates(state, { defs: POWER_FREE, caps: unifiedCaps });
+    expect(byBuilding[0]?.effectiveRate).toBe(0);
+  });
+
+  it('§13.3 unified caps: producer runs when unified cap has headroom', () => {
+    // Local cap is 100, local inventory is 100, but unified cap is 200.
+    // Mine should run because there's headroom in the unified cap.
+    const state = makeState({
+      buildings: [MINE],
+      inventory: { ...blankInventory(), iron_ore: 100 },
+      storageCaps: { ...blankCaps(100) },
+    });
+    const unifiedCaps = { ...blankCaps(200) };
+    const { byBuilding } = computeRates(state, { defs: POWER_FREE, caps: unifiedCaps });
+    expect(byBuilding[0]?.effectiveRate).toBeGreaterThan(0);
+  });
 });
 
 // -----------------------------------------------------------------------

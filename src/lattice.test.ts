@@ -4,6 +4,7 @@ import {
   crossIslandNeighbors,
   isLatticeActive,
   latticeIslands,
+  latticeStorageCaps,
   LATTICE_ACTIVATION_THRESHOLD,
 } from './lattice.js';
 import { makeInitialIslandState, makeInitialWorld } from './world.js';
@@ -264,5 +265,49 @@ describe('crossIslandNeighbors', () => {
     const neighbors = crossIslandNeighbors(world, 'home');
     expect(neighbors).toBeDefined();
     expect(neighbors!.length).toBe(0);
+  });
+});
+
+describe('latticeStorageCaps', () => {
+  it('returns undefined when lattice is inactive', () => {
+    const world = makeTestWorld();
+    expect(latticeStorageCaps(world)).toBeUndefined();
+  });
+
+  it('sums caps across lattice islands', () => {
+    const world = makeTestWorld();
+    const homeState = world.islandStates.get('home')!;
+    homeState.storageCaps.iron_ore = 1000;
+    world.islands.push({
+      id: 'remote',
+      name: 'remote',
+      biome: 'plains',
+      cx: 100,
+      cy: 0,
+      majorRadius: 10,
+      minorRadius: 10,
+      populated: true,
+      discovered: true,
+      buildings: [],
+      modifiers: [],
+    });
+    const remoteState = makeInitialIslandState(world.islands[world.islands.length - 1]!, 0);
+    remoteState.storageCaps.iron_ore = 500;
+    world.islandStates.set('remote', remoteState);
+    world.latticeActive = true;
+    world.latticeNodeIslands = ['home', 'remote'];
+    const caps = latticeStorageCaps(world);
+    expect(caps).toBeDefined();
+    expect(caps!.iron_ore).toBe(1500);
+  });
+
+  it('defaults missing resources to 0 in the sum', () => {
+    const world = makeTestWorld();
+    world.latticeActive = true;
+    world.latticeNodeIslands = ['home'];
+    const caps = latticeStorageCaps(world);
+    expect(caps).toBeDefined();
+    // home's caps are the default from makeInitialIslandState
+    expect(caps!.iron_ore).toBe(world.islandStates.get('home')!.storageCaps.iron_ore);
   });
 });

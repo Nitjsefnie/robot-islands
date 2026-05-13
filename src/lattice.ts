@@ -93,6 +93,28 @@ export function crossIslandNeighbors(
 }
 
 /**
+ * §13.3 Summed storage caps across all Lattice islands.
+ *
+ * Returns a fresh Record summing every ResourceId across the storageCaps of
+ * islands in `world.latticeNodeIslands`. Returns `undefined` when the Lattice
+ * is inactive so callers can fall back to local caps without branching.
+ */
+export function latticeStorageCaps(
+  world: WorldState,
+): Record<ResourceId, number> | undefined {
+  if (!world.latticeActive) return undefined;
+  const unified: Record<ResourceId, number> = {} as Record<ResourceId, number>;
+  for (const id of world.latticeNodeIslands) {
+    const state = world.islandStates?.get(id);
+    if (!state) continue;
+    for (const [r, amt] of Object.entries(state.storageCaps)) {
+      unified[r as ResourceId] = (unified[r as ResourceId] ?? 0) + (amt ?? 0);
+    }
+  }
+  return unified;
+}
+
+/**
  * §13.3 Unified inventory across all Lattice islands.
  *
  * Returns a fresh Record summing every ResourceId across the inventories of
