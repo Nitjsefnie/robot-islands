@@ -201,7 +201,7 @@ export function _seedVehicleIdCounter(value: number): void {
 // Auto-Patronage helpers (§9.6 / §12.7)
 // ---------------------------------------------------------------------------
 
-function nearestPatronHub(world: WorldState, targetId: string): IslandSpec | null {
+export function _nearestPatronHub(world: WorldState, targetId: string): IslandSpec | null {
   const islandStates = world.islandStates;
   if (!islandStates) return null;
 
@@ -218,7 +218,7 @@ function nearestPatronHub(world: WorldState, targetId: string): IslandSpec | nul
   let bestDist = Infinity;
   for (const hub of hubs) {
     const d = Math.hypot(hub.cx - target.cx, hub.cy - target.cy);
-    if (d < bestDist) {
+    if (d < bestDist || (d === bestDist && hub.id < best.id)) {
       best = hub;
       bestDist = d;
     }
@@ -227,7 +227,7 @@ function nearestPatronHub(world: WorldState, targetId: string): IslandSpec | nul
 }
 
 function spawnAutoPatronageRoutes(world: WorldState, targetId: string): void {
-  const hub = nearestPatronHub(world, targetId);
+  const hub = _nearestPatronHub(world, targetId);
   if (!hub) return;
 
   const islandStates = world.islandStates;

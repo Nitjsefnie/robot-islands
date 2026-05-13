@@ -13,6 +13,7 @@ import {
 import {
   HELICOPTER_STATS,
   SHIP_STATS,
+  _nearestPatronHub,
   _resetVehicleIdCounter,
   dispatchVehicle,
   hasLaunchBuildingFor,
@@ -1054,5 +1055,30 @@ describe('Auto-Patronage §9.6 / §12.7', () => {
     const newRoutes = world.routes.slice(routeCountBefore);
     expect(newRoutes.every(rt => rt.from === 'near-hub')).toBe(true);
     expect(newRoutes.every(rt => rt.to === 'target')).toBe(true);
+  });
+
+  it('breaks distance ties by lower island ID', () => {
+    const hubA = makeT3Island('hub-b', 0, 0, { hasPatronHub: true });
+    const hubB = makeT3Island('hub-a', 0, 0, { hasPatronHub: true });
+    const target = makeIslandSpec({ id: 'target', cx: 0, cy: 0 });
+    const stateA = makeT3State('hub-b');
+    stateA.buildings = hubA.buildings;
+    const stateB = makeT3State('hub-a');
+    stateB.buildings = hubB.buildings;
+    const world: WorldState = {
+      islands: [hubA, hubB, target],
+      drones: [],
+      routes: [],
+      vehicles: [],
+      revealedCells: new Set(),
+      seed: 'test-seed',
+      islandStates: new Map([
+        ['hub-b', stateA],
+        ['hub-a', stateB],
+      ]),
+    };
+    const result = _nearestPatronHub(world, 'target');
+    expect(result).not.toBeNull();
+    expect(result!.id).toBe('hub-a');
   });
 });

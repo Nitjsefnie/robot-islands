@@ -5,7 +5,7 @@
 
 ---
 
-## Completed (13 tasks)
+## Completed (15 tasks)
 
 - `b86ab5a` feat(§7.7): T3 microchip intermediate chain
 - `8e3af1d` feat(§6.7): byproducts oxygen/argon/slag
@@ -20,6 +20,8 @@
 - `53b8b28` feat(§2.6): route storm capacity reduction and in-flight losses
 - `263f233` feat(§3.5): High Wind output variance + night severe-storm boost
 - `e8883a4` fix(§2.6): drone return-leg dedup for weather destruction
+- `3a9cee5` feat(§4.5): gating adjacency — hard gates, soft degradation
+- `bfe2605` feat: inspector gate status pills
 
 All landed with implementer → spec reviewer → code quality reviewer per subagent-driven-development.
 
@@ -32,7 +34,7 @@ All plans live in `docs/superpowers/plans/`. Use **superpowers:subagent-driven-d
 ### Execution order
 
 1. ~~**Weather System** — `2026-05-12-weather-system.md`~~ ✅ DONE
-2. **Gating Adjacency** — `2026-05-12-gating-adjacency.md` (2 tasks, #26 mechanics → #32 inspector)
+2. ~~**Gating Adjacency** — `2026-05-12-gating-adjacency.md`~~ ✅ DONE
 3. **Network Consciousness** — `2026-05-12-network-consciousness.md` (2 tasks, #18 reachability → #51 Auto-Patronage)
 4. **Skill Tree Deepening** — `2026-05-12-skill-tree-deepening.md` (1 task, #53)
 5. **T5 Drone & Extractor Mechanics** — `2026-05-12-t5-drone-extractor-mechanics.md` (3 tasks, #29 path drones → #45 multi-output → #41 Probability Engine)
