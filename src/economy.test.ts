@@ -834,6 +834,81 @@ describe('modifier integration in computeRates / advanceIsland (§3.5)', () => {
     expect(byBuilding[0]!.effectiveRate).toBeCloseTo(0.025, 9);
     expect(production.iron_ore).toBeCloseTo(0.025, 9);
   });
+
+  it('Geothermal Active lets Blast Furnace run without adjacent heat source', () => {
+    const BF: PlacedBuilding = { id: 'bf', defId: 'blast_furnace', x: 0, y: 0 };
+    const noPowerBf = ((): DefCatalog => {
+      const base = { ...BUILDING_DEFS } as Record<BuildingDefId, BuildingDef>;
+      const { power: _p, ...rest } = base.blast_furnace;
+      base.blast_furnace = rest as BuildingDef;
+      return base;
+    })();
+    const state = makeState({
+      buildings: [BF],
+      inventory: {
+        ...blankInventory(),
+        iron_ingot: 1000,
+        coke: 1000,
+      },
+      storageCaps: blankCaps(10_000),
+      level: 5,
+    });
+    // Without geothermalActive, BF stalls (no adjacent heat source).
+    const cold = computeRates(state, { defs: noPowerBf });
+    const coldRate = cold.byBuilding.find((r) => r.building.id === 'bf');
+    expect(coldRate?.effectiveRate).toBe(0);
+
+    // With geothermalActive=true, BF runs at full rate.
+    const hot = computeRates(state, { defs: noPowerBf, geothermalActive: true });
+    const hotRate = hot.byBuilding.find((r) => r.building.id === 'bf');
+    expect(hotRate?.effectiveRate).toBeCloseTo(1 / 480, 9); // blast_furnace cycleSec = 480
+  });
+
+  it('Aetheric Anomaly gives T5 extractor 1.5× rate', () => {
+    const conduit: PlacedBuilding = { id: 'b-ac', defId: 'aetheric_conduit', x: 0, y: 0 };
+    const state = makeState({
+      buildings: [conduit],
+      inventory: blankInventory(),
+    });
+    const noPower = ((): DefCatalog => {
+      const base = { ...BUILDING_DEFS } as Record<BuildingDefId, BuildingDef>;
+      const { power: _p, ...rest } = base.aetheric_conduit;
+      base.aetheric_conduit = rest as BuildingDef;
+      return base;
+    })();
+    const mulNormal = effectiveModifierMultipliers([]);
+    const rNormal = computeRates(state, { modifierMul: mulNormal, defs: noPower, worldSeed: 'test' }, 0);
+    const mulAnomaly = effectiveModifierMultipliers(['aetheric_anomaly']);
+    const rAnomaly = computeRates(state, { modifierMul: mulAnomaly, defs: noPower, worldSeed: 'test' }, 0);
+    expect(rAnomaly.byBuilding[0]!.effectiveRate).toBeCloseTo(
+      rNormal.byBuilding[0]!.effectiveRate * 1.5,
+      9,
+    );
+  });
+
+  it('Frozen Core doubles cryo recipe rate', () => {
+    const cryo: PlacedBuilding = { id: 'b-cl', defId: 'cryo_lab', x: 0, y: 0 };
+    const state = makeState({
+      buildings: [cryo],
+      inventory: { ...blankInventory(), hydrogen: 1000, nitrogen: 1000 },
+      storageCaps: blankCaps(10_000),
+      level: 10, // T3 for cryo_lab
+    });
+    const noPower = ((): DefCatalog => {
+      const base = { ...BUILDING_DEFS } as Record<BuildingDefId, BuildingDef>;
+      const { power: _p, ...rest } = base.cryo_lab;
+      base.cryo_lab = rest as BuildingDef;
+      return base;
+    })();
+    const mulNormal = effectiveModifierMultipliers([]);
+    const rNormal = computeRates(state, { modifierMul: mulNormal, defs: noPower }, 0);
+    const mulFrozen = effectiveModifierMultipliers(['frozen_core']);
+    const rFrozen = computeRates(state, { modifierMul: mulFrozen, defs: noPower }, 0);
+    expect(rFrozen.byBuilding[0]!.effectiveRate).toBeCloseTo(
+      rNormal.byBuilding[0]!.effectiveRate * 2,
+      9,
+    );
+  });
 });
 
 // -----------------------------------------------------------------------

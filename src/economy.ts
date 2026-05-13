@@ -79,6 +79,8 @@ export interface RatesContext {
   readonly accelerationMul?: number;
   /** World seed for deterministic §8.10 output rotation. */
   readonly worldSeed?: string;
+  /** §3.5 Geothermal Active: free heat for all requiresHeat buildings on this island. */
+  readonly geothermalActive?: boolean;
 }
 
 /**
@@ -440,7 +442,7 @@ export function computeRates(
   // from the pass-3 power balance (per §5.1 "active iff … all gates pass").
   // Coal-source served counts drive a post-pass fuel-burn deduction folded
   // directly into `consumption.coal` / `net.coal`.
-  const heat = resolveHeatAssignments(validBuildings);
+  const heat = resolveHeatAssignments(validBuildings, ctx?.geothermalActive ?? false);
   // §9.7 Tier Reset runtime gate. A building whose tier exceeds the island's
   // current tier band (e.g. a T2 building on a post-reset L1 island) is
   // forced to baseRate = 0 in pass-1 and excluded from the pass-3 power
@@ -513,7 +515,7 @@ export function computeRates(
         cycleSec: GENESIS_CYCLE_SEC,
         category: 'manufacturing',
       };
-      const gateResult = checkGates(b, validBuildings, defs);
+      const gateResult = checkGates(b, validBuildings, defs, ctx?.geothermalActive ?? false);
       if (gateResult.effectiveMul === 0) {
         tentative.push({ building: b, recipe: syntheticRecipe, baseRate: 0, buffStack: 1 });
         continue;
@@ -587,7 +589,7 @@ export function computeRates(
       }
     }
     // §4.5 gating adjacency: hard gates zero output; soft gates degrade.
-    const gateResult = checkGates(b, validBuildings, defs);
+    const gateResult = checkGates(b, validBuildings, defs, ctx?.geothermalActive ?? false);
     if (gateResult.effectiveMul === 0) {
       tentative.push({ building: b, recipe, baseRate: 0, buffStack });
       continue;
@@ -614,7 +616,10 @@ export function computeRates(
       b.defId === 'eldritch_sieve' ||
       b.defId === 'casimir_tap';
     const t5Mul = isT5Extractor ? modifierMul.t5ExtractionRateMul : 1;
-    const baseRate = (1 / recipe.cycleSec) * buffStack * rateMul * gateResult.effectiveMul * t5Mul;
+    const cryoMul = Object.keys(recipe.outputs).some((r) => r.includes('cryo'))
+      ? modifierMul.cryoRecipeRateMul
+      : 1;
+    const baseRate = (1 / recipe.cycleSec) * buffStack * rateMul * gateResult.effectiveMul * t5Mul * cryoMul;
     tentative.push({ building: b, recipe, baseRate, buffStack });
     const pass1Outputs = resolveRotatingOutput(recipe, t);
     for (const [r, yld] of Object.entries(pass1Outputs)) {
@@ -681,7 +686,7 @@ export function computeRates(
     // even if the building's recipe is somehow undefined for the variant.
     if (def.requiresHeat && heat.hasHeat.get(b.id) !== true) continue;
     // §4.5 gating adjacency: a building with a failed hard gate draws no power.
-    const gateResult = checkGates(b, validBuildings, defs);
+    const gateResult = checkGates(b, validBuildings, defs, ctx?.geothermalActive ?? false);
     if (gateResult.effectiveMul === 0) continue;
     // Same tile-aware resolution as the pass-1 loop. `active` only checks
     // recipe presence here, so the variant chosen doesn't matter — but we
@@ -711,7 +716,7 @@ export function computeRates(
   for (const b of validBuildings) {
     if (b.defId !== 'genesis_chamber') continue;
     if (!isBuildingActive(b)) continue;
-    const gcGateResult = checkGates(b, validBuildings, defs);
+    const gcGateResult = checkGates(b, validBuildings, defs, ctx?.geothermalActive ?? false);
     if (gcGateResult.effectiveMul === 0) continue;
     if (!state.genesisTarget) continue;
     const targetTier = tierForResource(state.genesisTarget);

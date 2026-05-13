@@ -88,17 +88,10 @@ describe('MODIFIER_DEFS catalog', () => {
       expect(def.displayName.length).toBeGreaterThan(0);
     }
   });
-  it('marks the two step-8 placeholders as placeholder=true', () => {
-    expect(MODIFIER_DEFS.geothermal_active.placeholder).toBe(true);
-    expect(MODIFIER_DEFS.frozen_core.placeholder).toBe(true);
-  });
-  it('marks the six wired modifiers as placeholder=false', () => {
-    expect(MODIFIER_DEFS.high_wind.placeholder).toBe(false);
-    expect(MODIFIER_DEFS.mineral_rich.placeholder).toBe(false);
-    expect(MODIFIER_DEFS.fertile.placeholder).toBe(false);
-    expect(MODIFIER_DEFS.cursed_storms.placeholder).toBe(false);
-    expect(MODIFIER_DEFS.stable.placeholder).toBe(false);
-    expect(MODIFIER_DEFS.aetheric_anomaly.placeholder).toBe(false);
+  it('marks all modifiers as placeholder=false (no remaining placeholders)', () => {
+    for (const id of ALL_MODIFIERS) {
+      expect(MODIFIER_DEFS[id].placeholder, `${id} should be wired`).toBe(false);
+    }
   });
   it('frozen_core is biome-restricted to arctic', () => {
     expect(MODIFIER_DEFS.frozen_core.biomeRestriction).toEqual(['arctic']);
@@ -250,16 +243,26 @@ describe('effectiveModifierMultipliers', () => {
     for (const c of Object.values(m.recipeRateByCategory)) expect(c).toBe(1);
   });
 
-  it('placeholder modifiers contribute no multiplier change', () => {
-    const placeholders: ModifierId[] = [
-      'geothermal_active',
-      'aetheric_anomaly',
-      'frozen_core',
-    ];
-    const m = effectiveModifierMultipliers(placeholders);
+  it('aetheric_anomaly gives 1.5× T5 extraction rate', () => {
+    const m = effectiveModifierMultipliers(['aetheric_anomaly']);
+    expect(m.t5ExtractionRateMul).toBeCloseTo(1.5, 12);
+    expect(m.globalRecipeRate).toBe(1);
+  });
+
+  it('frozen_core doubles cryo recipe rate', () => {
+    const m = effectiveModifierMultipliers(['frozen_core']);
+    expect(m.cryoRecipeRateMul).toBe(2);
+    expect(m.globalRecipeRate).toBe(1);
+    for (const c of Object.values(m.recipeRateByCategory)) expect(c).toBe(1);
+  });
+
+  it('geothermal_active is a structural no-op in multiplier fold', () => {
+    const m = effectiveModifierMultipliers(['geothermal_active']);
     expect(m.globalRecipeRate).toBe(1);
     for (const c of Object.values(m.recipeRateByCategory)) expect(c).toBe(1);
     expect(m.outputVariance).toBe(false);
+    expect(m.t5ExtractionRateMul).toBe(1);
+    expect(m.cryoRecipeRateMul).toBe(1);
   });
 
   it('high_wind sets outputVariance=true and leaves rates unchanged', () => {

@@ -5,21 +5,20 @@
 // that aggregates the active set into a multiplier bundle consumed by
 // `computeRates` in `economy.ts`.
 //
-// Step 8 wires four modifier effects through to the economy:
-//   - mineral_rich   → +25% on extraction-tagged recipes
-//   - fertile        → +50% on extraction-tagged recipes (forestry per §3.5;
-//                      we don't yet differentiate forestry from other extraction
-//                      so they share the wire — documented as a simplification)
-//   - cursed_storms  → -10% on ALL recipe rates (global multiplier)
-//   - stable         → no-op (1.0); tracked so future event systems know to
-//                      skip negative rolls on this island
+// Step 8 wires modifier effects through to the economy:
+//   - mineral_rich      → +25% on extraction-tagged recipes
+//   - fertile           → +50% on extraction-tagged recipes (forestry per §3.5;
+//                         we don't yet differentiate forestry from other extraction
+//                         so they share the wire — documented as a simplification)
+//   - cursed_storms     → -10% on ALL recipe rates (global multiplier)
+//   - stable            → no-op (1.0); tracked so future event systems know to
+//                         skip negative rolls on this island
+//   - high_wind         → outputVariance = true (±20% variance wired)
+//   - geothermal_active → free heat to all requiresHeat buildings (heat.ts)
+//   - aetheric_anomaly  → T5 raw extraction +50% rate (economy.ts)
+//   - frozen_core       → cryo recipes 2× rate (economy.ts)
 //
-// The other four modifiers (high_wind, geothermal_active, aetheric_anomaly,
-// frozen_core) are STRUCTURAL PLACEHOLDERS for step 8: they appear in the
-// catalog, can be assigned to islands, and render in the UI, but their
-// economic effects rely on systems not yet built (heat propagation, T5
-// extraction, cryo recipes, Wind Turbine + variance machinery). They are
-// flagged `placeholder: true` and have no effect in `effectiveModifierMultipliers`.
+// All eight modifiers are now active; none remain structural placeholders.
 //
 // Modifier RANDOM GENERATION (`rollModifiers`) is exported for future-step use
 // (artificial islands / new colonies / persisted seed worlds). Step 8 does
@@ -186,7 +185,7 @@ export const MODIFIER_DEFS: Readonly<Record<ModifierId, ModifierDef>> = {
       desert: 0.5,
       arctic: 0.5,
     },
-    placeholder: true, // Heat-system not implemented.
+    placeholder: false, // Wired in heat.ts: free heat for all requiresHeat buildings.
     category: 'exotic',
   },
   mineral_rich: {
@@ -233,7 +232,7 @@ export const MODIFIER_DEFS: Readonly<Record<ModifierId, ModifierDef>> = {
     description: 'Cryo recipes 2× efficient.',
     weight: 6,
     biomeRestriction: ['arctic'],
-    placeholder: true, // Cryo recipes not implemented.
+    placeholder: false, // Wired in economy.ts: cryo recipes 2× rate.
     category: 'exotic',
     naturalOnly: true,
   },
@@ -272,14 +271,16 @@ export interface ModifierMultipliers {
   readonly recipeRateByCategory: Readonly<Record<RecipeCategory, number>>;
   /** If true, apply ±20% variance to all recipe outputs. */
   readonly outputVariance: boolean;
-  /** §8.10 Aetheric Anomaly: doubles T5 extractor rate (halves cycleSec). */
+  /** §8.10 Aetheric Anomaly: +50% T5 extractor rate. */
   readonly t5ExtractionRateMul: number;
+  /** §3.5 Frozen Core: 2× cryo recipe rate. */
+  readonly cryoRecipeRateMul: number;
 }
 
 function blankModifierMultipliers(): ModifierMultipliers {
   const recipeRateByCategory = {} as Record<RecipeCategory, number>;
   for (const c of ALL_RECIPE_CATEGORIES) recipeRateByCategory[c] = 1;
-  return { globalRecipeRate: 1, recipeRateByCategory, outputVariance: false, t5ExtractionRateMul: 1 };
+  return { globalRecipeRate: 1, recipeRateByCategory, outputVariance: false, t5ExtractionRateMul: 1, cryoRecipeRateMul: 1 };
 }
 
 /** Identity bundle, exported so callers (`computeRates`, tests) have a
@@ -291,14 +292,15 @@ export const IDENTITY_MODIFIER_MULTIPLIERS: ModifierMultipliers = blankModifierM
  * case (returns a fresh identity bundle), and silently ignores unknown ids.
  *
  * Active §3.5 modifier effects:
- *   - mineral_rich → recipeRateByCategory.extraction × 1.25
- *   - fertile      → recipeRateByCategory.extraction × 1.50
- *                    (composes with mineral_rich; both target extraction)
- *   - cursed_storms → globalRecipeRate × 0.90
- *   - stable        → no-op (recorded for future event-system gates)
- *   - high_wind     → outputVariance = true
- *
- * Placeholder modifiers contribute nothing.
+ *   - mineral_rich    → recipeRateByCategory.extraction × 1.25
+ *   - fertile         → recipeRateByCategory.extraction × 1.50
+ *                       (composes with mineral_rich; both target extraction)
+ *   - cursed_storms   → globalRecipeRate × 0.90
+ *   - stable          → no-op (recorded for future event-system gates)
+ *   - high_wind       → outputVariance = true
+ *   - geothermal_active → no numeric multiplier (structural; handled in heat.ts)
+ *   - aetheric_anomaly  → t5ExtractionRateMul × 1.50
+ *   - frozen_core       → cryoRecipeRateMul × 2.0
  */
 export function effectiveModifierMultipliers(
   modifiers: ReadonlyArray<ModifierId>,
@@ -309,6 +311,7 @@ export function effectiveModifierMultipliers(
   let global = out.globalRecipeRate;
   let outputVariance = out.outputVariance;
   let t5ExtractionRateMul = out.t5ExtractionRateMul;
+  let cryoRecipeRateMul = out.cryoRecipeRateMul;
   for (const id of modifiers) {
     switch (id) {
       case 'mineral_rich':
@@ -325,10 +328,12 @@ export function effectiveModifierMultipliers(
         break;
       case 'stable':
       case 'geothermal_active':
-      case 'frozen_core':
         break;
       case 'aetheric_anomaly':
-        t5ExtractionRateMul *= 2;
+        t5ExtractionRateMul *= 1.5;
+        break;
+      case 'frozen_core':
+        cryoRecipeRateMul *= 2;
         break;
       default: {
         // Exhaustiveness guard — adding a new ModifierId without wiring its
@@ -339,7 +344,7 @@ export function effectiveModifierMultipliers(
       }
     }
   }
-  return { globalRecipeRate: global, recipeRateByCategory: cat, outputVariance, t5ExtractionRateMul };
+  return { globalRecipeRate: global, recipeRateByCategory: cat, outputVariance, t5ExtractionRateMul, cryoRecipeRateMul };
 }
 
 // ---------------------------------------------------------------------------

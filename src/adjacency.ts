@@ -206,9 +206,11 @@ export function gateSatisfied(
   gate: GateRequirement,
   all: ReadonlyArray<PlacedBuilding>,
   defs: Readonly<Record<BuildingDefId, BuildingDef>> = BUILDING_DEFS,
+  geothermalActive: boolean = false,
 ): boolean {
   const def = defs[building.defId];
   if (!def) return true;
+  if (geothermalActive && gate.matchType === 'heat_source') return true;
   const neighbors = collectNeighbors(building, all, defs);
   let matches = 0;
   for (const n of neighbors) {
@@ -223,6 +225,7 @@ export function checkGates(
   building: PlacedBuilding,
   all: ReadonlyArray<PlacedBuilding>,
   defs: Readonly<Record<BuildingDefId, BuildingDef>> = BUILDING_DEFS,
+  geothermalActive: boolean = false,
 ): GateResult {
   const def = defs[building.defId];
   if (!def.gates || def.gates.length === 0) {
@@ -233,6 +236,7 @@ export function checkGates(
 
   let minMul = 1;
   for (const gate of def.gates) {
+    if (geothermalActive && gate.matchType === 'heat_source') continue;
     let matches = 0;
     for (const n of neighbors) {
       const nd = defs[n.defId];

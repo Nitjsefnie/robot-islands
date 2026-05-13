@@ -123,6 +123,7 @@ function sourceTouchesBorder(source: PlacedBuilding, border: Set<string>): boole
  */
 export function resolveHeatAssignments(
   buildings: ReadonlyArray<PlacedBuilding>,
+  geothermalActive: boolean = false,
 ): HeatAssignments {
   const hasHeat = new Map<string, boolean>();
   const coalConsumersByFurnace = new Map<string, number>();
@@ -143,14 +144,22 @@ export function resolveHeatAssignments(
       else coalSources.push(b);
     }
   }
-  if (consumers.length === 0) {
-    return { hasHeat, coalConsumersByFurnace, assignedSource };
-  }
-
   // Lex-sort consumers and coal sources by id for determinism per §5.2
   // ("the engine walks consumers in ascending building-ID order"). Free
   // sources don't need sorting (the first match suffices; no fuel cost).
   const sortedConsumers = [...consumers].sort((a, b) => a.id.localeCompare(b.id));
+
+  if (geothermalActive) {
+    for (const consumer of sortedConsumers) {
+      hasHeat.set(consumer.id, true);
+    }
+    return { hasHeat, coalConsumersByFurnace, assignedSource };
+  }
+
+  if (consumers.length === 0) {
+    return { hasHeat, coalConsumersByFurnace, assignedSource };
+  }
+
   const sortedCoal = [...coalSources].sort((a, b) => a.id.localeCompare(b.id));
 
   for (const consumer of sortedConsumers) {

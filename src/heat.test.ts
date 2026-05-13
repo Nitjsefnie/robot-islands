@@ -213,6 +213,16 @@ describe('resolveHeatAssignments — §5.2', () => {
     expect(res.coalConsumersByFurnace.size).toBe(0);
   });
 
+  it('Geothermal Active modifier grants heat to all consumers without adjacent source', () => {
+    const buildings: PlacedBuilding[] = [
+      { id: 'bf', defId: 'blast_furnace', x: 0, y: 0 },
+    ];
+    const res = resolveHeatAssignments(buildings, true);
+    expect(res.hasHeat.get('bf')).toBe(true);
+    expect(res.coalConsumersByFurnace.size).toBe(0);
+    expect(res.assignedSource.has('bf')).toBe(false);
+  });
+
   it('N:1 share — three consumers all on one Geothermal Vent → free for all', () => {
     // Geothermal Vent 2×2 at (0,0)..(1,1). Three coke ovens placed around it
     // on the N, E, and S sides — none overlapping each other.
