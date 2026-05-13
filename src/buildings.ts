@@ -64,7 +64,7 @@ export interface PlacedBuilding {
   readonly eternalServitor?: true;
   /** §14.2 Spaceport tier for launch-success-rate scaling. Optional so legacy
    *  saves and non-upgradable buildings load cleanly (undefined ≡ tier 1). */
-  readonly tier?: number;
+  tier?: number;
   /** True if the building's footprint no longer matches terrain after biome change. */
   invalid?: boolean;
 }

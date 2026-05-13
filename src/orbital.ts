@@ -3,7 +3,7 @@
 // Pure layer — no PixiJS, no DOM. All state mutations go through explicit
 // functions so the simulation is testable without a renderer.
 //
-// §14.2 Spaceport + §14.7 launch success rolls with failure modes.
+// §14.2 Spaceport + §14.7 launch success rolls with failure modes + upgrade lifecycle.
 
 import { inv } from './economy.js';
 import { makeSeededRng } from './rng.js';
@@ -132,6 +132,16 @@ export function launchSatellite(
   return { ok: true, sat };
 }
 
+/**
+ * Upgrade the Spaceport on an island to the next tier.
+ *
+ * Cost table:
+ *   - Tier 1 → 2: 5 phase_converter, 2 eldritch_processor, 50 cryogenic_hydrogen
+ *   - Tier 2 → 3: 10 reality_anchor, 5 eldritch_processor, 100 antimatter_propellant
+ *
+ * Returns `{ ok: true }` on success, or `{ ok: false, reason }` when the island
+ * or spaceport is missing, the tier is already maxed, or resources are insufficient.
+ */
 export function upgradeSpaceport(
   world: WorldState,
   islandId: string
@@ -155,6 +165,6 @@ export function upgradeSpaceport(
   for (const [r, amt] of Object.entries(costs)) {
     state.inventory[r as ResourceId] = inv(state, r as ResourceId) - amt;
   }
-  (sp as { tier?: number }).tier = currentTier + 1;
+  sp.tier = currentTier + 1;
   return { ok: true };
 }

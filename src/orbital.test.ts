@@ -303,6 +303,14 @@ function stockUpgradeResourcesTier2(state: IslandState): void {
 }
 
 describe('spaceport upgrade', () => {
+  it('rejects when island does not exist', () => {
+    const world = makeWorld();
+    const result = upgradeSpaceport(world, 'missing');
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.reason).toBe('no-island');
+  });
+
   it('upgrades spaceport I -> II with correct cost consumption', () => {
     const world = makeWorld();
     const state = makeIslandState({ id: 'home' });
