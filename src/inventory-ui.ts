@@ -115,6 +115,8 @@ export const RESOURCE_CATEGORY: Readonly<Record<ResourceId, ResourceCategory>> =
   // Misc
   scrap: 'misc',
   slag: 'misc',
+  // §13.4 T5 endgame artifact
+  genesis_cell: 'rare',
 };
 
 /** Filter chips shown above the resource list. `'all'` is the default. */

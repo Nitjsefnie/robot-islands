@@ -150,7 +150,9 @@ export type ResourceId =
   | 'pcb'
   | 'circuit_board'
   | 'processor'
-  | 'computing_module';
+  | 'computing_module'
+  // §13.4 endgame artifact — victory condition resource. No producer yet.
+  | 'genesis_cell';
 
 /** All known resources, useful for iterating to initialise inventories. */
 export const ALL_RESOURCES: ReadonlyArray<ResourceId> = [
@@ -228,6 +230,8 @@ export const ALL_RESOURCES: ReadonlyArray<ResourceId> = [
   'circuit_board',
   'processor',
   'computing_module',
+  // §13.4 endgame artifact
+  'genesis_cell',
 ];
 
 /**
@@ -329,6 +333,8 @@ export const XP_WEIGHT: Readonly<Record<ResourceId, number>> = {
   circuit_board: 30,
   processor: 30,
   computing_module: 30,
+  // §13.4 T5 endgame artifact
+  genesis_cell: 300,
 };
 
 /**

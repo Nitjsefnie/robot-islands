@@ -20,7 +20,6 @@ import {
   rerollModifiers,
   rollModifiers,
   terrainAtForBiome,
-  type ModifierId,
 } from './biomes.js';
 import { defaultTerrainAt, tileInscribedInEllipse, type TerrainKind } from './island.js';
 import type { Biome } from './world.js';

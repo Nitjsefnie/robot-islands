@@ -62,6 +62,9 @@ function makeWorld(over: Partial<WorldState> = {}): WorldState {
     ...base,
     satellites: [],
     repairDrones: [],
+      endgameState: { achieved: new Set(), firstAchievedMs: null, victoryBannerShown: false },
+      latticeActive: false,
+      latticeNodeIslands: [],
     ...over,
   };
 }
@@ -440,6 +443,9 @@ function makeBfsWorld(opts: {
     seed: '0',
     satellites: opts.satellites,
     repairDrones: [],
+      endgameState: { achieved: new Set(), firstAchievedMs: null, victoryBannerShown: false },
+      latticeActive: false,
+      latticeNodeIslands: [],
     islandStates: opts.islandStates,
   } as WorldState;
 }

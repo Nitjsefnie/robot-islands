@@ -55,6 +55,7 @@ import { SAT_BUFFER_CAP, type Satellite } from './orbital.js';
 import type { ObjectiveId } from './tutorial.js';
 import { _seedVehicleIdCounter, tuningFor } from './settlement.js';
 import { ALL_RESOURCES, type ResourceId } from './recipes.js';
+import type { VictoryCondition } from './endgame.js';
 import type { NodeId, SubPathId } from './skilltree.js';
 import { WORLD_SEED, type IslandSpec, type WorldState } from './world.js';
 
@@ -150,6 +151,16 @@ export interface SerializedWorld {
   readonly repairDrones?: ReadonlyArray<import('./orbital.js').RepairDrone>;
   /** Tutorial onboarding state. Backfilled on legacy saves. */
   readonly tutorialState?: { completed: ObjectiveId[]; current: ObjectiveId | null };
+  /** §13.4 endgame progress. Backfilled on legacy saves. */
+  readonly endgameState?: {
+    readonly achieved: ReadonlyArray<VictoryCondition>;
+    readonly firstAchievedMs: number | null;
+    readonly victoryBannerShown: boolean;
+  };
+  /** §13.3 Omniscient Lattice activation. Backfilled on legacy saves. */
+  readonly latticeActive?: boolean;
+  /** §13.3 Lattice Node island list. Backfilled on legacy saves. */
+  readonly latticeNodeIslands?: ReadonlyArray<string>;
 }
 
 /** Top-level snapshot. The `v` field is the schema-version anchor: this
@@ -236,6 +247,14 @@ export function serializeWorld(
         completed: Array.from(world.tutorialState?.completed ?? []),
         current: world.tutorialState?.current ?? null,
       },
+      // §13.4 endgame state.
+      endgameState: {
+        achieved: [...(world.endgameState?.achieved ?? [])],
+        firstAchievedMs: world.endgameState?.firstAchievedMs ?? null,
+        victoryBannerShown: world.endgameState?.victoryBannerShown ?? false,
+      },
+      latticeActive: world.latticeActive,
+      latticeNodeIslands: [...world.latticeNodeIslands],
     },
     islandStates: stateEntries,
   };
@@ -425,6 +444,17 @@ export function deserializeWorld(
           current: snapshot.world.tutorialState.current,
         }
       : { completed: new Set(), current: 'place_solar' },
+    // §13.4 endgame state backfill: legacy saves predate the field.
+    endgameState: snapshot.world.endgameState
+      ? {
+          achieved: new Set<VictoryCondition>(snapshot.world.endgameState.achieved),
+          firstAchievedMs: snapshot.world.endgameState.firstAchievedMs,
+          victoryBannerShown: snapshot.world.endgameState.victoryBannerShown,
+        }
+      : { achieved: new Set<VictoryCondition>(), firstAchievedMs: null, victoryBannerShown: false },
+    // §13.3 Omniscient Lattice backfill: legacy saves predate these fields.
+    latticeActive: snapshot.world.latticeActive ?? false,
+    latticeNodeIslands: [...(snapshot.world.latticeNodeIslands ?? [])],
   };
 
   const islandStates = new Map<string, IslandState>();

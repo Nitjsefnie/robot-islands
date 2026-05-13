@@ -91,7 +91,7 @@ function makeIslandSpec(over: Partial<IslandSpec>): IslandSpec {
 }
 
 function freshWorld(islands: IslandSpec[] = []): WorldState {
-  return { islands, drones: [], routes: [], vehicles: [], revealedCells: new Set(), satellites: [], repairDrones: [], seed: 'test-seed' };
+  return { islands, drones: [], routes: [], vehicles: [], revealedCells: new Set(), satellites: [], repairDrones: [], endgameState: { achieved: new Set(), firstAchievedMs: null, victoryBannerShown: false }, latticeActive: false, latticeNodeIslands: [], seed: 'test-seed' };
 }
 
 function makeTestWorld(): {
@@ -972,6 +972,9 @@ function makeNetworkedWorldWithMilestone(
     revealedCells: new Set(),
     satellites: [],
     repairDrones: [],
+      endgameState: { achieved: new Set(), firstAchievedMs: null, victoryBannerShown: false },
+      latticeActive: false,
+      latticeNodeIslands: [],
     seed: 'test-seed',
     islandStates,
   };
@@ -1075,6 +1078,9 @@ describe('Auto-Patronage §9.6 / §12.7', () => {
       revealedCells: new Set(),
       satellites: [],
       repairDrones: [],
+      endgameState: { achieved: new Set(), firstAchievedMs: null, victoryBannerShown: false },
+      latticeActive: false,
+      latticeNodeIslands: [],
       seed: 'test-seed',
       islandStates: new Map([
         ['hub-b', stateA],

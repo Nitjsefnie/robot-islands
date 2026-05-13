@@ -29,6 +29,7 @@ import type { PlacedBuilding } from './buildings.js';
 import { renderBuildings } from './buildings.js';
 import { islandCells } from './discovery.js';
 import type { IslandState } from './economy.js';
+import type { EndgameState, VictoryCondition } from './endgame.js';
 import { regenerateTerrain, type TerrainKind, type Tile } from './island.js';
 import {
   computeIslandTiles,
@@ -709,6 +710,12 @@ export interface WorldState {
   /** Tutorial onboarding state. Optional so legacy saves and test fixtures
    *  compile without change; `makeInitialWorld` always seeds it. */
   tutorialState?: import('./tutorial.js').TutorialState;
+  /** §13.4 endgame progress tracking. */
+  endgameState: EndgameState;
+  /** §13.3 Omniscient Lattice global activation flag. */
+  latticeActive: boolean;
+  /** Island IDs that have an active Lattice Node. */
+  latticeNodeIslands: string[];
 
 }
 
@@ -768,7 +775,7 @@ export function makeInitialWorld(_nowMs: number): WorldState {
     if (!spec.populated && !spec.discovered) continue;
     for (const k of islandCells(spec)) revealedCells.add(k);
   }
-  return { islands, drones: [], routes: [], vehicles: [], revealedCells, seed: WORLD_SEED, satellites: [], repairDrones: [], tutorialState: { completed: new Set(), current: 'place_solar' } };
+  return { islands, drones: [], routes: [], vehicles: [], revealedCells, seed: WORLD_SEED, satellites: [], repairDrones: [], tutorialState: { completed: new Set(), current: 'place_solar' }, endgameState: { achieved: new Set<VictoryCondition>(), firstAchievedMs: null, victoryBannerShown: false }, latticeActive: false, latticeNodeIslands: [] };
 }
 
 // ---------------------------------------------------------------------------
