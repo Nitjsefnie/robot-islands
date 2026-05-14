@@ -2501,3 +2501,38 @@ describe('computeRates with T5 extractor rotation', () => {
     expect(r2.production.higgs_flux ?? 0).toBeGreaterThan(0);
   });
 });
+
+// ---------------------------------------------------------------------------
+// §4.5 Chemical Reactor toxicity event integration
+// ---------------------------------------------------------------------------
+
+describe('§4.5 — chemical_reactor toxicity in computeRates', () => {
+  it('halves the effective rate of a toxicity-active reactor versus a clear one', () => {
+    const reactorA: PlacedBuilding = { id: 'b-cr-a', defId: 'chemical_reactor', x: 0, y: 0 };
+    const reactorB: PlacedBuilding = { id: 'b-cr-b', defId: 'chemical_reactor', x: 2, y: 0 };
+    const nowMs = 1_000_000;
+    reactorA.toxicityExpiryMs = nowMs + 30 * 60 * 1000; // active
+    // reactorB has no toxicityExpiryMs → clear
+
+    const state = makeState({
+      buildings: [reactorA, reactorB],
+      inventory: { ...blankInventory(), salt: 100, fresh_water: 100 },
+      level: 5, // tier 2 unlocked
+      lastTick: nowMs,
+    });
+
+    const noPower = ((): DefCatalog => {
+      const base = { ...BUILDING_DEFS } as Record<BuildingDefId, BuildingDef>;
+      const { power: _p, ...rest } = base.chemical_reactor;
+      base.chemical_reactor = rest as BuildingDef;
+      return base;
+    })();
+
+    const { byBuilding } = computeRates(state, { defs: noPower }, nowMs);
+    const rateA = byBuilding.find((r) => r.building.id === 'b-cr-a')!.effectiveRate;
+    const rateB = byBuilding.find((r) => r.building.id === 'b-cr-b')!.effectiveRate;
+    // Base rate = 1/800 = 0.00125. No other multipliers apply in this fixture.
+    expect(rateB).toBeCloseTo(0.00125, 9);
+    expect(rateA).toBeCloseTo(rateB * 0.5, 9);
+  });
+});

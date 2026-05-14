@@ -1179,6 +1179,30 @@ describe('PlacedBuilding flags round-trip', () => {
     const solar = restoredHome.buildings.find((b) => b.id === 'solar-99')!;
     expect(solar.eternalServitor).toBe(true);
   });
+
+  it('preserves toxicityExpiryMs on a chemical_reactor', () => {
+    const world = makeInitialWorld(0);
+    const home = world.islands.find((s) => s.id === 'home')!;
+    home.buildings.push({ id: 'reactor-1', defId: 'chemical_reactor', x: 3, y: 3, toxicityExpiryMs: 1_234_567 });
+    const snap = serializeWorld(world, new Map(), 0, 0);
+    const json = JSON.parse(JSON.stringify(snap)) as SaveSnapshot;
+    const { world: restored } = deserializeWorld(json, 0, 0);
+    const restoredHome = restored.islands.find((s) => s.id === 'home')!;
+    const r = restoredHome.buildings.find((b) => b.id === 'reactor-1')!;
+    expect(r.toxicityExpiryMs).toBe(1_234_567);
+  });
+
+  it('leaves undefined toxicityExpiryMs as undefined', () => {
+    const world = makeInitialWorld(0);
+    const home = world.islands.find((s) => s.id === 'home')!;
+    home.buildings.push({ id: 'reactor-2', defId: 'chemical_reactor', x: 4, y: 4 });
+    const snap = serializeWorld(world, new Map(), 0, 0);
+    const json = JSON.parse(JSON.stringify(snap)) as SaveSnapshot;
+    const { world: restored } = deserializeWorld(json, 0, 0);
+    const restoredHome = restored.islands.find((s) => s.id === 'home')!;
+    const r = restoredHome.buildings.find((b) => b.id === 'reactor-2')!;
+    expect(r.toxicityExpiryMs).toBeUndefined();
+  });
 });
 
 // ---------------------------------------------------------------------------

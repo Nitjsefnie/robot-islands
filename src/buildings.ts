@@ -67,6 +67,12 @@ export interface PlacedBuilding {
   /** §14.2 Spaceport tier for launch-success-rate scaling. Optional so legacy
    *  saves and non-upgradable buildings load cleanly (undefined ≡ tier 1). */
   tier?: number;
+  /** §4.5 toxicity event expiry timestamp in perf-domain ms. Set when a
+   *  chemical_reactor rolls its 5%/hr toxicity event; 50% throughput
+   *  multiplier applies while `nowMs < toxicityExpiryMs`. Missing/undefined
+   *  ≡ no active toxicity period. Forward-compat: legacy saves load with
+   *  the field absent and behave normally. */
+  toxicityExpiryMs?: number;
   /** True if the building's footprint no longer matches terrain after biome change. */
   invalid?: boolean;
 }

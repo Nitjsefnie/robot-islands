@@ -325,6 +325,9 @@ export function deserializeWorld(
       ...(b.maintainedAt !== undefined
         ? { maintainedAt: b.maintainedAt + perfShift }
         : {}),
+      ...(b.toxicityExpiryMs !== undefined
+        ? { toxicityExpiryMs: b.toxicityExpiryMs + perfShift }
+        : {}),
     })),
   }));
 

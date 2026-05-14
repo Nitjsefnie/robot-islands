@@ -43,6 +43,7 @@ import {
   nextMaintenanceBoundaryMs,
   tryAutoMaintain,
 } from './maintenance.js';
+import { advanceToxicityRolls, toxicityMultiplier } from './reactor-toxicity.js';
 import { makeSeededRng } from './rng.js';
 import { nextRotateOutputBoundaryMs, resolveRecipe, resolveRotatingOutput, XP_WEIGHT, type Recipe, type ResourceId } from './recipes.js';
 import { effectiveSkillMultipliers, type NodeId, type SubPathId } from './skilltree.js';
@@ -805,7 +806,8 @@ export function computeRates(
     // factor and double-dip on consumers. Resource recipes only.
     const mf = maintenanceFactor(te.building, defs[te.building.defId]);
     const accelMul = ctx?.accelerationMul ?? 1;
-    const effectiveRate = te.baseRate * ia * pf * mf * accelMul * varianceFactor;
+    const toxMul = toxicityMultiplier(te.building, t);
+    const effectiveRate = te.baseRate * ia * pf * mf * accelMul * varianceFactor * toxMul;
     byBuilding.push({ building: te.building, recipe: te.recipe, effectiveRate });
 
     if (effectiveRate === 0) continue;
@@ -1120,6 +1122,9 @@ export function advanceIsland(
     clearGraceIfRedundant(state, r);
   }
   let t = state.lastTick;
+  if (ctx?.worldSeed) {
+    advanceToxicityRolls(state.buildings, ctx.worldSeed, state.lastTick, nowMs);
+  }
   // §4.7: attempt auto-maintain BEFORE the first segment too — a save loaded
   // with materials in inventory and an over-threshold building should
   // self-heal on the next tick without waiting for the next inventory
