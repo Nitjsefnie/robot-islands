@@ -5,6 +5,7 @@
 
 import type { PlacedBuilding } from './buildings.js';
 import type { ResourceId } from './recipes.js';
+import { tierForLevel } from './skilltree.js';
 import type { WorldState } from './world.js';
 
 /** §13.3 Network Consciousness threshold for Omniscient Lattice activation. */
@@ -14,7 +15,7 @@ export const LATTICE_ACTIVATION_THRESHOLD = 20;
 function isT5Mastered(world: WorldState, islandId: string): boolean {
   const state = world.islandStates?.get(islandId);
   if (!state) return false;
-  return state.level >= 50 && state.aiCoreCrafted;
+  return tierForLevel(state.level) >= 5 && state.aiCoreCrafted;
 }
 
 /** Does the island have at least one valid Lattice Node? */

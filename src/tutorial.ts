@@ -1,3 +1,4 @@
+import { tierForLevel } from './skilltree.js';
 import type { WorldState } from './world.js';
 
 export type ObjectiveId =
@@ -34,7 +35,7 @@ export const OBJECTIVES: Record<ObjectiveId, { title: string; hint: string; chec
   reach_level_5: {
     title: 'Grow',
     hint: 'Reach level 5 to unlock Tier 2.',
-    check: (w) => Array.from(w.islandStates?.values() ?? []).some(s => s.level >= 5),
+    check: (w) => Array.from(w.islandStates?.values() ?? []).some(s => tierForLevel(s.level) >= 2),
   },
   build_dronepad: {
     title: 'Take Flight',

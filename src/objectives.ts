@@ -14,6 +14,7 @@ import type { IslandSpec, WorldState } from './world.js';
 import type { IslandState } from './economy.js';
 import type { Route } from './routes.js';
 import type { Drone } from './drones.js';
+import { tierForLevel } from './skilltree.js';
 
 // ---------------------------------------------------------------------------
 // Snapshot — what the objective checks can read
@@ -63,7 +64,7 @@ export const OBJECTIVES: ReadonlyArray<Objective> = [
     description: 'Reach Level 5 on any island.',
     check: (snap) => {
       for (const state of snap.islandStates.values()) {
-        if (state.level >= 5) return true;
+        if (tierForLevel(state.level) >= 2) return true;
       }
       return false;
     },
@@ -124,7 +125,7 @@ export const OBJECTIVES: ReadonlyArray<Objective> = [
     description: 'Reach Tier 3 (level 15) on any island.',
     check: (snap) => {
       for (const state of snap.islandStates.values()) {
-        if (state.level >= 15) return true;
+        if (tierForLevel(state.level) >= 3) return true;
       }
       return false;
     },
@@ -146,7 +147,7 @@ export const OBJECTIVES: ReadonlyArray<Objective> = [
     description: 'Reach Tier 4 (level 30) on any island.',
     check: (snap) => {
       for (const state of snap.islandStates.values()) {
-        if (state.level >= 30) return true;
+        if (tierForLevel(state.level) >= 4) return true;
       }
       return false;
     },
@@ -168,7 +169,7 @@ export const OBJECTIVES: ReadonlyArray<Objective> = [
     description: 'Reach Tier 5 (level 50 + AI Core crafted) on any island.',
     check: (snap) => {
       for (const state of snap.islandStates.values()) {
-        if (state.aiCoreCrafted && state.level >= 50) return true;
+        if (state.aiCoreCrafted && tierForLevel(state.level) >= 5) return true;
       }
       return false;
     },

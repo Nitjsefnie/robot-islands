@@ -752,7 +752,7 @@ export function mountBuildingsUi(
     // T5 has a two-axis gate (level 50 AND aiCoreCrafted per §13.1). When the
     // level is met but the AI Core requirement isn't, show "AI CORE REQ"
     // instead of "0 LV TO UNLOCK" which would lie about what's missing.
-    if (ref.tier === 5 && state.level >= 50 && !state.aiCoreCrafted) {
+    if (ref.tier === 5 && tierForLevel(state.level) >= 5 && !state.aiCoreCrafted) {
       ref.headingLabel.style.color = WARN;
       ref.heading.style.borderBottomColor = WARN_DIM;
       ref.headingStatus.textContent = 'AI CORE REQ';
