@@ -151,6 +151,7 @@ export type BuildingDefId =
   // §14.8 debris and Kessler cascades, §14.9 four new Orbital skill
   // sub-paths, §14.12 Repair Drone operations — all deferred.
   | 'spaceport'
+  | 'orbital_tracking_station'
   | 'antimatter_refinery'
   | 'scanner_sat_assembly'
   | 'comm_sat_assembly'
@@ -1569,6 +1570,24 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     // §14 placeholder — tune in Appendix A.
     placementCost: { antimatter_propellant: 100, steel: 200, reality_anchor: 100 },
     glyph: '▲',
+  },
+  // §14.2 Orbital Tracking Station: T6 ground-based radar (3×3). Detects
+  // orbital debris within ORBITAL_TRACKING_DETECTION_RADIUS_TILES of the
+  // island. Multiple stations across islands compose into a network. The
+  // debris-mechanics consumer lives in src/orbital.ts (see
+  // debrisDetectionRangeForIsland).
+  orbital_tracking_station: {
+    id: 'orbital_tracking_station',
+    displayName: 'Orbital Tracking Station',
+    category: 'special',
+    tier: 6,
+    footprint: SHAPES.square3,
+    fill: 0x4080a0,        // radar-blue
+    stroke: 0x102030,
+    power: { consumes: 80 },
+    // §14 placeholder — tune in Appendix A.
+    placementCost: { steel: 200, microchip: 80, glass: 30 },
+    glyph: '◉',
   },
   // §11.7 / §14.10: Antimatter Refinery — produces Antimatter Propellant
   // (T6 launch fuel). Recipe placeholder per the task brief:

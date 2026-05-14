@@ -76,6 +76,7 @@ const KNOWN_DEF_IDS: ReadonlyArray<BuildingDefId> = [
   // Step-20 T5→T6 transition + T6 Orbital (§13.4 / §14.2 / §14.10)
   'ascendant_assembly',
   'spaceport',
+  'orbital_tracking_station',
   'antimatter_refinery',
   'scanner_sat_assembly',
   'comm_sat_assembly',
@@ -704,6 +705,7 @@ describe('§8.8 shipyard coastal gating', () => {
 
 describe('step-20 T6 Orbital catalog (§14 / step 20)', () => {
   const T6_NON_SPACEPORT_IDS = [
+    'orbital_tracking_station',
     'antimatter_refinery',
     'scanner_sat_assembly',
     'comm_sat_assembly',
@@ -711,7 +713,7 @@ describe('step-20 T6 Orbital catalog (§14 / step 20)', () => {
   ] as const;
   const ALL_T6_IDS = ['spaceport', ...T6_NON_SPACEPORT_IDS] as const;
 
-  it('all 5 T6 defs are present with tier 6', () => {
+  it('all 6 T6 defs are present with tier 6', () => {
     for (const id of ALL_T6_IDS) {
       expect(BUILDING_DEFS[id]).toBeDefined();
       expect(BUILDING_DEFS[id].tier).toBe(6);
@@ -723,6 +725,15 @@ describe('step-20 T6 Orbital catalog (§14 / step 20)', () => {
     expect(shapeWidth(def.footprint)).toBe(4);
     expect(shapeHeight(def.footprint)).toBe(4);
     expect(def.power?.consumes).toBe(3000);
+    expect(def.category).toBe('special');
+    expect(def.requiredBiomes).toBeUndefined();
+  });
+
+  it('Orbital Tracking Station: 3×3, -80W consumer, special category (§14.2)', () => {
+    const def = BUILDING_DEFS.orbital_tracking_station;
+    expect(shapeWidth(def.footprint)).toBe(3);
+    expect(shapeHeight(def.footprint)).toBe(3);
+    expect(def.power?.consumes).toBe(80);
     expect(def.category).toBe('special');
     expect(def.requiredBiomes).toBeUndefined();
   });

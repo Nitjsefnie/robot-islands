@@ -10,6 +10,8 @@ import {
   flushSatBuffer,
   dispatchRepairDrone,
   tickRepairDrones,
+  debrisDetectionRangeForIsland,
+  ORBITAL_TRACKING_DETECTION_RADIUS_TILES,
   type SatelliteVariant,
   type Satellite,
   type SatBufferEntry,
@@ -314,13 +316,13 @@ describe('satellite launch resource consumption', () => {
 
 function stockUpgradeResourcesTier1(state: IslandState): void {
   state.inventory.phase_converter = 5;
-  state.inventory.eldritch_processor = 2;
+  state.inventory.memetic_core = 2;
   state.inventory.cryogenic_hydrogen = 50;
 }
 
 function stockUpgradeResourcesTier2(state: IslandState): void {
   state.inventory.reality_anchor = 10;
-  state.inventory.eldritch_processor = 5;
+  state.inventory.memetic_core = 5;
   state.inventory.antimatter_propellant = 100;
 }
 
@@ -344,7 +346,7 @@ describe('spaceport upgrade', () => {
     const sp = state.buildings.find(b => b.defId === 'spaceport');
     expect(sp?.tier).toBe(2);
     expect(state.inventory.phase_converter).toBe(0);
-    expect(state.inventory.eldritch_processor).toBe(0);
+    expect(state.inventory.memetic_core).toBe(0);
     expect(state.inventory.cryogenic_hydrogen).toBe(0);
   });
 
@@ -359,7 +361,7 @@ describe('spaceport upgrade', () => {
     const sp = state.buildings.find(b => b.defId === 'spaceport');
     expect(sp?.tier).toBe(3);
     expect(state.inventory.reality_anchor).toBe(0);
-    expect(state.inventory.eldritch_processor).toBe(0);
+    expect(state.inventory.memetic_core).toBe(0);
     expect(state.inventory.antimatter_propellant).toBe(0);
   });
 
@@ -394,6 +396,66 @@ describe('spaceport upgrade', () => {
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.reason).toBe('insufficient-resources');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// §14.2 debrisDetectionRangeForIsland
+// ---------------------------------------------------------------------------
+
+describe('§14.2 debrisDetectionRangeForIsland', () => {
+  it('returns 0 for an island with no orbital_tracking_station', () => {
+    const world = makeWorld();
+    const state = makeIslandState({ id: 'home' });
+    world.islandStates = new Map([['home', state]]);
+    expect(debrisDetectionRangeForIsland(world, 'home')).toBe(0);
+  });
+
+  it('returns ORBITAL_TRACKING_DETECTION_RADIUS_TILES when one station is placed', () => {
+    const world = makeWorld();
+    const state = makeIslandState({ id: 'home' });
+    state.buildings.push({ id: 'ots1', defId: 'orbital_tracking_station', x: 0, y: 0 });
+    world.islandStates = new Map([['home', state]]);
+    expect(debrisDetectionRangeForIsland(world, 'home')).toBe(ORBITAL_TRACKING_DETECTION_RADIUS_TILES);
+  });
+
+  it('returns the constant regardless of how many stations are placed (single-island radius is fixed)', () => {
+    const world = makeWorld();
+    const state = makeIslandState({ id: 'home' });
+    state.buildings.push({ id: 'ots1', defId: 'orbital_tracking_station', x: 0, y: 0 });
+    state.buildings.push({ id: 'ots2', defId: 'orbital_tracking_station', x: 3, y: 0 });
+    world.islandStates = new Map([['home', state]]);
+    expect(debrisDetectionRangeForIsland(world, 'home')).toBe(ORBITAL_TRACKING_DETECTION_RADIUS_TILES);
+  });
+});
+
+describe('§14.2 upgradeSpaceport spec-literal costs (memetic_core, not stand-in)', () => {
+  it('tier 1 → 2 charges memetic_core not eldritch_processor', () => {
+    const world = makeWorld();
+    const state = makeIslandState({ id: 'home' });
+    addSpaceport(state, 1);
+    state.inventory.phase_converter = 5;
+    state.inventory.memetic_core = 2;
+    state.inventory.cryogenic_hydrogen = 50;
+    // Deliberately do NOT stock eldritch_processor — the fixture should still succeed.
+    world.islandStates = new Map([['home', state]]);
+    const result = upgradeSpaceport(world, 'home');
+    expect(result.ok).toBe(true);
+    expect(state.inventory.memetic_core).toBe(0);
+  });
+
+  it('tier 2 → 3 charges memetic_core not eldritch_processor', () => {
+    const world = makeWorld();
+    const state = makeIslandState({ id: 'home' });
+    addSpaceport(state, 2);
+    state.inventory.reality_anchor = 10;
+    state.inventory.memetic_core = 5;
+    state.inventory.antimatter_propellant = 100;
+    // Deliberately do NOT stock eldritch_processor.
+    world.islandStates = new Map([['home', state]]);
+    const result = upgradeSpaceport(world, 'home');
+    expect(result.ok).toBe(true);
+    expect(state.inventory.memetic_core).toBe(0);
   });
 });
 

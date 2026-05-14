@@ -12,6 +12,11 @@ import type { WorldState } from './world.js';
 
 export const SAT_BUFFER_CAP = 100;
 
+/** §14.2 Orbital Tracking Station detection radius. Placeholder — Appendix A.
+ *  Chosen to cover a meaningful slice of the orbital arena (multi-cell)
+ *  while leaving room for multi-station networks to extend reach. */
+export const ORBITAL_TRACKING_DETECTION_RADIUS_TILES = 1500;
+
 export type SatelliteVariant = 'scanner' | 'sweeper' | 'comm';
 
 export interface SatBufferEntry {
@@ -206,6 +211,22 @@ export function connectedSatellites(world: WorldState): Satellite[] {
   return world.satellites.filter((s) => connected.has(s.id));
 }
 
+/** §14.2: per-island debris detection radius. Returns
+ *  ORBITAL_TRACKING_DETECTION_RADIUS_TILES when the island has at least one
+ *  orbital_tracking_station; returns 0 otherwise (no coverage = debris is
+ *  invisible). */
+export function debrisDetectionRangeForIsland(
+  world: WorldState,
+  islandId: string,
+): number {
+  const state = world.islandStates?.get(islandId);
+  if (!state) return 0;
+  if (!state.buildings.some((b) => b.defId === 'orbital_tracking_station')) {
+    return 0;
+  }
+  return ORBITAL_TRACKING_DETECTION_RADIUS_TILES;
+}
+
 // ---------------------------------------------------------------------------
 // Store-and-forward buffering
 // ---------------------------------------------------------------------------
@@ -296,9 +317,9 @@ export function tickRepairDrones(world: WorldState, nowMs: number): void {
 /**
  * Upgrade the Spaceport on an island to the next tier.
  *
- * Cost table:
- *   - Tier 1 → 2: 5 phase_converter, 2 eldritch_processor, 50 cryogenic_hydrogen
- *   - Tier 2 → 3: 10 reality_anchor, 5 eldritch_processor, 100 antimatter_propellant
+ * Cost table (§14.2 spec literal):
+ *   - Tier 1 → 2: 5 phase_converter, 2 memetic_core, 50 cryogenic_hydrogen
+ *   - Tier 2 → 3: 10 reality_anchor, 5 memetic_core, 100 antimatter_propellant
  *
  * Returns `{ ok: true }` on success, or `{ ok: false, reason }` when the island
  * or spaceport is missing, the tier is already maxed, or resources are insufficient.
@@ -315,8 +336,8 @@ export function upgradeSpaceport(
   if (currentTier >= 3) return { ok: false, reason: 'max-tier' };
 
   const costs = currentTier === 1
-    ? { phase_converter: 5, eldritch_processor: 2, cryogenic_hydrogen: 50 }
-    : { reality_anchor: 10, eldritch_processor: 5, antimatter_propellant: 100 };
+    ? { phase_converter: 5, memetic_core: 2, cryogenic_hydrogen: 50 }
+    : { reality_anchor: 10, memetic_core: 5, antimatter_propellant: 100 };
 
   // Check inventory
   for (const [r, amt] of Object.entries(costs)) {
