@@ -70,7 +70,8 @@ function makeState(id: string, over: Partial<IslandState> = {}): IslandState {
 }
 function makeWorld(routes: Route[] = [], islands: IslandSpec[] = []): WorldState {
   return { islands, drones: [], routes, vehicles: [], revealedCells: new Set(), satellites: [], repairDrones: [],
-    debrisFields: [], endgameState: { achieved: new Set(), firstAchievedMs: null, victoryBannerShown: false }, latticeActive: false, latticeNodeIslands: [], seed: 'test-seed' };
+    debrisFields: [], endgameState: { achieved: new Set(), firstAchievedMs: null, victoryBannerShown: false }, latticeActive: false, latticeNodeIslands: [],
+    commPackets: [], seed: 'test-seed' };
 }
 
 function makeIslandSpec(id: string, cx: number, cy: number): IslandSpec {

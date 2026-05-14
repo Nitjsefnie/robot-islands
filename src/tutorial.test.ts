@@ -19,6 +19,7 @@ function makeWorld(over: Partial<WorldState> = {}): WorldState {
     endgameState: { achieved: new Set(), firstAchievedMs: null, victoryBannerShown: false },
     latticeActive: false,
     latticeNodeIslands: [],
+    commPackets: [],
     ...over,
   };
 }

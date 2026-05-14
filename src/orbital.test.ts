@@ -31,10 +31,14 @@ import {
   scannerDiscoveryProbability,
   cellsCoveredBySat,
   tickScannerDiscovery,
+  buildCommGraph,
+  nextHopToNearestSpaceport,
+  tickCommPackets,
   type SatelliteVariant,
   type Satellite,
   type SatBufferEntry,
   type DebrisField,
+  type CommPacket,
 } from './orbital.js';
 import { ALL_RESOURCES, type ResourceId } from './recipes.js';
 import {
@@ -532,6 +536,7 @@ function makeBfsWorld(opts: {
       latticeActive: false,
       latticeNodeIslands: [],
     islandStates: opts.islandStates,
+    commPackets: [],
   } as WorldState;
 }
 
@@ -1348,5 +1353,234 @@ describe('§14.7 launchSatellite uses launchSuccessBonus', () => {
     // At 0.99 cap we should see both successes and failures across seeds.
     expect(foundSuccess).toBe(true);
     expect(foundFailure).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// §14.4 Comm packet propagation
+// ---------------------------------------------------------------------------
+
+describe('§14.4 comm packet propagation', () => {
+  it('buildCommGraph connects two Spaceports within range', () => {
+    const islandA = makeMinimalIsland({ id: 'home', cx: 0, cy: 0, populated: true, buildings: [{ id: 'sp1', defId: 'spaceport', x: 0, y: 0 }] });
+    const islandB = makeMinimalIsland({ id: 'away', cx: 100, cy: 0, populated: true, buildings: [{ id: 'sp2', defId: 'spaceport', x: 0, y: 0 }] });
+    const stateA = makeIslandState({ id: 'home' });
+    addSpaceport(stateA);
+    const stateB = makeIslandState({ id: 'away' });
+    addSpaceport(stateB);
+    const world = makeBfsWorld({
+      islands: [islandA, islandB],
+      islandStates: new Map([['home', stateA], ['away', stateB]]),
+      satellites: [],
+    });
+    const graph = buildCommGraph(world);
+    expect(graph.get('home')!.has('away')).toBe(true);
+    expect(graph.get('away')!.has('home')).toBe(true);
+  });
+
+  it('buildCommGraph does not connect Spaceports out of range', () => {
+    const islandA = makeMinimalIsland({ id: 'home', cx: 0, cy: 0, populated: true, buildings: [{ id: 'sp1', defId: 'spaceport', x: 0, y: 0 }] });
+    const islandB = makeMinimalIsland({ id: 'away', cx: 500, cy: 0, populated: true, buildings: [{ id: 'sp2', defId: 'spaceport', x: 0, y: 0 }] });
+    const stateA = makeIslandState({ id: 'home' });
+    addSpaceport(stateA);
+    const stateB = makeIslandState({ id: 'away' });
+    addSpaceport(stateB);
+    const world = makeBfsWorld({
+      islands: [islandA, islandB],
+      islandStates: new Map([['home', stateA], ['away', stateB]]),
+      satellites: [],
+    });
+    const graph = buildCommGraph(world);
+    expect(graph.get('home')!.has('away')).toBe(false);
+    expect(graph.get('away')!.has('home')).toBe(false);
+  });
+
+  it('buildCommGraph excludes unlocked satellites (in-transit)', () => {
+    const island = makeMinimalIsland({ id: 'home', cx: 0, cy: 0, populated: true, buildings: [{ id: 'sp1', defId: 'spaceport', x: 0, y: 0 }] });
+    const state = makeIslandState({ id: 'home' });
+    addSpaceport(state);
+    const sat = makeMinimalSat({ id: 'sat1', x: 100, y: 0, commRange: 200, locked: false });
+    const world = makeBfsWorld({
+      islands: [island],
+      islandStates: new Map([['home', state]]),
+      satellites: [sat],
+    });
+    const graph = buildCommGraph(world);
+    expect(graph.has('sat1')).toBe(false);
+    expect(graph.get('home')!.has('sat1')).toBe(false);
+  });
+
+  it('nextHopToNearestSpaceport returns null on isolated node', () => {
+    const graph = new Map<string, Set<string>>();
+    graph.set('alone', new Set());
+    const targets = new Set(['target']);
+    expect(nextHopToNearestSpaceport(graph, 'alone', targets)).toBeNull();
+  });
+
+  it('nextHopToNearestSpaceport returns the direct-link spaceport when adjacent', () => {
+    const graph = new Map<string, Set<string>>();
+    graph.set('sat1', new Set(['home']));
+    graph.set('home', new Set(['sat1']));
+    const targets = new Set(['home']);
+    expect(nextHopToNearestSpaceport(graph, 'sat1', targets)).toBe('home');
+  });
+
+  it('nextHopToNearestSpaceport picks the neighbor with shortest BFS path; ties broken by lowest id', () => {
+    // Graph: start -> {a, b}. a -> target. b -> c -> target.
+    // Both a and b are neighbors of start. a has distance 1 to target, b has distance 2.
+    // So start should pick a.
+    const graph = new Map<string, Set<string>>();
+    graph.set('start', new Set(['a', 'b']));
+    graph.set('a', new Set(['start', 'target']));
+    graph.set('b', new Set(['start', 'c']));
+    graph.set('c', new Set(['b', 'target']));
+    graph.set('target', new Set(['a', 'c']));
+    const targets = new Set(['target']);
+    expect(nextHopToNearestSpaceport(graph, 'start', targets)).toBe('a');
+
+    // Tie-break test: start -> {x, y}. x -> target (dist 1). y -> target (dist 1).
+    // Lower id 'x' should win over 'y'.
+    const graph2 = new Map<string, Set<string>>();
+    graph2.set('start', new Set(['y', 'x']));
+    graph2.set('x', new Set(['start', 'target']));
+    graph2.set('y', new Set(['start', 'target']));
+    graph2.set('target', new Set(['x', 'y']));
+    expect(nextHopToNearestSpaceport(graph2, 'start', targets)).toBe('x');
+  });
+
+  it('tickCommPackets advances a packet one hop per tick along a 3-node chain (sat → sat → spaceport), delivering on the third tick', () => {
+    // Chain: satA (x=100) -> satB (x=250) -> home spaceport (x=0)
+    // home has T1 spaceport (range 200). satA at dist 100 from home (in range).
+    // satB at dist 250 from home (out of range of home's 200).
+    // satA has range 200, satB has range 200.
+    // satA <-> home: dist 100 <= max(200, 200) = 200 ✓
+    // satB <-> home: dist 250 <= max(200, 200) = 200 ✗
+    // satA <-> satB: dist 150 <= max(200, 200) = 200 ✓
+    // So the chain is satA - satB - home? Wait, satA is in range of home directly.
+    // That makes it a 2-hop path, not 3. Let me adjust.
+    // Make home T1 (range 200). Place satA at x=150, satB at x=300.
+    // satA <-> home: 150 <= 200 ✓
+    // satB <-> home: 300 <= 200 ✗
+    // satA <-> satB: 150 <= 200 ✓
+    // This gives satA directly connected to home, which is a 1-hop delivery.
+    // I need satA NOT directly connected to home.
+    // Let's use home T1 (200), satA at x=250 with commRange 100, satB at x=350 with commRange 100.
+    // Wait, the connection rule is max(range_A, range_B).
+    // home (200) <-> satA (100): dist=250 <= max(200,100)=200? No, 250 > 200. Not connected.
+    // satA (100) <-> satB (100): dist=100 <= max(100,100)=100 ✓
+    // satB (100) <-> home (200): dist=350 <= max(100,200)=200? No, 350 > 200. Not connected.
+    // Hmm, then satB isn't connected to home either. We need satB in range of home.
+    // Let's try: home at x=0 with T1 spaceport (range 200). satA at x=250 with commRange 200. satB at x=400 with commRange 200.
+    // home <-> satA: 250 <= max(200,200)=200? No.
+    // Let's use T2 for home (range 300).
+    // home <-> satA: 250 <= max(300,200)=300 ✓
+    // satA <-> satB: 150 <= max(200,200)=200 ✓
+    // home <-> satB: 400 <= max(300,200)=300? No.
+    // This works! satA is directly connected to home, but for the 3-node chain test we want satA -> satB -> home.
+    // The packet starts at satA. On tick 1, nextHop should be satB (not home) because... wait.
+    // nextHopToNearestSpaceport picks the neighbor with the shortest BFS path to a spaceport.
+    // satA's neighbors: home (distance 0) and satB (distance 1 via home? No, satB -> home is not direct).
+    // Wait, in this setup satB is connected to satA but NOT to home. So from satB, path to home is satB -> satA -> home (dist 2).
+    // From satA, path to home is direct (dist 1). So nextHop from satA would be home, not satB.
+    // That's not a 3-node chain.
+    // I need: satA connected to satB, satB connected to home, but satA NOT connected to home.
+    // home T1 (200) at x=0. satB at x=150 with commRange 100. satA at x=300 with commRange 100.
+    // home <-> satB: 150 <= max(200,100)=200 ✓
+    // satB <-> satA: 150 <= max(100,100)=100? No.
+    // Need satB range bigger. satB commRange = 200.
+    // home <-> satB: 150 <= max(200,200)=200 ✓
+    // satB <-> satA: 150 <= max(200,100)=200 ✓
+    // home <-> satA: 300 <= max(200,100)=200? No.
+    // This works! Graph: satA -- satB -- home.
+    // From satA: neighbors = {satB}. BFS from satB to home: satB -> home (dist 1). So nextHop = satB.
+    // From satB: neighbors = {home, satA}. BFS from home to targets: 0 (direct). BFS from satA to home: satA -> satB -> home (dist 2). So nextHop = home.
+    const island = makeMinimalIsland({ id: 'home', cx: 0, cy: 0, populated: true, buildings: [{ id: 'sp1', defId: 'spaceport', x: 0, y: 0 }] });
+    const state = makeIslandState({ id: 'home' });
+    addSpaceport(state, 1);
+    const satA = makeMinimalSat({ id: 'satA', x: 300, y: 0, commRange: 100, locked: true });
+    const satB = makeMinimalSat({ id: 'satB', x: 150, y: 0, commRange: 200, locked: true });
+    const world = makeBfsWorld({
+      islands: [island],
+      islandStates: new Map([['home', state]]),
+      satellites: [satA, satB],
+    });
+
+    const pkt: CommPacket = {
+      id: 'pkt1',
+      payload: { type: 'discovery', payload: {} },
+      currentNodeId: 'satA',
+      originSatId: 'satA',
+      generatedMs: 0,
+    };
+    world.commPackets = [pkt];
+
+    // Tick 1: satA -> satB
+    const d1 = tickCommPackets(world);
+    expect(d1).toHaveLength(0);
+    expect(world.commPackets).toHaveLength(1);
+    expect(world.commPackets[0]!.currentNodeId).toBe('satB');
+
+    // Tick 2: satB -> home
+    const d2 = tickCommPackets(world);
+    expect(d2).toHaveLength(0);
+    expect(world.commPackets).toHaveLength(1);
+    expect(world.commPackets[0]!.currentNodeId).toBe('home');
+
+    // Tick 3: delivered
+    const d3 = tickCommPackets(world);
+    expect(d3).toHaveLength(1);
+    expect(d3[0]!.id).toBe('pkt1');
+    expect(world.commPackets).toHaveLength(0);
+  });
+
+  it('tickCommPackets drops a packet whose holder no longer exists (sat removed mid-flight)', () => {
+    const island = makeMinimalIsland({ id: 'home', cx: 0, cy: 0, populated: true, buildings: [{ id: 'sp1', defId: 'spaceport', x: 0, y: 0 }] });
+    const state = makeIslandState({ id: 'home' });
+    addSpaceport(state);
+    const satA = makeMinimalSat({ id: 'satA', x: 100, y: 0, commRange: 200, locked: true });
+    const world = makeBfsWorld({
+      islands: [island],
+      islandStates: new Map([['home', state]]),
+      satellites: [satA],
+    });
+    const pkt: CommPacket = {
+      id: 'pkt1',
+      payload: { type: 'discovery', payload: {} },
+      currentNodeId: 'satA',
+      originSatId: 'satA',
+      generatedMs: 0,
+    };
+    world.commPackets = [pkt];
+    // Remove satA before the tick.
+    world.satellites = [];
+    const delivered = tickCommPackets(world);
+    expect(delivered).toHaveLength(0);
+    expect(world.commPackets).toHaveLength(0);
+  });
+
+  it('tickCommPackets leaves a packet in place when no next hop is available (disconnected island)', () => {
+    // Island with spaceport but no sats in range.
+    const island = makeMinimalIsland({ id: 'home', cx: 0, cy: 0, populated: true, buildings: [{ id: 'sp1', defId: 'spaceport', x: 0, y: 0 }] });
+    const state = makeIslandState({ id: 'home' });
+    addSpaceport(state);
+    const satA = makeMinimalSat({ id: 'satA', x: 1000, y: 0, commRange: 100, locked: true });
+    const world = makeBfsWorld({
+      islands: [island],
+      islandStates: new Map([['home', state]]),
+      satellites: [satA],
+    });
+    const pkt: CommPacket = {
+      id: 'pkt1',
+      payload: { type: 'discovery', payload: {} },
+      currentNodeId: 'satA',
+      originSatId: 'satA',
+      generatedMs: 0,
+    };
+    world.commPackets = [pkt];
+    const delivered = tickCommPackets(world);
+    expect(delivered).toHaveLength(0);
+    expect(world.commPackets).toHaveLength(1);
+    // Packet stays at satA because there are no neighbors.
+    expect(world.commPackets[0]!.currentNodeId).toBe('satA');
   });
 });

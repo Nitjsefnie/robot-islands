@@ -1419,3 +1419,47 @@ describe('§14.5 scanner dwellByCellKey persistence', () => {
     expect(restored.satellites[0]!.dwellByCellKey).toBeUndefined();
   });
 });
+
+// ---------------------------------------------------------------------------
+// §14.4 commPackets persistence
+// ---------------------------------------------------------------------------
+
+describe('§14.4 commPackets persistence', () => {
+  it('round-trips empty commPackets', () => {
+    const world = makeInitialWorld(0);
+    expect(world.commPackets).toEqual([]);
+    const snap = serializeWorld(world, new Map(), 0, 0);
+    const json = JSON.parse(JSON.stringify(snap)) as SaveSnapshot;
+    const { world: restored } = deserializeWorld(json, 0, 0);
+    expect(restored.commPackets).toEqual([]);
+  });
+
+  it('round-trips commPackets with one packet', () => {
+    const world = makeInitialWorld(0);
+    world.commPackets.push({
+      id: 'pkt-1',
+      payload: { type: 'discovery', payload: { islandId: 'remote' } },
+      currentNodeId: 'satA',
+      originSatId: 'satA',
+      generatedMs: 1234,
+    });
+    const snap = serializeWorld(world, new Map(), 0, 0);
+    const json = JSON.parse(JSON.stringify(snap)) as SaveSnapshot;
+    const { world: restored } = deserializeWorld(json, 0, 0);
+    expect(restored.commPackets).toHaveLength(1);
+    const pkt = restored.commPackets[0]!;
+    expect(pkt.id).toBe('pkt-1');
+    expect(pkt.payload).toEqual({ type: 'discovery', payload: { islandId: 'remote' } });
+    expect(pkt.currentNodeId).toBe('satA');
+    expect(pkt.originSatId).toBe('satA');
+    expect(pkt.generatedMs).toBe(1234);
+  });
+
+  it('backfills missing commPackets on legacy saves to []', () => {
+    const baseSnap = serializeWorld(makeInitialWorld(0), new Map(), 0, 0);
+    const legacy = JSON.parse(JSON.stringify(baseSnap)) as SaveSnapshot;
+    delete (legacy.world as { commPackets?: unknown }).commPackets;
+    const { world: restored } = deserializeWorld(legacy, 0, 0);
+    expect(restored.commPackets).toEqual([]);
+  });
+});

@@ -106,6 +106,7 @@ function makeWorld(opts: {
       endgameState: { achieved: new Set(), firstAchievedMs: null, victoryBannerShown: false },
       latticeActive: false,
       latticeNodeIslands: [],
+    commPackets: [],
     islandStates,
   };
 }

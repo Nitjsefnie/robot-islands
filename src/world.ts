@@ -718,6 +718,8 @@ export interface WorldState {
   latticeActive: boolean;
   /** Island IDs that have an active Lattice Node. */
   latticeNodeIslands: string[];
+  /** §14.4 in-flight comm packets. Mutable. */
+  commPackets: import('./orbital.js').CommPacket[];
 
 }
 
@@ -777,7 +779,7 @@ export function makeInitialWorld(_nowMs: number): WorldState {
     if (!spec.populated && !spec.discovered) continue;
     for (const k of islandCells(spec)) revealedCells.add(k);
   }
-  return { islands, drones: [], routes: [], vehicles: [], revealedCells, seed: WORLD_SEED, satellites: [], repairDrones: [], debrisFields: [], tutorialState: { completed: new Set(), current: 'place_solar' }, endgameState: { achieved: new Set<VictoryCondition>(), firstAchievedMs: null, victoryBannerShown: false }, latticeActive: false, latticeNodeIslands: [] };
+  return { islands, drones: [], routes: [], vehicles: [], revealedCells, seed: WORLD_SEED, satellites: [], repairDrones: [], debrisFields: [], tutorialState: { completed: new Set(), current: 'place_solar' }, endgameState: { achieved: new Set<VictoryCondition>(), firstAchievedMs: null, victoryBannerShown: false }, latticeActive: false, latticeNodeIslands: [], commPackets: [] };
 }
 
 // ---------------------------------------------------------------------------

@@ -110,7 +110,8 @@ function makeState(over: Partial<IslandState> = {}): IslandState {
 
 function makeWorld(islands: IslandSpec[]): WorldState {
   return { islands: [...islands], drones: [], routes: [], vehicles: [], revealedCells: new Set(), satellites: [], repairDrones: [],
-    debrisFields: [], endgameState: { achieved: new Set(), firstAchievedMs: null, victoryBannerShown: false }, latticeActive: false, latticeNodeIslands: [], seed: 'test-seed' };
+    debrisFields: [], endgameState: { achieved: new Set(), firstAchievedMs: null, victoryBannerShown: false }, latticeActive: false, latticeNodeIslands: [],
+    commPackets: [], seed: 'test-seed' };
 }
 
 beforeEach(() => {

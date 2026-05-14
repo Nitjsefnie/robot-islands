@@ -129,6 +129,7 @@ function makeTinyWorld(): WorldState & { islandStates: Map<string, IslandState> 
     endgameState: { achieved: new Set(), firstAchievedMs: null, victoryBannerShown: false },
     latticeActive: false,
     latticeNodeIslands: [],
+    commPackets: [],
     seed: 'test-seed',
   };
   const islandStates = new Map<string, IslandState>([['home', homeState]]);
@@ -189,6 +190,7 @@ describe('dispatchDrone', () => {
       endgameState: { achieved: new Set(), firstAchievedMs: null, victoryBannerShown: false },
       latticeActive: false,
       latticeNodeIslands: [],
+    commPackets: [],
       seed: 'test-seed',
     };
   }
@@ -308,6 +310,7 @@ describe('tickDrones (§11 telemetry: per-cell reveal in antenna range)', () => 
       endgameState: { achieved: new Set(), firstAchievedMs: null, victoryBannerShown: false },
       latticeActive: false,
       latticeNodeIslands: [],
+    commPackets: [],
       seed: 'test-seed',
     };
   }
@@ -341,6 +344,7 @@ describe('tickDrones (§11 telemetry: per-cell reveal in antenna range)', () => 
       endgameState: { achieved: new Set(), firstAchievedMs: null, victoryBannerShown: false },
       latticeActive: false,
       latticeNodeIslands: [],
+    commPackets: [],
       seed: 'test-seed',
     };
   }
@@ -539,6 +543,7 @@ describe('dispatchDrone — §11.7 tier-matched fuel', () => {
       endgameState: { achieved: new Set(), firstAchievedMs: null, victoryBannerShown: false },
       latticeActive: false,
       latticeNodeIslands: [],
+    commPackets: [],
       seed: 'test-seed',
     };
   }
@@ -677,6 +682,7 @@ describe('drone weather destruction §2.6', () => {
       endgameState: { achieved: new Set(), firstAchievedMs: null, victoryBannerShown: false },
       latticeActive: false,
       latticeNodeIslands: [],
+    commPackets: [],
       seed,
     };
     const home = makeIslandState();
@@ -703,6 +709,7 @@ describe('drone weather destruction §2.6', () => {
       endgameState: { achieved: new Set(), firstAchievedMs: null, victoryBannerShown: false },
       latticeActive: false,
       latticeNodeIslands: [],
+    commPackets: [],
       seed,
     };
     const home = makeIslandState();
@@ -733,6 +740,7 @@ describe('T5 path-drawn drone', () => {
       endgameState: { achieved: new Set(), firstAchievedMs: null, victoryBannerShown: false },
       latticeActive: false,
       latticeNodeIslands: [],
+    commPackets: [],
       seed: 'test-seed',
     };
   }
@@ -843,6 +851,7 @@ describe('dark-mode telemetry', () => {
       endgameState: { achieved: new Set(), firstAchievedMs: null, victoryBannerShown: false },
       latticeActive: false,
       latticeNodeIslands: [],
+    commPackets: [],
       seed: 'test-seed',
     };
   }
@@ -919,6 +928,7 @@ describe('dark-mode telemetry', () => {
       endgameState: { achieved: new Set(), firstAchievedMs: null, victoryBannerShown: false },
       latticeActive: false,
       latticeNodeIslands: [],
+    commPackets: [],
       seed: 'destroy-0',
     };
     // Add home island with no antenna.

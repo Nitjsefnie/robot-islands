@@ -33,6 +33,20 @@ export interface SatBufferEntry {
   readonly payload: unknown;
 }
 
+/** §14.4 in-flight comm packet. Generated at a satellite, hops one node
+ *  per tick toward the nearest Spaceport via greedy BFS routing. */
+export interface CommPacket {
+  readonly id: string;
+  readonly payload: SatBufferEntry;
+  /** Id of the node (satellite or island) currently holding the packet.
+   *  When this id matches a Spaceport-bearing island, the packet is
+   *  delivered and removed in the next tick. */
+  currentNodeId: string;
+  /** Sat that originated the packet. Useful for telemetry / debug. */
+  readonly originSatId: string;
+  readonly generatedMs: number;
+}
+
 export interface Satellite {
   readonly id: string;
   readonly variant: SatelliteVariant;
@@ -212,7 +226,7 @@ export function launchSatellite(
 // Comm graph BFS
 // ---------------------------------------------------------------------------
 
-function groundStationCommRange(world: WorldState, islandId: string): number {
+export function groundStationCommRange(world: WorldState, islandId: string): number {
   const state = world.islandStates?.get(islandId);
   const sp = state?.buildings.find((b) => b.defId === 'spaceport');
   const tier = sp?.tier ?? 1;
@@ -230,6 +244,133 @@ function getEntityById(
   const sat = world.satellites.find((s) => s.id === id);
   if (sat) return { x: sat.x, y: sat.y, commRange: sat.commRange };
   return null;
+}
+
+/** Build the undirected comm graph: a Map<nodeId, Set<nodeId>> linking
+ *  every Spaceport-bearing populated island and every locked satellite that
+ *  is within `max(range_A, range_B)` of the other node. */
+export function buildCommGraph(world: WorldState): Map<string, Set<string>> {
+  const graph = new Map<string, Set<string>>();
+  type Node = { id: string; x: number; y: number; commRange: number };
+  const nodes: Node[] = [];
+  for (const spec of world.islands) {
+    if (!spec.populated) continue;
+    const state = world.islandStates?.get(spec.id);
+    if (!state?.buildings.some((b) => b.defId === 'spaceport')) continue;
+    nodes.push({
+      id: spec.id,
+      x: spec.cx,
+      y: spec.cy,
+      commRange: groundStationCommRange(world, spec.id),
+    });
+  }
+  for (const sat of world.satellites) {
+    if (!sat.locked) continue;
+    nodes.push({ id: sat.id, x: sat.x, y: sat.y, commRange: sat.commRange });
+  }
+  for (const n of nodes) graph.set(n.id, new Set());
+  for (let i = 0; i < nodes.length; i++) {
+    for (let j = i + 1; j < nodes.length; j++) {
+      const a = nodes[i]!;
+      const b = nodes[j]!;
+      const dist = Math.hypot(a.x - b.x, a.y - b.y);
+      if (dist <= Math.max(a.commRange, b.commRange)) {
+        graph.get(a.id)!.add(b.id);
+        graph.get(b.id)!.add(a.id);
+      }
+    }
+  }
+  return graph;
+}
+
+/** Set of node ids that ARE Spaceport-bearing islands (delivery targets). */
+function spaceportNodes(world: WorldState): Set<string> {
+  const out = new Set<string>();
+  for (const spec of world.islands) {
+    if (!spec.populated) continue;
+    const state = world.islandStates?.get(spec.id);
+    if (state?.buildings.some((b) => b.defId === 'spaceport')) out.add(spec.id);
+  }
+  return out;
+}
+
+/** BFS from `startId` toward any node in `targets`. Returns the first hop on
+ *  the shortest path (immediate neighbor of startId), with ties broken by
+ *  lower id (string compare). Returns null if no path exists. */
+export function nextHopToNearestSpaceport(
+  graph: Map<string, Set<string>>,
+  startId: string,
+  targets: Set<string>,
+): string | null {
+  if (targets.has(startId)) return null; // already delivered
+  const neighbors = graph.get(startId);
+  if (!neighbors || neighbors.size === 0) return null;
+  // BFS distance from each neighbor to closest target. Return the neighbor
+  // with the lowest distance (ties → lowest id).
+  let bestNeighbor: string | null = null;
+  let bestDist = Infinity;
+  // Sort neighbors deterministically.
+  const sortedNeighbors = [...neighbors].sort();
+  for (const nb of sortedNeighbors) {
+    if (targets.has(nb)) {
+      // direct delivery hop is distance 0 — wins immediately
+      return nb;
+    }
+    // BFS from nb to any target.
+    const visited = new Set<string>([startId, nb]);
+    const queue: Array<{ id: string; d: number }> = [{ id: nb, d: 0 }];
+    let dist = Infinity;
+    while (queue.length > 0) {
+      const cur = queue.shift()!;
+      if (targets.has(cur.id)) {
+        dist = cur.d;
+        break;
+      }
+      for (const next of [...(graph.get(cur.id) ?? [])].sort()) {
+        if (visited.has(next)) continue;
+        visited.add(next);
+        queue.push({ id: next, d: cur.d + 1 });
+      }
+    }
+    if (dist < bestDist) {
+      bestDist = dist;
+      bestNeighbor = nb;
+    }
+  }
+  return bestNeighbor;
+}
+
+/** §14.4 per-tick packet propagation. For each packet:
+ *    1. If `currentNodeId` no longer exists in the graph → packet lost.
+ *    2. If `currentNodeId` is a Spaceport node → delivered; drop packet.
+ *    3. Otherwise compute next hop via `nextHopToNearestSpaceport`; if a
+ *       valid hop exists, advance. If not, leave packet in place (buffers
+ *       locally per the spec's "or buffer locally if no neighbor is in
+ *       range" clause).
+ *  Returns the list of delivered packets (for telemetry). */
+export function tickCommPackets(world: WorldState): CommPacket[] {
+  if (world.commPackets.length === 0) return [];
+  const graph = buildCommGraph(world);
+  const targets = spaceportNodes(world);
+  const delivered: CommPacket[] = [];
+  const survivors: CommPacket[] = [];
+  for (const pkt of world.commPackets) {
+    if (!graph.has(pkt.currentNodeId)) {
+      // Holder destroyed or otherwise removed → packet lost.
+      continue;
+    }
+    if (targets.has(pkt.currentNodeId)) {
+      delivered.push(pkt);
+      continue;
+    }
+    const next = nextHopToNearestSpaceport(graph, pkt.currentNodeId, targets);
+    if (next !== null) {
+      pkt.currentNodeId = next;
+    }
+    survivors.push(pkt);
+  }
+  world.commPackets = survivors;
+  return delivered;
 }
 
 export function connectedSatellites(world: WorldState): Satellite[] {

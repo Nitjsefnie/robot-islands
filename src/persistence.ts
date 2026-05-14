@@ -163,6 +163,8 @@ export interface SerializedWorld {
   readonly latticeActive?: boolean;
   /** §13.3 Lattice Node island list. Backfilled on legacy saves. */
   readonly latticeNodeIslands?: ReadonlyArray<string>;
+  /** §14.4 in-flight comm packets. Backfilled to `[]` on legacy saves. */
+  readonly commPackets?: ReadonlyArray<import('./orbital.js').CommPacket>;
 }
 
 /** Top-level snapshot. The `v` field is the schema-version anchor: this
@@ -259,6 +261,7 @@ export function serializeWorld(
       },
       latticeActive: world.latticeActive,
       latticeNodeIslands: [...world.latticeNodeIslands],
+      commPackets: [...world.commPackets],
     },
     islandStates: stateEntries,
   };
@@ -471,6 +474,7 @@ export function deserializeWorld(
     // §13.3 Omniscient Lattice backfill: legacy saves predate these fields.
     latticeActive: snapshot.world.latticeActive ?? false,
     latticeNodeIslands: [...(snapshot.world.latticeNodeIslands ?? [])],
+    commPackets: [...(snapshot.world.commPackets ?? [])],
   };
 
   const islandStates = new Map<string, IslandState>();
