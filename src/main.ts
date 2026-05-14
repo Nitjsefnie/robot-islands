@@ -77,6 +77,14 @@ import {
 } from './world.js';
 import { mountDronesUi } from './drones-ui.js';
 import { tickDrones } from './drones.js';
+import {
+  tickCommPackets,
+  tickDebris,
+  tickRepairDrones,
+  tickSatMovement,
+  tickScannerDiscovery,
+  tickSweeperCleanup,
+} from './orbital.js';
 import { findNextMerge, performMerge } from './island-merge.js';
 import { makeIslandScreenPosResolver, mountRoutesUi } from './routes-ui.js';
 import { cableInflowForIsland, tickRoutes } from './routes.js';
@@ -1266,6 +1274,25 @@ async function main(): Promise<void> {
       }
     }
     tickRoutes(worldState, islandStates, now, elapsedSec);
+
+    // §14 orbital tick chores. Order matters:
+    //   1. Movement first (sats arrive / are lost in transit; cell occupancy
+    //      changes for subsequent debris/cleanup).
+    //   2. Sweeper cleanup before debris ticks so sat-cleared cells don't
+    //      generate hits this same tick.
+    //   3. Debris ticks (lodge / destruction / Kessler cascade).
+    //   4. Scanner discovery using the post-movement sat positions.
+    //   5. Comm packet propagation.
+    //   6. Repair drone arrivals (existing — keep last so a successful arrival
+    //      sees the freshly-cleaned/destroyed satellite state).
+    const orbitalDeltaMs = now - prevFrameMs;
+    tickSatMovement(worldState, now);
+    tickSweeperCleanup(worldState, orbitalDeltaMs);
+    tickDebris(worldState, now);
+    tickScannerDiscovery(worldState, orbitalDeltaMs, now);
+    tickCommPackets(worldState);
+    tickRepairDrones(worldState, now);
+
     // Step-12 / §12: settlement vehicles tick after drones so a frame can
     // see new discoveries AND a brand-new arrival in the same pass. On
     // arrival, `tickVehicles` flips `target.populated`, places a Cargo

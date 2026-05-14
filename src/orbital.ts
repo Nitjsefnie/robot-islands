@@ -115,6 +115,17 @@ export const SAT_MOVE_SPEED_TILES_PER_SEC = 5; // travel speed
 export const SAT_MOVE_FAILURE_PROBABILITY = 0.02; // §14.6 "low probability"
 export const SAT_MOVE_FAILURE_DEBRIS = 10; // fragments seeded on in-transit loss
 
+/** §14.8 / Appendix A: fragments cleared per real-time second per locked Sweeper Sat
+ *  inside a debris field. Stacks linearly (multiple Sweepers in same cell add). */
+export const SWEEPER_CLEAN_RATE_PER_SEC = 0.1;
+
+/** §14.12 Repair Drone fuel cost per tile of rendezvous distance.
+ *  Smaller than satellite launch propellant per spec ("smaller load"). */
+export const REPAIR_DRONE_FUEL_PER_TILE = 0.01;
+/** Minimum fuel load — covers fixed launch overhead, prevents 0-distance
+ *  edge cases. Placeholder Appendix A. */
+export const REPAIR_DRONE_MIN_FUEL = 1;
+
 /** Per-variant payload resource id consumed at launch time. */
 const PAYLOAD_RESOURCE: Record<SatelliteVariant, ResourceId> = {
   scanner: 'scanner_sat',
@@ -458,13 +469,21 @@ export function dispatchRepairDrone(
     return { ok: false, reason: 'no-ascendant-core' };
   }
 
-  // TODO(§14.12): proportional fuel load by distance
-  // Consume 1 repair_pack + 1 antimatter_propellant
+  // §14.12 proportional fuel by rendezvous distance.
+  const islandSpec = world.islands.find((i) => i.id === spaceportIslandId);
+  if (!islandSpec) return { ok: false, reason: 'no-island' };
+  const rendezvousDist = Math.hypot(sat.x - islandSpec.cx, sat.y - islandSpec.cy);
+  const fuelLoad = Math.max(
+    REPAIR_DRONE_MIN_FUEL,
+    rendezvousDist * REPAIR_DRONE_FUEL_PER_TILE,
+  );
   if (inv(state, 'repair_pack') < 1) return { ok: false, reason: 'insufficient-repair-pack' };
-  if (inv(state, 'antimatter_propellant') < 1) return { ok: false, reason: 'insufficient-fuel' };
+  if (inv(state, 'antimatter_propellant') < fuelLoad) {
+    return { ok: false, reason: 'insufficient-fuel' };
+  }
 
   state.inventory.repair_pack = inv(state, 'repair_pack') - 1;
-  state.inventory.antimatter_propellant = inv(state, 'antimatter_propellant') - 1;
+  state.inventory.antimatter_propellant = inv(state, 'antimatter_propellant') - fuelLoad;
 
   const travelTimeSec = 100; // placeholder: 100 seconds
   const drone: RepairDrone = {
@@ -658,6 +677,33 @@ export function tickDebris(world: WorldState, nowMs: number): void {
   world.satellites = survivors;
   // Cleanup: drop fields with zero fragments.
   world.debrisFields = world.debrisFields.filter((f) => f.fragments > 0);
+}
+
+/** §14.8 Sweeper cleanup tick. For each debris field, sum the count of locked
+ *  Sweeper Sats currently inside the field's cell, multiply by tickDeltaMs/1000
+ *  × SWEEPER_CLEAN_RATE_PER_SEC, subtract from `field.fragments`. Field
+ *  removed (filtered out of `world.debrisFields`) when fragments hit 0.
+ *  Returns total fragments removed across all fields (telemetry). */
+export function tickSweeperCleanup(world: WorldState, tickDeltaMs: number): number {
+  if (world.debrisFields.length === 0) return 0;
+  if (world.satellites.length === 0) return 0;
+  let totalCleared = 0;
+  for (const field of world.debrisFields) {
+    let sweepers = 0;
+    for (const sat of world.satellites) {
+      if (sat.variant !== 'sweeper') continue;
+      if (!sat.locked) continue;
+      const { cellX, cellY } = tileToCell(sat.x, sat.y);
+      if (cellX === field.cellX && cellY === field.cellY) sweepers++;
+    }
+    if (sweepers === 0) continue;
+    const cleared = sweepers * SWEEPER_CLEAN_RATE_PER_SEC * (tickDeltaMs / 1000);
+    const actualCleared = Math.min(field.fragments, cleared);
+    field.fragments = Math.max(0, field.fragments - cleared);
+    totalCleared += actualCleared;
+  }
+  world.debrisFields = world.debrisFields.filter((f) => f.fragments > 0);
+  return totalCleared;
 }
 
 /** Compute scanner discovery probability per tick at a given dwell time. */

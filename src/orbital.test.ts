@@ -34,6 +34,10 @@ import {
   buildCommGraph,
   nextHopToNearestSpaceport,
   tickCommPackets,
+  tickSweeperCleanup,
+  SWEEPER_CLEAN_RATE_PER_SEC,
+  REPAIR_DRONE_FUEL_PER_TILE,
+  REPAIR_DRONE_MIN_FUEL,
   type SatelliteVariant,
   type Satellite,
   type SatBufferEntry,
@@ -1582,5 +1586,137 @@ describe('§14.4 comm packet propagation', () => {
     expect(world.commPackets).toHaveLength(1);
     // Packet stays at satA because there are no neighbors.
     expect(world.commPackets[0]!.currentNodeId).toBe('satA');
+  });
+});
+
+
+// ---------------------------------------------------------------------------
+// §14.8 Sweeper passive cleanup
+// ---------------------------------------------------------------------------
+
+describe('§14.8 tickSweeperCleanup', () => {
+  it('returns 0 when no debris fields exist', () => {
+    const world = makeBfsWorld({
+      islands: [],
+      islandStates: new Map(),
+      satellites: [makeMinimalSat({ id: 's1', x: 0, y: 0, variant: 'sweeper', locked: true })],
+    });
+    expect(tickSweeperCleanup(world, 1000)).toBe(0);
+  });
+
+  it('returns 0 when no satellites exist', () => {
+    const world = makeBfsWorld({
+      islands: [],
+      islandStates: new Map(),
+      satellites: [],
+    });
+    world.debrisFields.push({ cellX: 0, cellY: 0, fragments: 100 });
+    expect(tickSweeperCleanup(world, 1000)).toBe(0);
+  });
+
+  it('clears fragments at SWEEPER_CLEAN_RATE_PER_SEC per sweeper per 1000ms', () => {
+    const world = makeBfsWorld({
+      islands: [],
+      islandStates: new Map(),
+      satellites: [makeMinimalSat({ id: 's1', x: 0, y: 0, variant: 'sweeper', locked: true })],
+    });
+    world.debrisFields.push({ cellX: 0, cellY: 0, fragments: 100 });
+    const cleared = tickSweeperCleanup(world, 1000);
+    const expectedCleared = 1 * SWEEPER_CLEAN_RATE_PER_SEC * 1;
+    expect(cleared).toBeCloseTo(expectedCleared, 5);
+    expect(world.debrisFields[0]!.fragments).toBeCloseTo(100 - expectedCleared, 5);
+  });
+
+  it('multiple sweepers stack (2 sweepers clear at 2× rate)', () => {
+    const world = makeBfsWorld({
+      islands: [],
+      islandStates: new Map(),
+      satellites: [
+        makeMinimalSat({ id: 's1', x: 0, y: 0, variant: 'sweeper', locked: true }),
+        makeMinimalSat({ id: 's2', x: 8, y: 8, variant: 'sweeper', locked: true }),
+      ],
+    });
+    world.debrisFields.push({ cellX: 0, cellY: 0, fragments: 100 });
+    const cleared = tickSweeperCleanup(world, 1000);
+    const expectedCleared = 2 * SWEEPER_CLEAN_RATE_PER_SEC * 1;
+    expect(cleared).toBeCloseTo(expectedCleared, 5);
+  });
+
+  it('removes field from world.debrisFields when fragments hit 0', () => {
+    const world = makeBfsWorld({
+      islands: [],
+      islandStates: new Map(),
+      satellites: [makeMinimalSat({ id: 's1', x: 0, y: 0, variant: 'sweeper', locked: true })],
+    });
+    world.debrisFields.push({ cellX: 0, cellY: 0, fragments: 0.01 });
+    tickSweeperCleanup(world, 1000);
+    expect(world.debrisFields).toHaveLength(0);
+  });
+
+  it('sweeper outside the cell does NOT count', () => {
+    const world = makeBfsWorld({
+      islands: [],
+      islandStates: new Map(),
+      satellites: [makeMinimalSat({ id: 's1', x: 1000, y: 1000, variant: 'sweeper', locked: true })],
+    });
+    world.debrisFields.push({ cellX: 0, cellY: 0, fragments: 100 });
+    const cleared = tickSweeperCleanup(world, 1000);
+    expect(cleared).toBe(0);
+    expect(world.debrisFields[0]!.fragments).toBe(100);
+  });
+
+  it('unlocked sweeper does NOT count', () => {
+    const world = makeBfsWorld({
+      islands: [],
+      islandStates: new Map(),
+      satellites: [makeMinimalSat({ id: 's1', x: 0, y: 0, variant: 'sweeper', locked: false })],
+    });
+    world.debrisFields.push({ cellX: 0, cellY: 0, fragments: 100 });
+    const cleared = tickSweeperCleanup(world, 1000);
+    expect(cleared).toBe(0);
+    expect(world.debrisFields[0]!.fragments).toBe(100);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// §14.12 Repair Drone proportional fuel
+// ---------------------------------------------------------------------------
+
+describe('§14.12 dispatchRepairDrone proportional fuel', () => {
+  function makeRepairWorld(opts: { satX?: number; satY?: number; propellant: number }): { world: WorldState; state: IslandState } {
+    const world = makeWorld();
+    const island = makeMinimalIsland({ id: 'home', cx: 0, cy: 0, populated: true, buildings: [{ id: 'sp1', defId: 'spaceport', x: 0, y: 0 }] });
+    world.islands = [island];
+    const sat = makeMinimalSat({ id: 'sat1', x: opts.satX ?? 0, y: opts.satY ?? 0 });
+    world.satellites.push(sat);
+    const state = makeIslandState({ id: 'home', ascendantCoreCrafted: true });
+    addSpaceport(state);
+    state.inventory.repair_pack = 1;
+    state.inventory.antimatter_propellant = opts.propellant;
+    world.islandStates = new Map([['home', state]]);
+    return { world, state };
+  }
+
+  it('fuel load scales with rendezvous distance', () => {
+    const { world, state } = makeRepairWorld({ satX: 100, satY: 0, propellant: 100 });
+    const result = dispatchRepairDrone(world, 'home', 'sat1', 0);
+    expect(result.ok).toBe(true);
+    const expectedFuel = Math.max(REPAIR_DRONE_MIN_FUEL, 100 * REPAIR_DRONE_FUEL_PER_TILE);
+    expect(state.inventory.antimatter_propellant).toBeCloseTo(100 - expectedFuel, 5);
+  });
+
+  it('distance 0 uses REPAIR_DRONE_MIN_FUEL floor', () => {
+    const { world, state } = makeRepairWorld({ satX: 0, satY: 0, propellant: 100 });
+    const result = dispatchRepairDrone(world, 'home', 'sat1', 0);
+    expect(result.ok).toBe(true);
+    expect(state.inventory.antimatter_propellant).toBe(100 - REPAIR_DRONE_MIN_FUEL);
+  });
+
+  it('returns insufficient-fuel when propellant is below the proportional load', () => {
+    const { world } = makeRepairWorld({ satX: 1000, satY: 0, propellant: 1 });
+    const result = dispatchRepairDrone(world, 'home', 'sat1', 0);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.reason).toBe('insufficient-fuel');
   });
 });
