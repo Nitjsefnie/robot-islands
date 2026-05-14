@@ -130,6 +130,30 @@ export function _seedRouteIdCounter(value: number): void {
 // Pure helpers
 // ---------------------------------------------------------------------------
 
+/** §5.3: sum the W capacity of every cable route delivering to `islandId`
+ *  whose source AND destination both have at least one `power_substation`
+ *  building placed. Source-side capacity is NOT deducted from the source's
+ *  balance per current scope; this returns only what the destination
+ *  receives. */
+export function cableInflowForIsland(
+  world: WorldState,
+  states: Map<string, IslandState>,
+  islandId: string,
+): number {
+  let totalW = 0;
+  for (const route of world.routes) {
+    if (route.type !== 'cable') continue;
+    if (route.to !== islandId) continue;
+    const fromState = states.get(route.from);
+    const toState = states.get(islandId);
+    if (!fromState || !toState) continue;
+    if (!fromState.buildings.some((b) => b.defId === 'power_substation')) continue;
+    if (!toState.buildings.some((b) => b.defId === 'power_substation')) continue;
+    totalW += route.capacityPerSec;
+  }
+  return totalW;
+}
+
 /** Sum the amounts already in flight on `route` whose resourceId === `r`. */
 function inFlightSumFor(route: Route, r: ResourceId): number {
   let s = 0;
@@ -220,6 +244,7 @@ export function deliverArrivals(
   const delivered: Array<{ destIslandId: string; resourceId: ResourceId; amount: number }> = [];
 
   for (const route of world.routes) {
+    if (route.type === 'cable') continue; // §5.3: cables transmit power, not items.
     const destState = states.get(route.to);
     if (!destState) {
       // Destination state missing (e.g., island despawned mid-flight). Drop
@@ -345,6 +370,7 @@ function dispatchPhase(
   // source side, so dest-cap clamping has to happen per-route.
   const demands: RouteDemand[] = [];
   for (const route of world.routes) {
+    if (route.type === 'cable') continue; // §5.3: cables transmit power, not items.
     const srcState = states.get(route.from);
     if (!srcState) continue;
     const r = selectResource(world, states, route);

@@ -94,6 +94,11 @@ export interface RatesContext {
    *  `cap()` reads from this map instead of the local island storageCaps,
    *  enabling summed caps across the Lattice network. */
   readonly caps?: Record<ResourceId, number>;
+  /** §5.3 Inter-island cable inflow in Watts. Pre-computed per-island in
+   *  main.ts from world.routes (cable routes whose dest === this island AND
+   *  both endpoints carry a power_substation). Added directly to
+   *  `powerProduced` in Pass 3, treated as a "virtual producer" per spec. */
+  readonly cableInflowW?: number;
 }
 
 /**
@@ -770,6 +775,12 @@ export function computeRates(
     if (inv(state, state.genesisTarget) >= cap(state, state.genesisTarget)) continue;
     powerConsumed += (GENESIS_POWER_KW[targetTier]! * 1000) / skillMul.powerConsumption;
   }
+
+  // §5.3: cable inflow from inter-island Power Substation routes. Treated
+  // as a virtual producer on the destination side. Source-side deduction
+  // is intentionally OUT of scope (free wattage on dest) — re-evaluate if
+  // balance shifts during ship-balance review.
+  powerProduced += ctx?.cableInflowW ?? 0;
 
   // §13.3 Singularity Battery — cover deficit from stored energy.
   const batteryCount = validBuildings.filter((b) => b.defId === 'singularity_battery').length;

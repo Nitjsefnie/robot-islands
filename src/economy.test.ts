@@ -530,6 +530,42 @@ function mineHeavyCatalog(): DefCatalog {
 }
 const MINE_HEAVY: DefCatalog = mineHeavyCatalog();
 
+describe('§5.3 cable inflow', () => {
+  it('powerFactor = 0 when consumer has no native producers and cableInflowW = 0', () => {
+    // Mine consumes 40W and has no inputs, so it is always active.
+    const state = makeState({
+      buildings: [MINE_PWR],
+      inventory: blankInventory(),
+    });
+    const { power } = computeRates(state, { cableInflowW: 0 });
+    expect(power.produced).toBe(0);
+    expect(power.consumed).toBe(40);
+    expect(power.factor).toBe(0);
+  });
+
+  it('powerFactor = 1 when cableInflowW covers the consumer draw', () => {
+    const state = makeState({
+      buildings: [MINE_PWR],
+      inventory: blankInventory(),
+    });
+    const { power } = computeRates(state, { cableInflowW: 40 });
+    expect(power.produced).toBe(40);
+    expect(power.consumed).toBe(40);
+    expect(power.factor).toBe(1);
+  });
+
+  it('powerFactor = 0.5 when cableInflowW partially covers demand', () => {
+    const state = makeState({
+      buildings: [MINE_PWR],
+      inventory: blankInventory(),
+    });
+    const { power } = computeRates(state, { cableInflowW: 20 });
+    expect(power.produced).toBe(20);
+    expect(power.consumed).toBe(40);
+    expect(power.factor).toBe(0.5);
+  });
+});
+
 describe('power (§5.1)', () => {
   it('powerFactor = 1 when there are no power consumers', () => {
     // Bare mine, no power field → unchanged behaviour.

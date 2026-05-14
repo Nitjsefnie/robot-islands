@@ -79,7 +79,7 @@ import { mountDronesUi } from './drones-ui.js';
 import { tickDrones } from './drones.js';
 import { findNextMerge, performMerge } from './island-merge.js';
 import { makeIslandScreenPosResolver, mountRoutesUi } from './routes-ui.js';
-import { tickRoutes } from './routes.js';
+import { cableInflowForIsland, tickRoutes } from './routes.js';
 import { computeLatticeActive, crossIslandNeighbors, latticeInventory, latticeStorageCaps } from './lattice.js';
 import { mountSettlementUi } from './settlement-ui.js';
 import { tickVehicles } from './settlement.js';
@@ -1178,6 +1178,7 @@ async function main(): Promise<void> {
       const spec = islandSpecsById.get(s.id);
       const isLatticeIsland = unifiedInv !== undefined && worldState.latticeNodeIslands.includes(s.id);
       const crossIsland = crossIslandById.get(s.id);
+      const cableInflowW = cableInflowForIsland(worldState, islandStates, s.id);
       advanceIsland(s, now, {
         modifierMul: modifierMulFor(s.id),
         specMul: specMulFor(s),
@@ -1186,6 +1187,7 @@ async function main(): Promise<void> {
         inventory: isLatticeIsland ? unifiedInv : undefined,
         crossIsland,
         caps: isLatticeIsland ? unifiedCaps : undefined,
+        cableInflowW,
       });
       const { net, power } = computeRates(s, {
         modifierMul: modifierMulFor(s.id),
@@ -1195,6 +1197,7 @@ async function main(): Promise<void> {
         inventory: isLatticeIsland ? unifiedInv : undefined,
         crossIsland,
         caps: isLatticeIsland ? unifiedCaps : undefined,
+        cableInflowW,
       });
       islandNets.set(s.id, net);
       islandPower.set(s.id, power);
@@ -1299,6 +1302,7 @@ async function main(): Promise<void> {
     const postTickActiveS = activeState();
     const postTickActiveP = activeSpec();
     const postTickLattice = unifiedInv !== undefined && worldState.latticeNodeIslands.includes(postTickActiveS.id);
+    const postTickCableInflowW = cableInflowForIsland(worldState, islandStates, postTickActiveS.id);
     const { net: postNet, power: postPower } = computeRates(postTickActiveS, {
       modifierMul: modifierMulFor(postTickActiveS.id),
       specMul: specMulFor(postTickActiveS),
@@ -1307,6 +1311,7 @@ async function main(): Promise<void> {
       inventory: postTickLattice ? unifiedInv : undefined,
       crossIsland: crossIslandById.get(postTickActiveS.id),
       caps: postTickLattice ? unifiedCaps : undefined,
+      cableInflowW: postTickCableInflowW,
     });
     islandNets.set(activeIslandId, postNet);
     islandPower.set(activeIslandId, postPower);
@@ -1322,6 +1327,7 @@ async function main(): Promise<void> {
     if (activeLattice) {
       // Refresh the active island's net/power with unified inventory so the HUD
       // reads the same cross-island state that advanceIsland used.
+      const activeCableInflowW = cableInflowForIsland(worldState, islandStates, activeS.id);
       const { net: activeNet, power: activePower } = computeRates(activeS, {
         modifierMul: modifierMulFor(activeS.id),
         specMul: specMulFor(activeS),
@@ -1330,6 +1336,7 @@ async function main(): Promise<void> {
         inventory: unifiedInv,
         crossIsland: crossIslandById.get(activeS.id),
         caps: unifiedCaps,
+        cableInflowW: activeCableInflowW,
       });
       islandNets.set(activeS.id, activeNet);
       islandPower.set(activeS.id, activePower);

@@ -8,6 +8,7 @@ import {
 } from './drones.js';
 import {
   _resetRouteIdCounter,
+  cableInflowForIsland,
   deliverArrivals,
   dispatchAttempt,
   FUNNELING_BONUS_PERCENT,
@@ -130,6 +131,24 @@ function cargoRoute(
     filter,
     priorityList,
     transitTimeSec,
+    inFlight: [],
+  };
+}
+
+function cableRoute(
+  from: string,
+  to: string,
+  capacityPerSec = 100,
+): Route {
+  return {
+    id: nextRouteId(),
+    from,
+    to,
+    type: 'cable',
+    capacityPerSec,
+    filter: null,
+    priorityList: [],
+    transitTimeSec: 0,
     inFlight: [],
   };
 }
@@ -621,6 +640,104 @@ describe('reorderPriorityList', () => {
     const list: ResourceId[] = ['iron_ore', 'coal'];
     const result = reorderPriorityList(list, 5, 0);
     expect(result).toEqual(['iron_ore', 'coal']);
+  });
+});
+
+describe('cableInflowForIsland (§5.3)', () => {
+  it('returns 0 when there are no cable routes', () => {
+    const world = makeWorld();
+    const states = new Map<string, IslandState>();
+    expect(cableInflowForIsland(world, states, 'home')).toBe(0);
+  });
+
+  it('sums capacity of cable routes whose both endpoints have power_substation', () => {
+    const src = makeState('a', {
+      buildings: [{ id: 'ps-a', defId: 'power_substation', x: 0, y: 0 }],
+    });
+    const dst = makeState('b', {
+      buildings: [{ id: 'ps-b', defId: 'power_substation', x: 0, y: 0 }],
+    });
+    const world = makeWorld([cableRoute('a', 'b', 200)]);
+    world.islands.push(makeIslandSpec('a', 0, 0), makeIslandSpec('b', 10, 0));
+    const states = new Map<string, IslandState>([['a', src], ['b', dst]]);
+    expect(cableInflowForIsland(world, states, 'b')).toBe(200);
+  });
+
+  it('ignores cable routes when the source lacks a power_substation', () => {
+    const src = makeState('a', { buildings: [] });
+    const dst = makeState('b', {
+      buildings: [{ id: 'ps-b', defId: 'power_substation', x: 0, y: 0 }],
+    });
+    const world = makeWorld([cableRoute('a', 'b', 200)]);
+    const states = new Map<string, IslandState>([['a', src], ['b', dst]]);
+    expect(cableInflowForIsland(world, states, 'b')).toBe(0);
+  });
+
+  it('ignores cable routes when the dest lacks a power_substation', () => {
+    const src = makeState('a', {
+      buildings: [{ id: 'ps-a', defId: 'power_substation', x: 0, y: 0 }],
+    });
+    const dst = makeState('b', { buildings: [] });
+    const world = makeWorld([cableRoute('a', 'b', 200)]);
+    const states = new Map<string, IslandState>([['a', src], ['b', dst]]);
+    expect(cableInflowForIsland(world, states, 'b')).toBe(0);
+  });
+
+  it('ignores non-cable routes (cargo / drone) regardless of substations', () => {
+    const src = makeState('a', {
+      buildings: [{ id: 'ps-a', defId: 'power_substation', x: 0, y: 0 }],
+    });
+    const dst = makeState('b', {
+      buildings: [{ id: 'ps-b', defId: 'power_substation', x: 0, y: 0 }],
+    });
+    const world = makeWorld([cargoRoute('a', 'b', 'iron_ore', [], 100)]);
+    const states = new Map<string, IslandState>([['a', src], ['b', dst]]);
+    expect(cableInflowForIsland(world, states, 'b')).toBe(0);
+  });
+
+  it('sums multiple cable routes delivering to the same island', () => {
+    const src1 = makeState('a', {
+      buildings: [{ id: 'ps-a', defId: 'power_substation', x: 0, y: 0 }],
+    });
+    const src2 = makeState('c', {
+      buildings: [{ id: 'ps-c', defId: 'power_substation', x: 0, y: 0 }],
+    });
+    const dst = makeState('b', {
+      buildings: [{ id: 'ps-b', defId: 'power_substation', x: 0, y: 0 }],
+    });
+    const world = makeWorld([cableRoute('a', 'b', 100), cableRoute('c', 'b', 150)]);
+    const states = new Map<string, IslandState>([
+      ['a', src1],
+      ['c', src2],
+      ['b', dst],
+    ]);
+    expect(cableInflowForIsland(world, states, 'b')).toBe(250);
+  });
+});
+
+describe('§5.3 cable routes do not dispatch cargo', () => {
+  it('skips cable routes in dispatch even with non-empty priorityList and capacity', () => {
+    const src = makeState('a', {
+      inventory: { ...blankInventory(), iron_ore: 10 },
+    });
+    const dst = makeState('b');
+    const r: Route = {
+      id: nextRouteId(),
+      from: 'a',
+      to: 'b',
+      type: 'cable',
+      capacityPerSec: 1,
+      filter: null,
+      priorityList: ['iron_ore'],
+      transitTimeSec: 1,
+      inFlight: [],
+    };
+    const world = makeWorld([r]);
+    const states = new Map<string, IslandState>([['a', src], ['b', dst]]);
+    const out = dispatchAttempt(world, states, 0, 2);
+    expect(out.length).toBe(0);
+    expect(src.inventory.iron_ore).toBe(10);
+    expect(r.inFlight.length).toBe(0);
   });
 });
 
