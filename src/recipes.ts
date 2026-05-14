@@ -552,6 +552,24 @@ export const RECIPES: Partial<Record<RecipeId, Recipe>> = {
     outputs: {},
     category: 'power',
   },
+  // §8.5 T2 power: Cryogenic Generator burns cryo_coolant as fuel.
+  cryogenic_generator: {
+    cycleSec: 60,
+    inputs: { cryo_coolant: 1 },
+    outputs: {},
+    category: 'power',
+  },
+  // §8.5 T3 power: Nuclear Reactor fuel TBD per SPEC §6.5 — placeholder
+  // uses `coal: 5` as a heavy proxy until `uranium_ore` (§6.4) or
+  // `nuclear_fuel_rod` (§6.5) ship as ResourceIds in the catalog. Swap to
+  // the real T3/T4 fuel once that lands; for now coal makes the building
+  // TICKABLE without inventing a phantom ResourceId.
+  nuclear_reactor: {
+    cycleSec: 120,
+    inputs: { coal: 5 },
+    outputs: {},
+    category: 'power',
+  },
 
   // T2 smelting — rebalanced for idle-game scale, step #19 (×40)
   coke_oven: {

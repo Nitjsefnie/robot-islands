@@ -17,6 +17,7 @@ import {
   type BuildingDefId,
 } from './building-defs.js';
 import { shapeHeight, shapeWidth } from './shape-mask.js';
+import { RECIPES } from './recipes.js';
 import type { IslandSpec } from './world.js';
 
 // Hand-mirrored list of every id in the union. If a new id is added to
@@ -132,6 +133,10 @@ const KNOWN_DEF_IDS: ReadonlyArray<BuildingDefId> = [
   // §8.1 T2 extraction
   'heavy_logger',
   'deep_mine',
+  // §8.5 power generation
+  'wind_turbine',
+  'cryogenic_generator',
+  'nuclear_reactor',
 ];
 
 // Helper: build a minimal IslandSpec for the canPlaceOnIsland tests. The
@@ -709,6 +714,29 @@ describe('§8.1 T2 extraction buildings', () => {
       expect(def.tier).toBe(2);
       expect(def.footprint.tiles.length).toBe(6); // 2x3
       expect(def.requiredTile).toContain('ore');
+    });
+  });
+
+  describe('§8.5 power-generation buildings', () => {
+    it('wind_turbine is T1, 1x1, produces power for free', () => {
+      const def = BUILDING_DEFS.wind_turbine;
+      expect(def.tier).toBe(1);
+      expect(def.footprint.tiles.length).toBe(1);
+      expect(def.power?.produces).toBeGreaterThan(0);
+      expect(def.power?.consumes ?? 0).toBe(0);
+    });
+    it('cryogenic_generator is T2, 2x2, consumes cryo_coolant', () => {
+      const def = BUILDING_DEFS.cryogenic_generator;
+      expect(def.tier).toBe(2);
+      expect(def.footprint.tiles.length).toBe(4);
+      expect(def.power?.produces).toBeGreaterThan(0);
+      expect(RECIPES.cryogenic_generator!.inputs.cryo_coolant).toBeGreaterThan(0);
+    });
+    it('nuclear_reactor is T3, 4x4, produces high power', () => {
+      const def = BUILDING_DEFS.nuclear_reactor;
+      expect(def.tier).toBe(3);
+      expect(def.footprint.tiles.length).toBe(16);
+      expect(def.power?.produces).toBeGreaterThanOrEqual(1000);
     });
   });
 });

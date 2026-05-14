@@ -225,7 +225,11 @@ export type BuildingDefId =
   | 'compute_module_fab'
   // §2.6 weather stations
   | 'weather_station_t2'
-  | 'advanced_weather_station_t3';
+  | 'advanced_weather_station_t3'
+  // §8.5 power generation
+  | 'wind_turbine'
+  | 'cryogenic_generator'
+  | 'nuclear_reactor';
 
 /**
  * §4.5 buff-adjacency entry: per matching 4-neighbor, multiply the building's
@@ -594,6 +598,22 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     placementCost: { stone: 50, wood: 25 },
     glyph: '❀',
   },
+  // §8.5 T1 power: Wind Turbine (1x1, coast tile). Free output — no fuel
+  // consumption. Lower output than Solar's daytime peak; complements
+  // night-hour solar gaps on coastal islands.
+  wind_turbine: {
+    id: 'wind_turbine',
+    displayName: 'Wind Turbine',
+    category: 'power',
+    tier: 1,
+    footprint: SHAPES.single,
+    fill: 0xc0c8d0, // pale steel-blue
+    stroke: 0x404850,
+    power: { produces: 40 },
+    requiredTile: ['water'],
+    placementCost: { steel: 30, wood: 10 },
+    glyph: '✦',
+  },
   // §5.2 / §8.6: Coal Furnace — T1 fuel-burning heat source. Burns
   // `coalPerCycle × consumersServed` coal per 30s cycle (literal §5.2:
   // "fuel consumption multiplies by the number of heat consumers it currently
@@ -902,6 +922,22 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     placementCost: { stone: 150, iron_ingot: 50, wood: 30 },
     glyph: '⊕',
   },
+  // §8.5 T2 power: Cryogenic Generator (2x2, ice tile / arctic). Consumes
+  // cryo_coolant as fuel. High output among T2 power options when an Arctic
+  // colony's cryo chain is active.
+  cryogenic_generator: {
+    id: 'cryogenic_generator',
+    displayName: 'Cryogenic Generator',
+    category: 'power',
+    tier: 2,
+    footprint: SHAPES.square2,
+    fill: 0x70c0e0, // cryo cyan
+    stroke: 0x103060,
+    power: { produces: 400 },
+    requiredTile: ['ice'],
+    placementCost: { steel: 80, gear: 20, glass: 15 },
+    glyph: '❄',
+  },
   // -------------------------------------------------------------------------
   // T3 (levels 15-30)
   // -------------------------------------------------------------------------
@@ -975,6 +1011,22 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     // §14 placeholder — tune in Appendix A. 4×4 footprint bumps T3 base.
     placementCost: { steel: 200, microchip: 80, stone: 40 },
     glyph: '⬢',
+  },
+  // §8.5 T3 power: Nuclear Reactor (4x4, any tile). Consumes uranium fuel
+  // rods (or placeholder fuel if uranium_ore / nuclear_fuel_rod aren't in
+  // the catalog yet — see the recipe note). Very high output — the
+  // workhorse T3 power option for non-volcanic / non-arctic biomes.
+  nuclear_reactor: {
+    id: 'nuclear_reactor',
+    displayName: 'Nuclear Reactor',
+    category: 'power',
+    tier: 3,
+    footprint: SHAPES.square4,
+    fill: 0x80b070, // reactor green
+    stroke: 0x204010,
+    power: { produces: 2000 },
+    placementCost: { steel: 400, microchip: 20, glass: 30 },
+    glyph: '☢',
   },
   // -------------------------------------------------------------------------
   // T4 (levels 30-50) — endgame chain per §6.5 / §8.5 / §9.5
