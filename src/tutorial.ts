@@ -3,6 +3,8 @@ import type { WorldState } from './world.js';
 
 export type ObjectiveId =
   | 'place_solar'
+  | 'place_logger'
+  | 'place_quarry'
   | 'place_mine'
   | 'place_workshop'
   | 'reach_level_5'
@@ -19,12 +21,22 @@ export interface TutorialState {
 export const OBJECTIVES: Record<ObjectiveId, { title: string; hint: string; check: (world: WorldState) => boolean }> = {
   place_solar: {
     title: 'Power Up',
-    hint: 'Place a Solar Panel on any grass tile.',
+    hint: 'Place a Solar Panel on any grass tile (20 stone, 10 wood).',
     check: (w) => Array.from(w.islandStates?.values() ?? []).some(s => s.buildings.some(b => b.defId === 'solar')),
+  },
+  place_logger: {
+    title: 'Renewable Wood',
+    hint: 'Place a Logger on a tree tile (15 stone, 5 wood). Look for the small tree cluster on the home island.',
+    check: (w) => Array.from(w.islandStates?.values() ?? []).some(s => s.buildings.some(b => b.defId === 'logger')),
+  },
+  place_quarry: {
+    title: 'Renewable Stone',
+    hint: 'Place a Quarry on a 2×2 stone cluster (25 stone, 15 wood). Look for the dark-grey stone block on the home island.',
+    check: (w) => Array.from(w.islandStates?.values() ?? []).some(s => s.buildings.some(b => b.defId === 'quarry')),
   },
   place_mine: {
     title: 'Extract Resources',
-    hint: 'Place a Mine on an ore vein.',
+    hint: 'Place a Mine on an ore vein or coal vein (30 stone, 15 wood). Wait for Quarry / Logger output if you ran low.',
     check: (w) => Array.from(w.islandStates?.values() ?? []).some(s => s.buildings.some(b => b.defId === 'mine')),
   },
   place_workshop: {
