@@ -1305,3 +1305,60 @@ describe('debrisFields persistence', () => {
     expect(restored.debrisFields).toEqual([]);
   });
 });
+
+// ---------------------------------------------------------------------------
+// §14.6 satellite movingTo round-trip
+// ---------------------------------------------------------------------------
+
+describe('satellite movingTo persistence', () => {
+  it('round-trips a satellite with movingTo set', () => {
+    const world = makeInitialWorld(0);
+    world.satellites.push({
+      id: 'sat1',
+      variant: 'scanner',
+      spaceportIslandId: 'home',
+      x: 0,
+      y: 0,
+      commRange: 200,
+      coverageRadius: 400,
+      fuel: 80,
+      lodges: { scan: 0, weather: 0, comm: 0 },
+      locked: false,
+      pendingRepairDroneId: null,
+      buffer: [],
+      movingTo: { x: 100, y: 200, arrivalMs: 12_345 },
+    });
+    const snap = serializeWorld(world, new Map(), 0, 0);
+    const json = JSON.parse(JSON.stringify(snap)) as SaveSnapshot;
+    const { world: restored } = deserializeWorld(json, 0, 0);
+    expect(restored.satellites).toHaveLength(1);
+    const sat = restored.satellites[0]!;
+    expect(sat.movingTo).toEqual({ x: 100, y: 200, arrivalMs: 12_345 });
+    expect(sat.locked).toBe(false);
+  });
+
+  it('round-trips a satellite without movingTo (stationary)', () => {
+    const world = makeInitialWorld(0);
+    world.satellites.push({
+      id: 'sat2',
+      variant: 'comm',
+      spaceportIslandId: 'home',
+      x: 50,
+      y: 50,
+      commRange: 500,
+      coverageRadius: 0,
+      fuel: 100,
+      lodges: { scan: 0, weather: 0, comm: 0 },
+      locked: true,
+      pendingRepairDroneId: null,
+      buffer: [],
+    });
+    const snap = serializeWorld(world, new Map(), 0, 0);
+    const json = JSON.parse(JSON.stringify(snap)) as SaveSnapshot;
+    const { world: restored } = deserializeWorld(json, 0, 0);
+    expect(restored.satellites).toHaveLength(1);
+    const sat = restored.satellites[0]!;
+    expect(sat.movingTo).toBeUndefined();
+    expect(sat.locked).toBe(true);
+  });
+});

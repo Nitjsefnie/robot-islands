@@ -20,6 +20,11 @@ import {
   ORBIT_EXPLOSION_FRAGMENTS,
   SAT_DESTRUCTION_FRAGMENTS,
   SAT_CROSS_SECTION,
+  requestSatMove,
+  tickSatMovement,
+  SAT_FUEL_PER_TILE,
+  SAT_MOVE_SPEED_TILES_PER_SEC,
+  SAT_MOVE_FAILURE_DEBRIS,
   type SatelliteVariant,
   type Satellite,
   type SatBufferEntry,
@@ -1027,5 +1032,140 @@ describe('launchSatellite orbit-explosion debris', () => {
     expect(field.cellX).toBe(6);
     expect(field.cellY).toBe(6);
     expect(field.fragments).toBe(ORBIT_EXPLOSION_FRAGMENTS);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// §14.6 Satellite movement (fuel-spend)
+// ---------------------------------------------------------------------------
+
+describe('§14.6 requestSatMove + tickSatMovement', () => {
+  function makeSatMoveWorld(): WorldState {
+    return makeBfsWorld({
+      islands: [],
+      islandStates: new Map(),
+      satellites: [],
+    });
+  }
+
+  it('rejects when satellite does not exist', () => {
+    const world = makeSatMoveWorld();
+    const result = requestSatMove(world, 'missing', 10, 10, 0);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.reason).toBe('no-satellite');
+  });
+
+  it('rejects when satellite is already moving', () => {
+    const world = makeSatMoveWorld();
+    const sat = makeMinimalSat({ id: 'sat1', x: 0, y: 0, fuel: 100, locked: true });
+    sat.movingTo = { x: 50, y: 0, arrivalMs: 1000 };
+    world.satellites.push(sat);
+    const result = requestSatMove(world, 'sat1', 100, 0, 0);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.reason).toBe('already-moving');
+  });
+
+  it('rejects when a repair drone is pending', () => {
+    const world = makeSatMoveWorld();
+    const sat = makeMinimalSat({ id: 'sat1', x: 0, y: 0, fuel: 100, locked: true, pendingRepairDroneId: 'repair-1' });
+    world.satellites.push(sat);
+    const result = requestSatMove(world, 'sat1', 100, 0, 0);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.reason).toBe('pending-repair');
+  });
+
+  it('rejects when satellite is not locked', () => {
+    const world = makeSatMoveWorld();
+    const sat = makeMinimalSat({ id: 'sat1', x: 0, y: 0, fuel: 100, locked: false });
+    world.satellites.push(sat);
+    const result = requestSatMove(world, 'sat1', 100, 0, 0);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.reason).toBe('not-locked');
+  });
+
+  it('rejects when target equals current position (zero distance)', () => {
+    const world = makeSatMoveWorld();
+    const sat = makeMinimalSat({ id: 'sat1', x: 10, y: 20, fuel: 100, locked: true });
+    world.satellites.push(sat);
+    const result = requestSatMove(world, 'sat1', 10, 20, 0);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.reason).toBe('no-distance');
+  });
+
+  it('rejects when fuel is insufficient for the distance', () => {
+    const world = makeSatMoveWorld();
+    const sat = makeMinimalSat({ id: 'sat1', x: 0, y: 0, fuel: 1, locked: true });
+    world.satellites.push(sat);
+    // Distance = 100 tiles; fuel cost = 100 * 0.05 = 5 > 1.
+    const result = requestSatMove(world, 'sat1', 100, 0, 0);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.reason).toBe('insufficient-fuel');
+  });
+
+  it('spends fuel proportional to distance, sets movingTo, and unlocks on success', () => {
+    const world = makeSatMoveWorld();
+    const sat = makeMinimalSat({ id: 'sat1', x: 0, y: 0, fuel: 100, locked: true });
+    world.satellites.push(sat);
+    const result = requestSatMove(world, 'sat1', 100, 0, 1000);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const expectedCost = 100 * SAT_FUEL_PER_TILE; // 5
+    expect(sat.fuel).toBeCloseTo(100 - expectedCost, 5);
+    expect(sat.movingTo).toBeDefined();
+    expect(sat.movingTo!.x).toBe(100);
+    expect(sat.movingTo!.y).toBe(0);
+    expect(sat.movingTo!.arrivalMs).toBe(1000 + (100 / SAT_MOVE_SPEED_TILES_PER_SEC) * 1000);
+    expect(sat.locked).toBe(false);
+  });
+
+  it('tickSatMovement keeps movingTo until arrivalMs', () => {
+    const world = makeSatMoveWorld();
+    const sat = makeMinimalSat({ id: 'sat1', x: 0, y: 0, fuel: 100, locked: true });
+    world.satellites.push(sat);
+    requestSatMove(world, 'sat1', 100, 0, 0);
+    const arrivalMs = sat.movingTo!.arrivalMs;
+    // One ms before arrival — still in transit.
+    tickSatMovement(world, arrivalMs - 1);
+    expect(world.satellites).toHaveLength(1);
+    expect(sat.movingTo).toBeDefined();
+    expect(sat.locked).toBe(false);
+  });
+
+  it('tickSatMovement on arrival updates position, re-locks, and clears movingTo', () => {
+    const world = makeSatMoveWorld();
+    const sat = makeMinimalSat({ id: 'sat1', x: 0, y: 0, fuel: 100, locked: true });
+    world.satellites.push(sat);
+    requestSatMove(world, 'sat1', 100, 0, 0);
+    const arrivalMs = sat.movingTo!.arrivalMs;
+    tickSatMovement(world, arrivalMs);
+    expect(world.satellites).toHaveLength(1);
+    expect(sat.x).toBe(100);
+    expect(sat.y).toBe(0);
+    expect(sat.locked).toBe(true);
+    expect(sat.movingTo).toBeUndefined();
+  });
+
+  it('tickSatMovement failure destroys satellite and seeds debris at loss cell', () => {
+    const world = makeSatMoveWorld();
+    const sat = makeMinimalSat({ id: 'sat1', x: 0, y: 0, fuel: 100, locked: true });
+    world.satellites.push(sat);
+    // nowMs=3 yields deterministic RNG ≈0.0013 < 0.02 → failure.
+    requestSatMove(world, 'sat1', 100, 0, 3);
+    const arrivalMs = sat.movingTo!.arrivalMs;
+    tickSatMovement(world, arrivalMs);
+
+    expect(world.satellites).toHaveLength(0);
+    expect(world.debrisFields).toHaveLength(1);
+    const field = world.debrisFields[0]!;
+    // Target cell for (100,0): cellX = Math.floor(100/16) = 6, cellY = 0.
+    expect(field.cellX).toBe(6);
+    expect(field.cellY).toBe(0);
+    expect(field.fragments).toBe(SAT_MOVE_FAILURE_DEBRIS);
   });
 });

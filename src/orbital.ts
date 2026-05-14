@@ -46,6 +46,10 @@ export interface Satellite {
   pendingRepairDroneId: string | null;
   /** Store-and-forward buffer for disconnected satellites. */
   buffer: SatBufferEntry[];
+  /** §14.6 in-flight move target. When set, the satellite is in transit and
+   *  unlocked (`locked === false`); on arrival, position is updated and
+   *  `movingTo` is cleared. Missing/undefined ≡ stationary. */
+  movingTo?: { x: number; y: number; arrivalMs: number };
 }
 
 export interface RepairDrone {
@@ -75,6 +79,12 @@ export const SAT_CROSS_SECTION: Record<SatelliteVariant, number> = {
   sweeper: 1.0,
   comm: 0.8, // sleeker
 };
+
+/** §14.6 / Appendix A placeholders for satellite maneuvering. */
+export const SAT_FUEL_PER_TILE = 0.05; // fuel units per tile of relocation
+export const SAT_MOVE_SPEED_TILES_PER_SEC = 5; // travel speed
+export const SAT_MOVE_FAILURE_PROBABILITY = 0.02; // §14.6 "low probability"
+export const SAT_MOVE_FAILURE_DEBRIS = 10; // fragments seeded on in-transit loss
 
 /** Per-variant payload resource id consumed at launch time. */
 const PAYLOAD_RESOURCE: Record<SatelliteVariant, ResourceId> = {
@@ -353,6 +363,64 @@ export function tickRepairDrones(world: WorldState, nowMs: number): void {
  */
 /** Find or create the debris field anchored to a stratification cell.
  *  Adds `fragments` to the existing count or creates a new field. */
+export function requestSatMove(
+  world: WorldState,
+  satId: string,
+  targetX: number,
+  targetY: number,
+  nowMs: number,
+): { ok: true; eta: number } | { ok: false; reason: string } {
+  const sat = world.satellites.find((s) => s.id === satId);
+  if (!sat) return { ok: false, reason: 'no-satellite' };
+  if (sat.movingTo) return { ok: false, reason: 'already-moving' };
+  if (sat.pendingRepairDroneId) return { ok: false, reason: 'pending-repair' };
+  if (!sat.locked) return { ok: false, reason: 'not-locked' };
+  const dx = targetX - sat.x;
+  const dy = targetY - sat.y;
+  const dist = Math.hypot(dx, dy);
+  if (dist <= 0) return { ok: false, reason: 'no-distance' };
+  const fuelCost = dist * SAT_FUEL_PER_TILE;
+  if (sat.fuel < fuelCost) return { ok: false, reason: 'insufficient-fuel' };
+  // Spend fuel up-front (committed at command time, mirroring drone fuel
+  // semantics in dispatchDrone).
+  sat.fuel -= fuelCost;
+  const travelSec = dist / SAT_MOVE_SPEED_TILES_PER_SEC;
+  sat.movingTo = { x: targetX, y: targetY, arrivalMs: nowMs + travelSec * 1000 };
+  sat.locked = false;
+  return { ok: true, eta: sat.movingTo.arrivalMs };
+}
+
+export function tickSatMovement(world: WorldState, nowMs: number): void {
+  if (world.satellites.length === 0) return;
+  const survivors: Satellite[] = [];
+  for (const sat of world.satellites) {
+    if (!sat.movingTo) {
+      survivors.push(sat);
+      continue;
+    }
+    if (nowMs < sat.movingTo.arrivalMs) {
+      survivors.push(sat);
+      continue;
+    }
+    // Arrival window — roll mechanical-failure.
+    const rng = makeSeededRng(`${world.seed}_satmove_${sat.id}_${sat.movingTo.arrivalMs}`);
+    if (rng() < SAT_MOVE_FAILURE_PROBABILITY) {
+      // Lost in transit — seed debris at the loss cell.
+      const { cellX, cellY } = tileToCell(sat.movingTo.x, sat.movingTo.y);
+      addDebrisFragments(world, cellX, cellY, SAT_MOVE_FAILURE_DEBRIS);
+      // sat is omitted from survivors → destroyed.
+      continue;
+    }
+    // Success: update position, re-lock, clear movingTo.
+    sat.x = sat.movingTo.x;
+    sat.y = sat.movingTo.y;
+    sat.locked = true;
+    sat.movingTo = undefined;
+    survivors.push(sat);
+  }
+  world.satellites = survivors;
+}
+
 export function addDebrisFragments(
   world: WorldState,
   cellX: number,
