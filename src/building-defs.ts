@@ -229,7 +229,11 @@ export type BuildingDefId =
   // §8.5 power generation
   | 'wind_turbine'
   | 'cryogenic_generator'
-  | 'nuclear_reactor';
+  | 'nuclear_reactor'
+  // §8.7 cooling / treatment
+  | 'cooling_tower'
+  | 'wastewater_treatment'
+  | 'exhaust_scrubber';
 
 /**
  * §4.5 buff-adjacency entry: per matching 4-neighbor, multiply the building's
@@ -1027,6 +1031,55 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     power: { produces: 2000 },
     placementCost: { steel: 400, microchip: 20, glass: 30 },
     glyph: '☢',
+  },
+  // §8.7 T2 cooling: Cooling Tower (2x2). Adjacency anchor — required for
+  // some chemistry recipes (e.g. Crystal Growth Lab → rare crystals per
+  // §4.5). The adjacency-effect wire-up that recipe-unlocks downstream
+  // buildings is deferred; this def ships as a catalog row so the player
+  // can place it now in anticipation of those gates landing.
+  cooling_tower: {
+    id: 'cooling_tower',
+    displayName: 'Cooling Tower',
+    category: 'special',
+    tier: 2,
+    footprint: SHAPES.square2,
+    fill: 0x6090c0, // cool-blue tower
+    stroke: 0x102040,
+    power: { consumes: 40 },
+    placementCost: { steel: 60, glass: 20, gear: 10 },
+    glyph: '❅',
+  },
+  // §8.7 T2 treatment: Wastewater Treatment (2x2). Adjacency anchor —
+  // prevents efficiency penalty for chemistry per §4.5 ("Refinery without
+  // adjacent Wastewater Treatment operates only on low-grade recipe,
+  // efficiency -50%"). Soft-gate wire-up on downstream chemistry recipes
+  // is deferred; def ships as a catalog row.
+  wastewater_treatment: {
+    id: 'wastewater_treatment',
+    displayName: 'Wastewater Treatment',
+    category: 'special',
+    tier: 2,
+    footprint: SHAPES.square2,
+    fill: 0x4a7060, // murky water-treatment teal
+    stroke: 0x0a1810,
+    power: { consumes: 30 },
+    placementCost: { steel: 50, gear: 10 },
+    glyph: '⌇',
+  },
+  // §8.7 T2 emissions: Exhaust Scrubber (1x1). Required for clean operation
+  // of high-emission buildings per §8.7. Adjacency wire-up is deferred to
+  // the §4.5 gate-system extension; this def ships as a catalog row.
+  exhaust_scrubber: {
+    id: 'exhaust_scrubber',
+    displayName: 'Exhaust Scrubber',
+    category: 'special',
+    tier: 2,
+    footprint: SHAPES.single,
+    fill: 0x807060, // smokestack grey-brown
+    stroke: 0x201810,
+    power: { consumes: 20 },
+    placementCost: { steel: 30, gear: 5 },
+    glyph: '⌗',
   },
   // -------------------------------------------------------------------------
   // T4 (levels 30-50) — endgame chain per §6.5 / §8.5 / §9.5

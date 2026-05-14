@@ -137,6 +137,10 @@ const KNOWN_DEF_IDS: ReadonlyArray<BuildingDefId> = [
   'wind_turbine',
   'cryogenic_generator',
   'nuclear_reactor',
+  // §8.7 cooling / treatment
+  'cooling_tower',
+  'wastewater_treatment',
+  'exhaust_scrubber',
 ];
 
 // Helper: build a minimal IslandSpec for the canPlaceOnIsland tests. The
@@ -737,6 +741,24 @@ describe('§8.1 T2 extraction buildings', () => {
       expect(def.tier).toBe(3);
       expect(def.footprint.tiles.length).toBe(16);
       expect(def.power?.produces).toBeGreaterThanOrEqual(1000);
+    });
+  });
+
+  describe('§8.7 cooling / treatment buildings', () => {
+    it('cooling_tower is T2, 2x2', () => {
+      const def = BUILDING_DEFS.cooling_tower;
+      expect(def.tier).toBe(2);
+      expect(def.footprint.tiles.length).toBe(4);
+    });
+    it('wastewater_treatment is T2, 2x2', () => {
+      const def = BUILDING_DEFS.wastewater_treatment;
+      expect(def.tier).toBe(2);
+      expect(def.footprint.tiles.length).toBe(4);
+    });
+    it('exhaust_scrubber is T2, 1x1', () => {
+      const def = BUILDING_DEFS.exhaust_scrubber;
+      expect(def.tier).toBe(2);
+      expect(def.footprint.tiles.length).toBe(1);
     });
   });
 });
