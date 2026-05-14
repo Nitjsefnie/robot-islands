@@ -10,9 +10,11 @@ import {
   DRONE_T5_SCAN_RADIUS_TILES,
   DRONE_T5_SPEED_TILES_PER_SEC,
   DRONE_TIER_EFFICIENCY,
+  T4_PULSE_FUEL_COST,
   _resetDroneIdCounter,
   dispatchDrone,
   droneCurrentPosition,
+  firePulse,
   pointToSegmentDistSq,
   probabilityBiasForIsland,
   tickDrones,
@@ -95,6 +97,43 @@ function makeIslandSpec(over: Partial<IslandSpec>): IslandSpec {
 beforeEach(() => {
   _resetDroneIdCounter();
 });
+
+// ---------------------------------------------------------------------------
+// firePulse test fixture
+// ---------------------------------------------------------------------------
+
+function makeTinyWorld(): WorldState & { islandStates: Map<string, IslandState> } {
+  const homeSpec: IslandSpec = {
+    id: 'home',
+    name: 'home',
+    biome: 'plains',
+    cx: 0,
+    cy: 0,
+    majorRadius: 5,
+    minorRadius: 5,
+    populated: true,
+    discovered: true,
+    buildings: [],
+    modifiers: [],
+  };
+  const homeState = makeIslandState({ id: 'home' });
+  const world: WorldState = {
+    islands: [homeSpec],
+    drones: [],
+    routes: [],
+    vehicles: [],
+    revealedCells: new Set(),
+    satellites: [],
+    repairDrones: [],
+    endgameState: { achieved: new Set(), firstAchievedMs: null, victoryBannerShown: false },
+    latticeActive: false,
+    latticeNodeIslands: [],
+    seed: 'test-seed',
+  };
+  const islandStates = new Map<string, IslandState>([['home', homeState]]);
+  (world as typeof world & { islandStates: typeof islandStates }).islandStates = islandStates;
+  return world as typeof world & { islandStates: typeof islandStates };
+}
 
 // ---------------------------------------------------------------------------
 // pointToSegmentDistSq
@@ -949,5 +988,71 @@ describe('probabilityBiasForIsland', () => {
         ],
       }),
     ).toBe(0.60);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// §11.5 T4 omnidirectional pulse
+// ---------------------------------------------------------------------------
+
+describe('firePulse (§11.5 T4 omnidirectional pulse)', () => {
+  it('rejects when origin has no launch_tower', () => {
+    const world = makeTinyWorld();
+    const origin = world.islandStates!.get('home')!;
+    origin.level = 30;
+    origin.inventory.cryogenic_hydrogen = 100;
+    const r = firePulse(world, origin, 0);
+    expect(r.ok).toBe(false);
+    expect(r.reason).toBe('no-launch-tower');
+  });
+
+  it('rejects when origin is below tier 4', () => {
+    const world = makeTinyWorld();
+    const origin = world.islandStates!.get('home')!;
+    origin.buildings.push({
+      id: 'b_lt', defId: 'launch_tower', x: 0, y: 0, rotation: 0,
+    } as any);
+    origin.level = 5; // T2
+    origin.inventory.cryogenic_hydrogen = 100;
+    const r = firePulse(world, origin, 0);
+    expect(r.ok).toBe(false);
+    expect(r.reason).toBe('tier-too-low');
+  });
+
+  it('rejects when origin lacks tier-4 fuel', () => {
+    const world = makeTinyWorld();
+    const origin = world.islandStates!.get('home')!;
+    origin.buildings.push({
+      id: 'b_lt', defId: 'launch_tower', x: 0, y: 0, rotation: 0,
+    } as any);
+    origin.level = 30;
+    origin.inventory.cryogenic_hydrogen = 0;
+    const r = firePulse(world, origin, 0);
+    expect(r.ok).toBe(false);
+    expect(r.reason).toBe('insufficient-fuel');
+  });
+
+  it('reveals every undiscovered island within T4_PULSE_RADIUS_TILES (=48) and deducts fuel', () => {
+    const world = makeTinyWorld();
+    const origin = world.islandStates!.get('home')!;
+    origin.buildings.push({
+      id: 'b_lt', defId: 'launch_tower', x: 0, y: 0, rotation: 0,
+    } as any);
+    origin.level = 30;
+    origin.inventory.cryogenic_hydrogen = 50;
+    // Place an undiscovered island within the disk and one outside.
+    world.islands.push({
+      id: 'near', cx: 30, cy: 0, discovered: false, populated: false,
+    } as any);
+    world.islands.push({
+      id: 'far', cx: 100, cy: 0, discovered: false, populated: false,
+    } as any);
+    const r = firePulse(world, origin, 0);
+    expect(r.ok).toBe(true);
+    expect(r.discoveredIslandIds).toContain('near');
+    expect(r.discoveredIslandIds).not.toContain('far');
+    expect(world.islands.find((i) => i.id === 'near')!.discovered).toBe(true);
+    expect(world.islands.find((i) => i.id === 'far')!.discovered).toBe(false);
+    expect(origin.inventory.cryogenic_hydrogen).toBe(50 - T4_PULSE_FUEL_COST);
   });
 });

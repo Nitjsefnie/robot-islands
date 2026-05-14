@@ -135,6 +135,69 @@ export function pointToSegmentDistSq(
   return ex * ex + ey * ey;
 }
 
+/** §11.5 T4 omnidirectional pulse: reveals every undiscovered island whose
+ *  centre is within `T4_PULSE_RADIUS_TILES` of `origin` in a single instant.
+ *  Distinct from `dispatchDrone` — no flight path, no travel time, no
+ *  return event, no corridor capsule. Pure mutation: flips `discovered`
+ *  on matching islands, deducts `T4_PULSE_FUEL_COST` of tier-4 fuel
+ *  (`cryogenic_hydrogen`) from the origin inventory, returns the list of
+ *  newly-discovered island ids for telemetry / UI feedback. */
+export const T4_PULSE_RADIUS_TILES = 3 * 16; // = 3R per §11.5 (R = CELL_SIZE_TILES = 16)
+export const T4_PULSE_FUEL_COST = MIN_FUEL_PER_DRONE; // 10 units placeholder
+
+export interface PulseResult {
+  readonly ok: boolean;
+  readonly reason?: string;
+  readonly discoveredIslandIds: ReadonlyArray<string>;
+}
+
+export function firePulse(
+  world: WorldState,
+  origin: IslandState,
+  nowMs: number,
+): PulseResult {
+  // Gate 1: origin must have a launch_tower placed.
+  if (!origin.buildings.some((b) => b.defId === 'launch_tower')) {
+    return { ok: false, reason: 'no-launch-tower', discoveredIslandIds: [] };
+  }
+  // Gate 2: origin must be tier 4 or higher (Launch Tower is T4).
+  const tier = tierForLevel(origin.level);
+  if (tier < 4) {
+    return { ok: false, reason: 'tier-too-low', discoveredIslandIds: [] };
+  }
+  // Gate 3: tier-4 fuel on hand.
+  const fuelResource: ResourceId = fuelForTier(4);
+  if (inv(origin, fuelResource) < T4_PULSE_FUEL_COST) {
+    return { ok: false, reason: 'insufficient-fuel', discoveredIslandIds: [] };
+  }
+  // Locate origin spec for centre coordinates.
+  const originSpec = world.islands.find((i) => i.id === origin.id);
+  if (!originSpec) {
+    return { ok: false, reason: 'no-origin-spec', discoveredIslandIds: [] };
+  }
+  // Reveal every undiscovered island within the disk. `populated` islands
+  // are already discovered by definition; we still flip `discovered` for
+  // the unflagged ones (mirrors how dispatchDrone treats discovery).
+  const discovered: string[] = [];
+  for (const isl of world.islands) {
+    if (isl.discovered) continue;
+    const dx = isl.cx - originSpec.cx;
+    const dy = isl.cy - originSpec.cy;
+    if (dx * dx + dy * dy <= T4_PULSE_RADIUS_TILES * T4_PULSE_RADIUS_TILES) {
+      isl.discovered = true;
+      discovered.push(isl.id);
+    }
+  }
+  // Deduct fuel — pulse fires regardless of how many islands were revealed
+  // (consistent with `dispatchDrone`'s "fuel spent at launch" behavior).
+  origin.inventory[fuelResource] = inv(origin, fuelResource) - T4_PULSE_FUEL_COST;
+  // `nowMs` parameter currently unused — kept in the signature for future
+  // tracking (e.g. cooldown gate, last-pulse timestamp) without breaking
+  // call sites.
+  void nowMs;
+  return { ok: true, discoveredIslandIds: discovered };
+}
+
 let droneIdCounter = 0;
 export function nextDroneId(): string {
   droneIdCounter += 1;

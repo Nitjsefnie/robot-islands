@@ -30,8 +30,10 @@ import {
   DRONE_TIER_EFFICIENCY,
   MAX_FUEL_PER_DRONE,
   MIN_FUEL_PER_DRONE,
+  T4_PULSE_FUEL_COST,
   dispatchDrone,
   droneCurrentPosition,
+  firePulse,
   type Drone,
 } from './drones.js';
 import { TILE_PX } from './island.js';
@@ -398,6 +400,38 @@ export function mountDronesUi(parentEl: HTMLElement, deps: DroneUiDeps): DroneUi
     armBtn.blur();
   });
   body.appendChild(armBtn);
+
+  // -------------------------------------------------------------------------
+  // Fire Pulse button — T4 Launch Tower omnidirectional pulse (§11.5)
+  // -------------------------------------------------------------------------
+  const pulseBtn = document.createElement('button');
+  styled(
+    pulseBtn,
+    [
+      'background: #1a1f2a',
+      `color: ${FG}`,
+      `border: 1px solid ${PANEL_BORDER}`,
+      'padding: 8px 12px',
+      'cursor: pointer',
+      'font-family: ui-monospace, monospace',
+      'font-size: 11px',
+      'letter-spacing: 0.2em',
+      'text-transform: uppercase',
+      'font-weight: 600',
+      'transition: background 100ms ease, border-color 100ms ease, color 100ms ease',
+    ].join(';'),
+  );
+  pulseBtn.textContent = '◉ FIRE PULSE';
+  pulseBtn.addEventListener('click', () => {
+    const origin = deps.getOrigin();
+    const r = firePulse(deps.world, origin, performance.now());
+    if (r.ok) {
+      deps.onDiscoveryChanged();
+    }
+    refresh(performance.now());
+    pulseBtn.blur();
+  });
+  body.appendChild(pulseBtn);
 
   function setLaunchMode(on: boolean): void {
     if (launchMode === on) return;  // no-op + don't re-fire callback
@@ -781,6 +815,25 @@ export function mountDronesUi(parentEl: HTMLElement, deps: DroneUiDeps): DroneUi
     } else if (!launchMode) {
       armBtn.textContent = '◇ ARM LAUNCH';
       armBtn.title = '';
+    }
+
+    // Pulse gating — Launch Tower + T4 + cryogenic_hydrogen
+    const hasLaunchTower = originSpec.buildings.some((b) => b.defId === 'launch_tower');
+    const tier = tierForLevel(origin.level);
+    const t4Fuel = fuelForTier(4);
+    const pulseFuel = inv(origin, t4Fuel);
+    const canFirePulse = hasLaunchTower && tier >= 4 && pulseFuel >= T4_PULSE_FUEL_COST;
+    pulseBtn.disabled = !canFirePulse;
+    pulseBtn.style.opacity = canFirePulse ? '1' : '0.5';
+    pulseBtn.style.cursor = canFirePulse ? 'pointer' : 'not-allowed';
+    if (!hasLaunchTower) {
+      pulseBtn.title = 'Active island has no Launch Tower';
+    } else if (tier < 4) {
+      pulseBtn.title = 'Active island is below T4';
+    } else if (pulseFuel < T4_PULSE_FUEL_COST) {
+      pulseBtn.title = `Insufficient ${t4Fuel.replace(/_/g, ' ')}`;
+    } else {
+      pulseBtn.title = '';
     }
 
     repaintLedger(nowMs);
