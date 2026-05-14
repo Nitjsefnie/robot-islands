@@ -40,6 +40,9 @@ const KNOWN_DEF_IDS: ReadonlyArray<BuildingDefId> = [
   'steel_mill',
   'oxygen_converter',
   'assembler',
+  'fabricator',
+  'precision_lab',
+  'singularity_forge',
   'tank',
   'cold_storage',
   'component_warehouse',
@@ -673,7 +676,28 @@ describe('step-20 T6 Orbital catalog (§14 / step 20)', () => {
     }
   });
 
-  describe('§8.1 T2 extraction buildings', () => {
+  describe('§8.3 manufacturing buildings', () => {
+  it('fabricator is T3, 3x3, manufacturing category', () => {
+    const def = BUILDING_DEFS.fabricator;
+    expect(def.tier).toBe(3);
+    expect(def.footprint.tiles.length).toBe(9); // 3x3
+    expect(def.category).toBe('manufacturing');
+  });
+  it('precision_lab is T3, 3x3, manufacturing category', () => {
+    const def = BUILDING_DEFS.precision_lab;
+    expect(def.tier).toBe(3);
+    expect(def.footprint.tiles.length).toBe(9);
+    expect(def.category).toBe('manufacturing');
+  });
+  it('singularity_forge is T4, 4x4, manufacturing category', () => {
+    const def = BUILDING_DEFS.singularity_forge;
+    expect(def.tier).toBe(4);
+    expect(def.footprint.tiles.length).toBe(16);
+    expect(def.category).toBe('manufacturing');
+  });
+});
+
+describe('§8.1 T2 extraction buildings', () => {
     it('heavy_logger is T2, 2x2, requires tree (dense_forest deferred)', () => {
       const def = BUILDING_DEFS.heavy_logger;
       expect(def.tier).toBe(2);
