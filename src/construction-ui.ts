@@ -773,6 +773,7 @@ export function mountConstructionUi(
     const nameCheck = validateIslandName(customName);
     const displayName = nameCheck.ok ? nameCheck.name : undefined;
     const result = constructIsland(
+      options.world.seed,
       state,
       spec,
       req,

@@ -1586,6 +1586,7 @@ describe('step-11 — artificial-island construction integration (§2.5)', () =>
     });
     const cost = computeConstructionCost({ biome: 'plains', majorRadius: 4, minorRadius: 4 });
     const result = constructIsland(
+      'test-seed',
       founderState,
       founderSpec,
       { biome: 'plains', majorRadius: 4, minorRadius: 4 },

@@ -27,7 +27,7 @@
 //     instead of branching here.
 
 import type { Biome, IslandSpec } from './world.js';
-import { BIOME_DEFS, terrainAtForBiome } from './biomes.js';
+import { BIOME_DEFS, rollModifiersArtificial, terrainAtForBiome } from './biomes.js';
 import { tierForLevel } from './skilltree.js';
 import type { IslandState } from './economy.js';
 import { makeInitialIslandState } from './world.js';
@@ -185,9 +185,8 @@ export function validateConstruction(
  *   - populated: true (artificial islands are "built ready to use")
  *   - discovered: true (implied by populated)
  *   - artificial: true (§2.5 marker for future biome-locked-unique gating)
- *   - modifiers: [] (artificial islands cannot host rare-natural modifiers
- *                   per §2.5; empty list is the conservative interpretation
- *                   pending the §3.5 random-roll path being extended)
+ *   - modifiers: rolled from natural distribution excluding natural-only
+ *               entries per §2.5 (aetheric_anomaly, frozen_core)
  *   - buildings: [] (player builds out manually)
  *   - terrainAt: biome-typed scatter via `terrainAtForBiome(biome, islandId, x, y)`
  *
@@ -197,6 +196,7 @@ export function validateConstruction(
  * (typically a short `art-<n>` slug) and resolves position from the form.
  */
 export function constructIsland(
+  worldSeed: string,
   founderState: IslandState,
   founderSpec: IslandSpec,
   req: ConstructionRequirements,
@@ -235,7 +235,7 @@ export function constructIsland(
     discovered: true,
     buildings: [],
     terrainAt: (x: number, y: number) => terrainAtForBiome(biome, islandId, x, y),
-    modifiers: [],
+    modifiers: rollModifiersArtificial(worldSeed, biome, islandId, nowMs),
     artificial: true,
   };
   const newState = makeInitialIslandState(newSpec, nowMs);

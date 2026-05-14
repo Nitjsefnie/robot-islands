@@ -17,6 +17,7 @@ import {
   validateConstruction,
   type ConstructionRequirements,
 } from './artificial-island.js';
+import { rollModifiersArtificial, type ModifierId } from './biomes.js';
 import { BUILDING_DEFS, canPlaceOnIsland } from './building-defs.js';
 import type { PlacedBuilding } from './buildings.js';
 import type { IslandState } from './economy.js';
@@ -284,6 +285,7 @@ describe('constructIsland', () => {
     });
     const cost = computeConstructionCost({ biome: 'plains', majorRadius: 4, minorRadius: 4 });
     constructIsland(
+      'WS',
       state,
       spec,
       { biome: 'plains', majorRadius: 4, minorRadius: 4 },
@@ -300,6 +302,7 @@ describe('constructIsland', () => {
     const spec = makeFounderSpec([PC_BUILDING]);
     const state = makeFounderState([PC_BUILDING], { steel: 9999, iron_ingot: 9999, wood: 9999 });
     const result = constructIsland(
+      'WS',
       state,
       spec,
       { biome: 'desert', majorRadius: 5, minorRadius: 6 },
@@ -317,7 +320,7 @@ describe('constructIsland', () => {
     expect(result.newSpec.discovered).toBe(true);
     expect(result.newSpec.artificial).toBe(true);
     expect(result.newSpec.buildings.length).toBe(0);
-    expect(result.newSpec.modifiers.length).toBe(0);
+    expect(Array.isArray(result.newSpec.modifiers)).toBe(true);
     expect(result.newSpec.terrainAt).toBeDefined();
   });
 
@@ -325,6 +328,7 @@ describe('constructIsland', () => {
     const spec = makeFounderSpec([PC_BUILDING]);
     const state = makeFounderState([PC_BUILDING], { steel: 9999, iron_ingot: 9999, wood: 9999 });
     const result = constructIsland(
+      'WS',
       state,
       spec,
       { biome: 'plains', majorRadius: 4, minorRadius: 4 },
@@ -345,6 +349,7 @@ describe('constructIsland', () => {
     const state = makeFounderState([PC_BUILDING], { steel: 0, iron_ingot: 0, wood: 0 });
     expect(() =>
       constructIsland(
+        'WS',
         state,
         spec,
         { biome: 'plains', majorRadius: 4, minorRadius: 4 },
@@ -360,6 +365,7 @@ describe('constructIsland', () => {
     const state = makeFounderState([], { steel: 9999, iron_ingot: 9999, wood: 9999 });
     expect(() =>
       constructIsland(
+        'WS',
         state,
         spec,
         { biome: 'plains', majorRadius: 4, minorRadius: 4 },
@@ -389,6 +395,7 @@ describe('§9.5 — biome-locked uniques rejected on artificial islands (step 12
       { steel: 9999, iron_ingot: 9999, wood: 9999 },
     );
     const result = constructIsland(
+      'WS',
       state,
       spec,
       { biome: 'volcanic', majorRadius: 4, minorRadius: 4 },
@@ -471,5 +478,52 @@ describe('maxRadiusForFounderLevel', () => {
   it('returns 16 for T5 founders (level 50+)', () => {
     expect(maxRadiusForFounderLevel(50)).toBe(16);
     expect(maxRadiusForFounderLevel(100)).toBe(16);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// §2.5 artificial-island modifier roll
+// ---------------------------------------------------------------------------
+
+describe('§2.5 artificial-island modifier roll', () => {
+  it('is deterministic given (worldSeed, biome, islandId, nowMs)', () => {
+    const spec = makeFounderSpec([PC_BUILDING]);
+    const state = makeFounderState([PC_BUILDING], { steel: 9999, iron_ingot: 9999, wood: 9999 });
+    const req: ConstructionRequirements = { biome: 'plains', majorRadius: 8, minorRadius: 8 };
+    const a = constructIsland('WS', state, spec, req, { cx: 50, cy: 50 }, 'art-1', 1000);
+    const stateB = makeFounderState([PC_BUILDING], { steel: 9999, iron_ingot: 9999, wood: 9999 });
+    const b = constructIsland('WS', stateB, spec, req, { cx: 50, cy: 50 }, 'art-1', 1000);
+    expect(a.newSpec.modifiers).toEqual(b.newSpec.modifiers);
+  });
+
+  it('never rolls aetheric_anomaly or frozen_core (§2.5 natural-only)', () => {
+    const naturalOnly = new Set<ModifierId>(['aetheric_anomaly', 'frozen_core']);
+    for (let i = 0; i < 500; i++) {
+      const ids = rollModifiersArtificial('seed', 'volcanic', `art-${i}`, i * 1000);
+      for (const id of ids) {
+        expect(naturalOnly.has(id)).toBe(false);
+      }
+    }
+  });
+
+  it("does sometimes roll non-empty (artificial isn't a permanent empty list)", () => {
+    let nonEmptyCount = 0;
+    for (let i = 0; i < 200; i++) {
+      const ids = rollModifiersArtificial('seed', 'plains', `art-${i}`, i * 1000);
+      if (ids.length > 0) nonEmptyCount++;
+    }
+    expect(nonEmptyCount).toBeGreaterThan(50);
+  });
+
+  it('constructIsland.modifiers is rolled (not hardcoded empty) per §2.5', () => {
+    let nonEmpty = 0;
+    for (let i = 0; i < 50; i++) {
+      const fState = makeFounderState([PC_BUILDING], { steel: 9999, iron_ingot: 9999, wood: 9999 });
+      const fSpec = makeFounderSpec([PC_BUILDING]);
+      const req: ConstructionRequirements = { biome: 'plains', majorRadius: 8, minorRadius: 8 };
+      const r = constructIsland('seed', fState, fSpec, req, { cx: 50 + i, cy: 50 }, `art-${i}`, i * 1000);
+      if (r.newSpec.modifiers.length > 0) nonEmpty++;
+    }
+    expect(nonEmpty).toBeGreaterThan(0);
   });
 });

@@ -504,6 +504,25 @@ export function rerollModifiers(seed: string, biome: Biome): ModifierId[] {
   return result.filter((id) => !MODIFIER_DEFS[id].naturalOnly);
 }
 
+/**
+ * Roll modifiers for a newly-constructed artificial island per §2.5. Excludes
+ * natural-only modifiers (aetheric_anomaly, frozen_core) — those remain
+ * natural-island-only. Deterministic given (worldSeed, biome, islandId, nowMs):
+ * the construction event itself defines the entropy, so two players with the
+ * same world seed who construct the same artificial island at the same tick
+ * get the same modifier roll.
+ */
+export function rollModifiersArtificial(
+  worldSeed: string,
+  biome: Biome,
+  islandId: string,
+  nowMs: number,
+): ModifierId[] {
+  const rng = makeSeededRng(`${worldSeed}_artificial_${islandId}_${biome}_${nowMs}`);
+  const result = rollModifiers(worldSeed, biome, rng);
+  return result.filter((id) => !MODIFIER_DEFS[id].naturalOnly);
+}
+
 export function terrainAtForBiome(
   biome: Biome,
   islandId: string,
