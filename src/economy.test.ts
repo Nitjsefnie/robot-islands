@@ -353,6 +353,41 @@ describe('computeRates', () => {
     expect(net.iron_ore ?? 0).toBeCloseTo(0.01, 9);
   });
 
+  it('§4.5 soft-gated consumer demand uses gated rate in inputAvail (not nominal)', () => {
+    // Regression test for the Pass-2 nominalRate computation: a soft-gated
+    // consumer's input demand must be scaled by gateResult.effectiveMul so
+    // it doesn't over-claim from a supply-constrained pool.
+    //
+    // Setup: Mine soft-gated to 0.4× (supply = 0.02 × 0.4 = 0.008 iron_ore/s).
+    //        Workshop soft-gated to 0.5× (baseRate = 0.01 × 0.5 = 0.005/s,
+    //        nominal demand = 0.01 iron_ore/s, gated demand = 0.005/s).
+    //        Iron_ore stock = 0 (forces externalSupply path); coal = 100
+    //        (workshop's coal need is stockpile-satisfied).
+    //
+    // Pre-fix: nominalRate ignores effectiveMul → demand = 0.01/s →
+    //          inputAvail = 0.008/0.01 = 0.8 → effectiveRate = 0.005 × 0.8 = 0.004/s.
+    // Post-fix: nominalRate × 0.5 → demand = 0.005/s →
+    //           inputAvail = min(1, 0.008/0.005) = 1.0 → effectiveRate = 0.005/s.
+    const defs: DefCatalog = {
+      ...POWER_FREE,
+      mine: {
+        ...POWER_FREE.mine,
+        gates: [{ matchType: 'def_id', defId: 'coal_furnace', hard: false, degradeMul: 0.4 }],
+      },
+      workshop: {
+        ...POWER_FREE.workshop,
+        gates: [{ matchType: 'def_id', defId: 'coal_furnace', hard: false, degradeMul: 0.5 }],
+      },
+    };
+    const state = makeState({
+      buildings: [MINE, WORKSHOP],
+      inventory: { ...blankInventory(), iron_ore: 0, coal: 100 },
+    });
+    const { byBuilding } = computeRates(state, { defs });
+    const workshopRate = byBuilding.find((b) => b.building.id === 'b-workshop');
+    expect(workshopRate?.effectiveRate).toBeCloseTo(0.005, 9);
+  });
+
   it('§13.3 unified inventory: consumer runs when override has stockpile', () => {
     // Local island has 0 iron_ore, but unified inventory has 50.
     // Workshop should run because inputAvail sees the unified stockpile.

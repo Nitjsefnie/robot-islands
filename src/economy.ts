@@ -481,6 +481,10 @@ export function computeRates(
      *  and reused in pass-2's nominal-rate computation. 1.0 when the def
      *  has no `adjacencyBuffs` or no matching neighbors. */
     readonly buffStack: number;
+    /** §4.5 soft-gate multiplier: 1.0 when no gate applies, 0.0 for hard-gate
+     *  zero, and between 0 and 1 for soft gates. Carried into pass-2 so
+     *  nominalRate reflects the gated demand for inputAvail. */
+    readonly effectiveMul: number;
   }
   const tentative: Tentative[] = [];
   /** Gross production by resource from all tentatively-running buildings. */
@@ -496,6 +500,7 @@ export function computeRates(
           recipe: { inputs: {}, outputs: {}, cycleSec: 1, category: 'manufacturing' },
           baseRate: 0,
           buffStack: 1,
+          effectiveMul: 1,
         });
         continue;
       }
@@ -506,6 +511,7 @@ export function computeRates(
           recipe: { inputs: {}, outputs: {}, cycleSec: 1, category: 'manufacturing' },
           baseRate: 0,
           buffStack: 1,
+          effectiveMul: 1,
         });
         continue;
       }
@@ -516,6 +522,7 @@ export function computeRates(
           recipe: { inputs: {}, outputs: {}, cycleSec: 1, category: 'manufacturing' },
           baseRate: 0,
           buffStack: 1,
+          effectiveMul: 1,
         });
         continue;
       }
@@ -527,16 +534,16 @@ export function computeRates(
       };
       const gateResult = checkGates(b, validBuildings, defs, ctx?.geothermalActive ?? false, ctx?.crossIsland);
       if (gateResult.effectiveMul === 0) {
-        tentative.push({ building: b, recipe: syntheticRecipe, baseRate: 0, buffStack: 1 });
+        tentative.push({ building: b, recipe: syntheticRecipe, baseRate: 0, buffStack: 1, effectiveMul: 0 });
         continue;
       }
       const oa = outputAvail(state, syntheticRecipe, t, ctx?.caps);
       if (oa === 0) {
-        tentative.push({ building: b, recipe: syntheticRecipe, baseRate: 0, buffStack: 1 });
+        tentative.push({ building: b, recipe: syntheticRecipe, baseRate: 0, buffStack: 1, effectiveMul: gateResult.effectiveMul });
         continue;
       }
       const baseRate = (1 / GENESIS_CYCLE_SEC) * gateResult.effectiveMul;
-      tentative.push({ building: b, recipe: syntheticRecipe, baseRate, buffStack: 1 });
+      tentative.push({ building: b, recipe: syntheticRecipe, baseRate, buffStack: 1, effectiveMul: gateResult.effectiveMul });
       tentSupply[target] = (tentSupply[target] ?? 0) + baseRate;
       continue;
     }
@@ -556,7 +563,7 @@ export function computeRates(
     // tier band is fully inactive — same shape as the heat / output stall,
     // baseRate=0 + skipped in the pass-3 power balance.
     if (!isBuildingActive(b)) {
-      tentative.push({ building: b, recipe, baseRate: 0, buffStack });
+      tentative.push({ building: b, recipe, baseRate: 0, buffStack, effectiveMul: 1 });
       continue;
     }
     // §5.2 heat gate: a `requiresHeat` building with no adjacent source
@@ -564,7 +571,7 @@ export function computeRates(
     // draw. Recorded as a tentative entry with baseRate=0 so pass-3's
     // power-balance loop also skips it (matched via inputAvail = 0).
     if (def.requiresHeat && heat.hasHeat.get(b.id) !== true) {
-      tentative.push({ building: b, recipe, baseRate: 0, buffStack });
+      tentative.push({ building: b, recipe, baseRate: 0, buffStack, effectiveMul: 1 });
       continue;
     }
     // §8.1 tile-gating stall: if any footprint tile is outside the allowed
@@ -580,7 +587,7 @@ export function computeRates(
         }
       }
       if (!tileOk) {
-        tentative.push({ building: b, recipe, baseRate: 0, buffStack });
+        tentative.push({ building: b, recipe, baseRate: 0, buffStack, effectiveMul: 1 });
         continue;
       }
     }
@@ -594,19 +601,19 @@ export function computeRates(
         }
       }
       if (!hasWater) {
-        tentative.push({ building: b, recipe, baseRate: 0, buffStack });
+        tentative.push({ building: b, recipe, baseRate: 0, buffStack, effectiveMul: 1 });
         continue;
       }
     }
     // §4.5 gating adjacency: hard gates zero output; soft gates degrade.
     const gateResult = checkGates(b, validBuildings, defs, ctx?.geothermalActive ?? false, ctx?.crossIsland);
     if (gateResult.effectiveMul === 0) {
-      tentative.push({ building: b, recipe, baseRate: 0, buffStack });
+      tentative.push({ building: b, recipe, baseRate: 0, buffStack, effectiveMul: 0 });
       continue;
     }
     const oa = outputAvail(state, recipe, t, ctx?.caps);
     if (oa === 0) {
-      tentative.push({ building: b, recipe, baseRate: 0, buffStack });
+      tentative.push({ building: b, recipe, baseRate: 0, buffStack, effectiveMul: gateResult.effectiveMul });
       continue;
     }
     // Recipe-rate multipliers compose: skill-tree (per-category) × modifier
@@ -630,7 +637,7 @@ export function computeRates(
       ? modifierMul.cryoRecipeRateMul
       : 1;
     const baseRate = (1 / recipe.cycleSec) * buffStack * rateMul * gateResult.effectiveMul * t5Mul * cryoMul;
-    tentative.push({ building: b, recipe, baseRate, buffStack });
+    tentative.push({ building: b, recipe, baseRate, buffStack, effectiveMul: gateResult.effectiveMul });
     const pass1Outputs = resolveRotatingOutput(recipe, t);
     for (const [r, yld] of Object.entries(pass1Outputs)) {
       const id = r as ResourceId;
@@ -655,8 +662,11 @@ export function computeRates(
       (specMul.recipeRateByCategory[te.recipe.category] ?? 1) *
       specMul.globalRecipeRate *
       ncBuff;
-    // TODO(soft-gates): include gateResult.effectiveMul in nominalRate for inputAvail computation.
-    const nominalRate = (1 / te.recipe.cycleSec) * te.buffStack * rateMul;
+    // §4.5: soft-gate effectiveMul scales nominalRate so inputAvail's
+    // demand calculation matches actual consumption under the gate.
+    // Without this, a halved consumer over-claims inputs and starves
+    // siblings.
+    const nominalRate = (1 / te.recipe.cycleSec) * te.buffStack * rateMul * te.effectiveMul;
     const externalSupply: Record<ResourceId, number> = {} as Record<ResourceId, number>;
     for (const r of Object.keys(tentSupply) as ResourceId[]) {
       externalSupply[r] = tentSupply[r] ?? 0;
