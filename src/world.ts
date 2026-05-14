@@ -910,8 +910,9 @@ export function makeInitialIslandState(spec: IslandSpec, nowMs: number): IslandS
     declaredAt: null,
     // §13.1 T5 access gate. Defaults to false on every fresh island — T5
     // catalog rows stay locked until the player has both reached level 50
-    // and crafted at least one AI core. Production-trigger flip deferred
-    // to step 14; the step-13 demo seeds this true manually on forest-ne.
+    // and crafted at least one AI core. Auto-flips to true on first
+    // `ai_core` production via `state.aiCoreCrafted = true` in
+    // `economy.ts:1115`. (forest-ne demo seeds it manually via main.ts.)
     aiCoreCrafted: false,
     // §14.1 T6 access gate (first half). Defaults to false; the step-20
     // demo seeds this true manually on forest-ne alongside aiCoreCrafted.

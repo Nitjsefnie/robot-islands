@@ -1153,8 +1153,8 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
   // Foundation Kit decision to split kit_assembler from Workshop) so the
   // engine's 1:1 recipe-per-defId model has no conflict. Crafting one
   // Ascendant Core flips the §14.1 `ascendantCoreCrafted` gate (auto-flip
-  // on first production DEFERRED — current step seeds the flag manually
-  // on the forest-ne demo island).
+  // lives at `economy.ts:1118` on first `ascendant_core` production; forest-ne
+  // demo seeds the flag via main.ts for DEMO callers).
   ascendant_assembly: {
     id: 'ascendant_assembly',
     displayName: 'Ascendant Assembly',

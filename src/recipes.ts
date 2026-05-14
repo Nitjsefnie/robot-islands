@@ -805,9 +805,9 @@ export const RECIPES: Partial<Record<RecipeId, Recipe>> = {
     inputs: { crude_oil: 1, chlorine: 1 },
     outputs: { lubricant: 1 },
     category: 'chemistry',
-    // §7.X TODO: lubricant feeds T4 maintenance per §4.7. T4
-    // maintenance system is DEFERRED — lubricant is a stockpile-only
-    // resource until §4.7 lands.
+    // Lubricant feeds the §4.7 per-tier maintenance recipes (see
+    // `src/maintenance.ts:65-78` — every tier from T1 to T6 lists
+    // lubricant in its bill of materials).
   },
   diesel_refinery: {
     cycleSec: 1200, // rebalanced for idle-game scale, step #19 (×40: was 30s)
@@ -874,9 +874,9 @@ export const RECIPES: Partial<Record<RecipeId, Recipe>> = {
     inputs: { silicon: 1, wire: 1 },
     outputs: { microchip: 1 },
     category: 'electronics',
-    // §7.X TODO: microchip should feed circuit_board → processor →
-    // computing_module. Those intermediates DEFERRED — microchip is a
-    // stockpile-only output for step 18.
+    // Microchip feeds the §7.7 electronics chain: pcb_etcher (PCBs) →
+    // circuit_assembler → processor_fab → compute_module_fab. Those
+    // recipes ship below in this same file (search for `pcb_etcher`).
   },
   drilling_rig: {
     cycleSec: 2400, // rebalanced for idle-game scale, step #19 (×20: was 120s)
