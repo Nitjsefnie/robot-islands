@@ -34,7 +34,7 @@ import {
 import { gateSatisfied } from './adjacency.js';
 import { shapeHeight, shapeWidth } from './shape-mask.js';
 import { placementCostFor } from './placement.js';
-import type { PlacedBuilding } from './buildings.js';
+import { convertToServitor, type PlacedBuilding } from './buildings.js';
 import type { IslandState } from './economy.js';
 import { computeRates } from './economy.js';
 import {
@@ -829,6 +829,45 @@ export function mountInspectorUi(
   maintenanceSection.body.appendChild(maintenanceStatus);
   maintenanceSection.body.appendChild(maintenanceRecipeLine);
 
+  // §13.3 Convert to Eternal Servitor button — shown only when the island
+  // has a Reality Forge and the selected building is not already a Servitor.
+  const convertBtn = document.createElement('button');
+  styled(
+    convertBtn,
+    [
+      'background: transparent',
+      `color: ${ACCENT}`,
+      `border: 1px solid ${ACCENT_DIM}`,
+      'padding: 4px 8px',
+      'cursor: pointer',
+      'font-family: ui-monospace, monospace',
+      'font-size: 10.5px',
+      'letter-spacing: 0.08em',
+      'text-transform: uppercase',
+      'border-radius: 2px',
+      'transition: background 80ms ease, border-color 80ms ease',
+      'text-align: left',
+      'margin-top: 4px',
+    ].join(';'),
+  );
+  convertBtn.addEventListener('mouseenter', () => {
+    if (convertBtn.disabled) return;
+    convertBtn.style.background = 'rgba(125, 211, 232, 0.08)';
+    convertBtn.style.borderColor = ACCENT;
+  });
+  convertBtn.addEventListener('mouseleave', () => {
+    convertBtn.style.background = 'transparent';
+    convertBtn.style.borderColor = convertBtn.disabled ? FG_MUTED : ACCENT_DIM;
+  });
+  convertBtn.addEventListener('click', () => {
+    if (!target) return;
+    const res = convertToServitor(target.state, target.building.id, BUILDING_DEFS);
+    if (res.ok) {
+      paint();
+    }
+  });
+  maintenanceSection.body.appendChild(convertBtn);
+
   // §3.4 Land Reclamation section — shown only when the selected building
   // is a `land_reclamation_hub`. Two buttons (+1 major / +1 minor) wired
   // to deps.onExpandIsland; each shows its current-radius cost or the
@@ -1256,6 +1295,47 @@ export function mountInspectorUi(
       maintenanceRecipeLine.style.display = '';
     }
     maintenanceSection.wrap.style.display = '';
+
+    // §13.3 Convert to Eternal Servitor button paint.
+    const hasRealityForge = state.buildings.some((b) => b.defId === 'reality_forge');
+    if (building.eternalServitor !== true && hasRealityForge) {
+      const recipe = MAINTENANCE_RECIPES[def.tier];
+      const cost: Partial<Record<ResourceId, number>> = {};
+      for (const [r, qty] of Object.entries(recipe)) {
+        if ((qty ?? 0) === 0) continue;
+        cost[r as ResourceId] = (cost[r as ResourceId] ?? 0) + (qty ?? 0);
+      }
+      cost.eldritch_processor = (cost.eldritch_processor ?? 0) + 1;
+      cost.phase_converter = (cost.phase_converter ?? 0) + 1;
+
+      const canAfford = Object.entries(cost).every(
+        ([r, need]) => (state.inventory[r as ResourceId] ?? 0) >= (need ?? 0),
+      );
+
+      const costParts: string[] = [];
+      for (const [r, need] of Object.entries(cost)) {
+        if ((need ?? 0) === 0) continue;
+        const have = state.inventory[r as ResourceId] ?? 0;
+        costParts.push(`${need} ${r} (${have})`);
+      }
+
+      convertBtn.textContent = `CONVERT · ${costParts.join(', ')}`;
+      convertBtn.disabled = !canAfford;
+      convertBtn.style.display = '';
+      if (!canAfford) {
+        convertBtn.style.color = FG_MUTED;
+        convertBtn.style.borderColor = FG_MUTED;
+        convertBtn.style.cursor = 'not-allowed';
+        convertBtn.style.opacity = '0.6';
+      } else {
+        convertBtn.style.color = ACCENT;
+        convertBtn.style.borderColor = ACCENT_DIM;
+        convertBtn.style.cursor = 'pointer';
+        convertBtn.style.opacity = '1';
+      }
+    } else {
+      convertBtn.style.display = 'none';
+    }
 
     // §3.4 Land Reclamation section — only for the Hub itself. Renders
     // two expansion buttons; each is enabled when canExpandIsland

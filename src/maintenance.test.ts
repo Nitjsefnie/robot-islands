@@ -8,7 +8,8 @@
 import { describe, expect, it } from 'vitest';
 
 import { BUILDING_DEFS } from './building-defs.js';
-import type { PlacedBuilding } from './buildings.js';
+import { convertToServitor, type PlacedBuilding } from './buildings.js';
+import type { IslandState } from './economy.js';
 import {
   MAINTENANCE_DEGRADE_DURATION_MS,
   MAINTENANCE_RAMP_SEGMENTS,
@@ -220,5 +221,103 @@ describe('nextMaintenanceBoundaryMs', () => {
   it('returns null for Eternal Servitor', () => {
     const b: PlacedBuilding = { ...mkBuilding('mine', 0), eternalServitor: true };
     expect(nextMaintenanceBoundaryMs(b, BUILDING_DEFS.mine)).toBe(null);
+  });
+});
+
+
+// ---------------------------------------------------------------------------
+// §13.3 Servitor Conversion Kit helpers
+// ---------------------------------------------------------------------------
+
+function makeStateWithBuilding(overrides: Partial<PlacedBuilding> = {}): IslandState {
+  const building: PlacedBuilding = {
+    id: 'b-test',
+    defId: 'mine',
+    x: 0,
+    y: 0,
+    ...overrides,
+  };
+  return {
+    id: 'test-island',
+    buildings: [building],
+    inventory: blankInventory(),
+    storageCaps: blankInventory(),
+    xp: 0,
+    level: 1,
+    unspentSkillPoints: 0,
+    unlockedNodes: new Set(),
+    subPathProgress: new Map(),
+    funnelPending: blankInventory(),
+    specializationRole: null,
+    declaredAt: null,
+    aiCoreCrafted: false,
+    ascendantCoreCrafted: false,
+    lastResetAt: null,
+    timeLockBankedMin: 0,
+    accelerationQueue: [],
+    accelerationRemainingMin: 0,
+    bankingEnabled: false,
+    genesisTarget: null,
+    singularityStoredWs: 0,
+    starterInventoryGrace: {} as Record<ResourceId, number>,
+    lastTick: 0,
+  };
+}
+
+describe('§13.3 Servitor Conversion', () => {
+  it('converts a T4 building when materials present', () => {
+    const state = makeStateWithBuilding({ defId: 'fusion_core' /* T4 */ });
+    state.inventory.lubricant = 10;
+    state.inventory.exotic_alloy = 1;
+    state.inventory.microchip = 1;
+    state.inventory.eldritch_processor = 1;
+    state.inventory.phase_converter = 1;
+    const r = convertToServitor(state, state.buildings[0]!.id, BUILDING_DEFS);
+    expect(r.ok).toBe(true);
+    expect(state.buildings[0]!.eternalServitor).toBe(true);
+    // Materials consumed:
+    expect(state.inventory.lubricant).toBe(0);
+    expect(state.inventory.exotic_alloy).toBe(0);
+    expect(state.inventory.microchip).toBe(0);
+    expect(state.inventory.eldritch_processor).toBe(0);
+    expect(state.inventory.phase_converter).toBe(0);
+  });
+
+  it('rejects when materials insufficient', () => {
+    const state = makeStateWithBuilding({ defId: 'fusion_core' /* T4 */ });
+    // Insufficient: missing eldritch_processor.
+    state.inventory.lubricant = 10;
+    state.inventory.exotic_alloy = 1;
+    state.inventory.microchip = 1;
+    state.inventory.phase_converter = 1;
+    const r = convertToServitor(state, state.buildings[0]!.id, BUILDING_DEFS);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toBe('insufficient-materials');
+    expect(state.buildings[0]!.eternalServitor).toBeUndefined();
+    // Inventory unchanged:
+    expect(state.inventory.lubricant).toBe(10);
+  });
+
+  it('rejects when building already a servitor', () => {
+    const state = makeStateWithBuilding({ defId: 'fusion_core' });
+    (state.buildings[0] as { eternalServitor?: true }).eternalServitor = true;
+    // Stuff inventory.
+    state.inventory.eldritch_processor = 1; state.inventory.phase_converter = 1;
+    state.inventory.lubricant = 10; state.inventory.exotic_alloy = 1; state.inventory.microchip = 1;
+    const r = convertToServitor(state, state.buildings[0]!.id, BUILDING_DEFS);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toBe('already-servitor');
+  });
+
+  it('per-tier cost matches §13.3 — T5 building uses T5 maintenance recipe', () => {
+    const state = makeStateWithBuilding({ defId: 'reality_forge' /* T5 */ });
+    state.inventory.lubricant = 15;
+    state.inventory.phase_converter = 2;       // 1 in maintenance recipe + 1 for kit
+    state.inventory.eldritch_processor = 2;    // 1 in maintenance recipe + 1 for kit
+    const r = convertToServitor(state, state.buildings[0]!.id, BUILDING_DEFS);
+    expect(r.ok).toBe(true);
+    expect(state.inventory.lubricant).toBe(0);
+    expect(state.inventory.phase_converter).toBe(0);
+    expect(state.inventory.eldritch_processor).toBe(0);
   });
 });

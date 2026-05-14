@@ -13,10 +13,12 @@
 
 import { Container, Graphics, Text } from 'pixi.js';
 
-import { BUILDING_DEFS, type BuildingDefId } from './building-defs.js';
-import { footprintTiles, type Rotation } from './shape-mask.js';
+import { BUILDING_DEFS, type BuildingDef, type BuildingDefId } from './building-defs.js';
+import type { IslandState } from './economy.js';
 import { TILE_PX, desaturate, lighten } from './island.js';
+import { MAINTENANCE_RECIPES } from './maintenance.js';
 import type { ResourceId } from './recipes.js';
+import { footprintTiles, type Rotation } from './shape-mask.js';
 
 /** Per-instance placement. `id` is unique across the world; `defId` points
  *  into BUILDING_DEFS. (x, y) is the anchor tile of the footprint —
@@ -67,6 +69,60 @@ export interface PlacedBuilding {
   tier?: number;
   /** True if the building's footprint no longer matches terrain after biome change. */
   invalid?: boolean;
+}
+
+export type ConvertToServitorResult =
+  | { readonly ok: true; readonly cost: Partial<Record<ResourceId, number>> }
+  | { readonly ok: false; readonly reason: 'building-not-found' | 'already-servitor' | 'insufficient-materials' };
+
+/**
+ * Convert a placed building to its Eternal Servitor variant per §13.3.
+ * Consumes the §13.3 Conversion Kit recipe from `state.inventory`:
+ * 1 Eldritch Processor + 1 Phase Converter + the building's tier maintenance
+ * recipe (from MAINTENANCE_RECIPES). Sets `building.eternalServitor = true`.
+ * Conversion is permanent — converted buildings cannot revert.
+ *
+ * Pure: mutates `state.inventory` and the target building in place. Does
+ * NOT consult a Reality Forge presence — that gate is the UI's job (the
+ * "Convert" button is only shown when the island has an operational
+ * Reality Forge). This keeps the pure layer testable without UI state.
+ */
+export function convertToServitor(
+  state: IslandState,
+  buildingId: string,
+  defs: Readonly<Record<BuildingDefId, BuildingDef>>,
+): ConvertToServitorResult {
+  // 1. Find target.
+  const building = state.buildings.find((b) => b.id === buildingId);
+  if (!building) return { ok: false, reason: 'building-not-found' };
+  if (building.eternalServitor === true) return { ok: false, reason: 'already-servitor' };
+
+  // 2. Compose Conversion Kit cost: maintenance recipe for the building's
+  //    tier + 1 Eldritch Processor + 1 Phase Converter.
+  const def = defs[building.defId];
+  const maintBill = MAINTENANCE_RECIPES[def.tier];
+  const cost: Partial<Record<ResourceId, number>> = {};
+  for (const [r, qty] of Object.entries(maintBill)) {
+    cost[r as ResourceId] = (cost[r as ResourceId] ?? 0) + (qty ?? 0);
+  }
+  cost.eldritch_processor = (cost.eldritch_processor ?? 0) + 1;
+  cost.phase_converter = (cost.phase_converter ?? 0) + 1;
+
+  // 3. Verify inventory.
+  for (const [r, need] of Object.entries(cost)) {
+    if ((state.inventory[r as ResourceId] ?? 0) < (need ?? 0)) {
+      return { ok: false, reason: 'insufficient-materials' };
+    }
+  }
+
+  // 4. Deduct + flip flag.
+  for (const [r, need] of Object.entries(cost)) {
+    state.inventory[r as ResourceId] =
+      (state.inventory[r as ResourceId] ?? 0) - (need ?? 0);
+  }
+  (building as { eternalServitor?: true }).eternalServitor = true;
+
+  return { ok: true, cost };
 }
 
 // §3.7 cleanup: the pre-built home layout (Solar/Workshop/Mines/Dronepad/
