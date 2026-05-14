@@ -10,6 +10,7 @@ import {
   canSpend,
   costForDepth,
   effectiveSkillMultipliers,
+  launchSuccessBonus,
   magnitudeForDepth,
   nodeRequiredTier,
   spendPoint,
@@ -471,5 +472,27 @@ describe('effectiveSkillMultipliers', () => {
     expect(m.recipeRate.extraction).toBe(1);
     expect(m.storageCap).toBe(1);
     expect(m.powerProduction).toBe(1);
+  });
+});
+
+describe('§14.7 launchSuccessBonus', () => {
+  it('returns 0 for an island with no unlocked nodes', () => {
+    const s = makeState();
+    expect(launchSuccessBonus(s)).toBe(0);
+  });
+
+  it('returns magnitudeForDepth(1) when only launch.1 is unlocked', () => {
+    const s = makeState({ unlockedNodes: new Set(['launch.1']) });
+    expect(launchSuccessBonus(s)).toBe(magnitudeForDepth(1));
+  });
+
+  it('returns magnitudeForDepth(1) + magnitudeForDepth(2) when launch.1 and launch.2 are unlocked', () => {
+    const s = makeState({ unlockedNodes: new Set(['launch.1', 'launch.2']) });
+    expect(launchSuccessBonus(s)).toBe(magnitudeForDepth(1) + magnitudeForDepth(2));
+  });
+
+  it('returns 0 when only non-launch nodes are unlocked', () => {
+    const s = makeState({ unlockedNodes: new Set(['mining.1']) });
+    expect(launchSuccessBonus(s)).toBe(0);
   });
 });

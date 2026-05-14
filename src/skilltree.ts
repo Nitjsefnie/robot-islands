@@ -70,7 +70,8 @@ export type SkillEffect =
   | { readonly kind: 'unlockRecipe'; readonly recipeDefId: BuildingDefId }
   | { readonly kind: 'exoticAdjacency'; readonly description: string }
   | { readonly kind: 'biomeBypass'; readonly biomes: Biome[] }
-  | { readonly kind: 'structural'; readonly description: string };
+  | { readonly kind: 'structural'; readonly description: string }
+  | { readonly kind: 'launchSuccessAdditive' };
 
 export interface SkillNode {
   readonly id: NodeId;
@@ -326,14 +327,24 @@ function makeDeepNodes(subPath: SubPathId, baseEffect: SkillEffect): SkillNode[]
 function makeOrbitalNodes(subPath: SubPathId): SkillNode[] {
   const nodes: SkillNode[] = [];
   for (let d = 1; d <= 15; d++) {
+    // Launch sub-path: depth-doubled additive launch-success bonus per
+    // §14.7. Other Orbital sub-paths remain structural placeholders for
+    // now (wiring deferred to comm / scanner / resilience polish).
+    const isLaunch = subPath === 'launch';
+    const effect: SkillEffect = isLaunch
+      ? { kind: 'launchSuccessAdditive' }
+      : { kind: 'structural', description: `${subPath} depth-${d} unlock` };
+    const mag = isLaunch ? magnitudeForDepth(d) : 0;
     nodes.push({
       id: `${subPath}.${d}`,
       subPath,
       depth: d,
       cost: costForDepth(d),
-      magnitude: 0,
-      effect: { kind: 'structural', description: `${subPath} depth-${d} unlock` },
-      description: `${SUBPATH_LABEL[subPath]} depth-${d} unlock`,
+      magnitude: mag,
+      effect,
+      description: isLaunch
+        ? `Launch success +${(mag * 100).toFixed(1)}% (additive, capped at 99%)`
+        : `${SUBPATH_LABEL[subPath]} depth-${d} unlock`,
     });
   }
   return nodes;
@@ -585,6 +596,8 @@ export function effectiveSkillMultipliers(
         break;
       case 'structural':
         break;
+      case 'launchSuccessAdditive':
+        break;
     }
   }
   return {
@@ -593,6 +606,24 @@ export function effectiveSkillMultipliers(
     powerProduction,
     powerConsumption,
   };
+}
+
+/** §14.7 sum of Orbital `launch` sub-path additive bonuses for this island.
+ *  Each unlocked launch.* node contributes its magnitude additively. Other
+ *  sub-paths and other branches contribute 0. */
+export function launchSuccessBonus(
+  state: IslandState,
+  catalog: ReadonlyArray<SkillNode> = NODE_CATALOG,
+): number {
+  const cat = catalog === NODE_CATALOG ? DEFAULT_CATALOG : buildCatalog(catalog);
+  let bonus = 0;
+  for (const nodeId of state.unlockedNodes) {
+    const node = cat.byId.get(nodeId);
+    if (!node) continue;
+    if (node.effect.kind !== 'launchSuccessAdditive') continue;
+    bonus += node.magnitude;
+  }
+  return bonus;
 }
 
 /** Look up a node by id from the default catalog. Returns undefined if unknown. */

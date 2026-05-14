@@ -1284,3 +1284,69 @@ describe('§14.5 scanner dwell-ramp discovery', () => {
     expect(dwellAfterSecond).toContain('625,625'); // cell for (10000,10000)
   });
 });
+
+describe('§14.7 launchSatellite uses launchSuccessBonus', () => {
+  it('T1 Spaceport without bonus has baseSuccess 0.30', () => {
+    const world = makeWorld();
+    const state = makeIslandState({ id: 'home', ascendantCoreCrafted: true });
+    addSpaceport(state, 1);
+    stockLaunchResources(state, 'scanner');
+    world.islandStates = new Map([['home', state]]);
+    // nowMs=5 → rng≈0.70 > 0.30 → fails without bonus
+    const result = launchSatellite(world, 'home', 'scanner', 5);
+    expect(result.ok).toBe(false);
+  });
+
+  it('with launch.1 unlocked, effective rate becomes 0.30 + magnitudeForDepth(1)', () => {
+    const world = makeWorld();
+    const state = makeIslandState({
+      id: 'home',
+      ascendantCoreCrafted: true,
+      unlockedNodes: new Set(['launch.1']),
+    });
+    addSpaceport(state, 1);
+    stockLaunchResources(state, 'scanner');
+    world.islandStates = new Map([['home', state]]);
+    // nowMs=5 → rng≈0.70. With bonus 0.05, threshold is 0.35, so still fails.
+    // Use nowMs=0 → rng≈0.23. Threshold 0.35 > 0.23 → success.
+    const result = launchSatellite(world, 'home', 'scanner', 0);
+    expect(result.ok).toBe(true);
+  });
+
+  it('cumulative bonuses cap at 0.99 even when sum would exceed 1.0', () => {
+    const world = makeWorld();
+    const launchNodes: string[] = [];
+    for (let d = 1; d <= 15; d++) launchNodes.push(`launch.${d}`);
+    const state = makeIslandState({
+      id: 'home',
+      ascendantCoreCrafted: true,
+      unlockedNodes: new Set(launchNodes),
+    });
+    addSpaceport(state, 1);
+    stockLaunchResources(state, 'scanner');
+    world.islandStates = new Map([['home', state]]);
+    // With all 15 launch nodes unlocked, the raw sum is well over 1.0, but
+    // the effective rate must be clamped at 0.99. Find a seed that would
+    // fail at base 0.30 but succeed at 0.99.
+    let foundSuccess = false;
+    let foundFailure = false;
+    for (let t = 0; t < 200; t++) {
+      const w = makeWorld();
+      const s = makeIslandState({
+        id: 'home',
+        ascendantCoreCrafted: true,
+        unlockedNodes: new Set(launchNodes),
+      });
+      addSpaceport(s, 1);
+      stockLaunchResources(s, 'scanner');
+      w.islandStates = new Map([['home', s]]);
+      const result = launchSatellite(w, 'home', 'scanner', t);
+      if (result.ok) foundSuccess = true;
+      else foundFailure = true;
+      if (foundSuccess && foundFailure) break;
+    }
+    // At 0.99 cap we should see both successes and failures across seeds.
+    expect(foundSuccess).toBe(true);
+    expect(foundFailure).toBe(true);
+  });
+});

@@ -8,6 +8,7 @@
 import { cellKey, tileToCell } from './discovery.js';
 import { inv } from './economy.js';
 import { makeSeededRng } from './rng.js';
+import { launchSuccessBonus } from './skilltree.js';
 import type { ResourceId } from './recipes.js';
 import type { WorldState } from './world.js';
 
@@ -164,7 +165,9 @@ export function launchSatellite(
   const spaceportTier = spaceport.tier ?? 1;
   const baseSuccess =
     spaceportTier === 1 ? 0.30 : spaceportTier === 2 ? 0.50 : 0.70;
-  const successRate = Math.min(0.99, baseSuccess);
+  // §14.7: additive Orbital launch sub-path bonuses, clamped at 0.99.
+  const bonus = launchSuccessBonus(state);
+  const successRate = Math.min(0.99, baseSuccess + bonus);
   const rng = makeSeededRng(`${world.seed}_launch_${nowMs}`);
   if (rng() > successRate) {
     // Failure: pad explosion (30%) or orbit explosion (70%).
