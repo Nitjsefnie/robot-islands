@@ -12,9 +12,18 @@ import {
   tickRepairDrones,
   debrisDetectionRangeForIsland,
   ORBITAL_TRACKING_DETECTION_RADIUS_TILES,
+  addDebrisFragments,
+  debrisHitProbability,
+  tickDebris,
+  DEBRIS_HIT_CONSTANT,
+  DEBRIS_LODGE_MAGNITUDE,
+  ORBIT_EXPLOSION_FRAGMENTS,
+  SAT_DESTRUCTION_FRAGMENTS,
+  SAT_CROSS_SECTION,
   type SatelliteVariant,
   type Satellite,
   type SatBufferEntry,
+  type DebrisField,
 } from './orbital.js';
 import { ALL_RESOURCES, type ResourceId } from './recipes.js';
 import {
@@ -65,6 +74,7 @@ function makeWorld(over: Partial<WorldState> = {}): WorldState {
     ...base,
     satellites: [],
     repairDrones: [],
+    debrisFields: [],
       endgameState: { achieved: new Set(), firstAchievedMs: null, victoryBannerShown: false },
       latticeActive: false,
       latticeNodeIslands: [],
@@ -506,6 +516,7 @@ function makeBfsWorld(opts: {
     seed: '0',
     satellites: opts.satellites,
     repairDrones: [],
+    debrisFields: [],
       endgameState: { achieved: new Set(), firstAchievedMs: null, victoryBannerShown: false },
       latticeActive: false,
       latticeNodeIslands: [],
@@ -862,5 +873,159 @@ describe('repair drone arrival', () => {
     expect(sat.lodges).toEqual({ scan: 0.5, weather: 0.3, comm: 0.2 });
     expect(sat.pendingRepairDroneId).toBeNull();
     expect(world.repairDrones).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// §14.8 Debris fields
+// ---------------------------------------------------------------------------
+
+describe('addDebrisFragments', () => {
+  it('creates a new field when none exists for the cell', () => {
+    const world = makeBfsWorld({
+      islands: [],
+      islandStates: new Map(),
+      satellites: [],
+    });
+    const field = addDebrisFragments(world, 3, 4, 20);
+    expect(field.cellX).toBe(3);
+    expect(field.cellY).toBe(4);
+    expect(field.fragments).toBe(20);
+    expect(world.debrisFields).toHaveLength(1);
+  });
+
+  it('stacks fragments into an existing field', () => {
+    const world = makeBfsWorld({
+      islands: [],
+      islandStates: new Map(),
+      satellites: [],
+    });
+    addDebrisFragments(world, 3, 4, 20);
+    const field = addDebrisFragments(world, 3, 4, 15);
+    expect(field.fragments).toBe(35);
+    expect(world.debrisFields).toHaveLength(1);
+  });
+});
+
+describe('debrisHitProbability', () => {
+  it('scales linearly with fragments and cross-section', () => {
+    const field: DebrisField = { cellX: 0, cellY: 0, fragments: 100 };
+    const sat = makeMinimalSat({ id: 's1', x: 0, y: 0, variant: 'sweeper' });
+    const p = debrisHitProbability(field, sat);
+    expect(p).toBeCloseTo(100 * DEBRIS_HIT_CONSTANT * SAT_CROSS_SECTION.sweeper, 8);
+  });
+
+  it('clamps at 0.99 regardless of fragment count', () => {
+    const field: DebrisField = { cellX: 0, cellY: 0, fragments: 1_000_000 };
+    const sat = makeMinimalSat({ id: 's1', x: 0, y: 0, variant: 'scanner' });
+    expect(debrisHitProbability(field, sat)).toBe(0.99);
+  });
+});
+
+describe('tickDebris', () => {
+  it('is a no-op when there are no debris fields', () => {
+    const world = makeBfsWorld({
+      islands: [],
+      islandStates: new Map(),
+      satellites: [makeMinimalSat({ id: 's1', x: 0, y: 0 })],
+    });
+    tickDebris(world, 0);
+    expect(world.satellites).toHaveLength(1);
+  });
+
+  it('is a no-op when there are no satellites', () => {
+    const world = makeBfsWorld({
+      islands: [],
+      islandStates: new Map(),
+      satellites: [],
+    });
+    world.debrisFields.push({ cellX: 0, cellY: 0, fragments: 100 });
+    tickDebris(world, 0);
+    expect(world.debrisFields).toHaveLength(1);
+  });
+
+  it('skips in-transit (unlocked) satellites', () => {
+    const world = makeBfsWorld({
+      islands: [],
+      islandStates: new Map(),
+      satellites: [makeMinimalSat({ id: 's1', x: 0, y: 0, locked: false })],
+    });
+    world.debrisFields.push({ cellX: 0, cellY: 0, fragments: 100 });
+    tickDebris(world, 0);
+    expect(world.satellites).toHaveLength(1);
+  });
+
+  it('lodges a sub-stat on hit when lodge probability is forced to 1.0', () => {
+    const world = makeBfsWorld({
+      islands: [],
+      islandStates: new Map(),
+      satellites: [makeMinimalSat({ id: 's1', x: 0, y: 0, variant: 'scanner' })],
+    });
+    // 2000 fragments × 0.0005 × 1.2 = 1.2 → clamped to 0.99, so hit is nearly certain.
+    world.debrisFields.push({ cellX: 0, cellY: 0, fragments: 2000 });
+    // Deterministic lodge: seed '0_debris_0_s1' with hitP≈0.99 produces a hit,
+    // and the second RNG roll lands below DEBRIS_LODGE_PROBABILITY (0.9) → lodge.
+    tickDebris(world, 0);
+    expect(world.satellites).toHaveLength(1);
+    const sat = world.satellites[0]!;
+    // At least one lodge value should have increased.
+    const totalLodge = sat.lodges.scan + sat.lodges.weather + sat.lodges.comm;
+    expect(totalLodge).toBeGreaterThan(0);
+    expect(totalLodge).toBeCloseTo(DEBRIS_LODGE_MAGNITUDE, 5);
+  });
+
+  it('destroys satellite and seeds new fragments on destruction (Kessler)', () => {
+    const world = makeBfsWorld({
+      islands: [],
+      islandStates: new Map(),
+      satellites: [makeMinimalSat({ id: 's1', x: 0, y: 0, variant: 'sweeper' })],
+    });
+    world.debrisFields.push({ cellX: 0, cellY: 0, fragments: 2000 });
+    // Force destruction on every hit by overriding the lodge probability.
+    // We need a seed that hits (rng < 0.99) and then rolls destruction.
+    // With the default DEBRIS_LODGE_PROBABILITY = 0.9, destruction requires rng >= 0.9.
+    // Seed '0_debris_0_s1' first roll ≈0.003 (hit), second roll ≈0.718 (lodge).
+    // We need a seed where second roll >= 0.9.  Let's brute-search in the test.
+    let found = false;
+    for (let t = 0; t < 2000; t++) {
+      const w = makeBfsWorld({
+        islands: [],
+        islandStates: new Map(),
+        satellites: [makeMinimalSat({ id: `s${t}`, x: 0, y: 0, variant: 'sweeper' })],
+      });
+      w.debrisFields.push({ cellX: 0, cellY: 0, fragments: 2000 });
+      tickDebris(w, t);
+      if (w.satellites.length === 0) {
+        // Satellite was destroyed; check that fragments increased.
+        const field = w.debrisFields.find((f) => f.cellX === 0 && f.cellY === 0);
+        expect(field).toBeDefined();
+        expect(field!.fragments).toBe(2000 + SAT_DESTRUCTION_FRAGMENTS);
+        found = true;
+        break;
+      }
+    }
+    expect(found).toBe(true);
+  });
+});
+
+describe('launchSatellite orbit-explosion debris', () => {
+  it('creates a debris field at the failed lock cell on orbit explosion', () => {
+    const world = makeWorld();
+    const state = makeIslandState({ id: 'home', ascendantCoreCrafted: true });
+    addSpaceport(state, 1);
+    stockLaunchResources(state, 'scanner');
+    world.islandStates = new Map([['home', state]]);
+    // nowMs=9 at T1: first roll fails, second roll ≈0.99 ≥ 0.30 → orbit explosion.
+    const result = launchSatellite(world, 'home', 'scanner', 9);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.reason).toBe('launch-failure');
+    // Failed lock point is home (0,0) + 100 = (100,100).
+    // cell size = 16, so cellX = Math.floor(100/16) = 6, cellY = 6.
+    expect(world.debrisFields).toHaveLength(1);
+    const field = world.debrisFields[0]!;
+    expect(field.cellX).toBe(6);
+    expect(field.cellY).toBe(6);
+    expect(field.fragments).toBe(ORBIT_EXPLOSION_FRAGMENTS);
   });
 });

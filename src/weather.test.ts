@@ -140,6 +140,7 @@ describe('isWeatherVisible', () => {
       revealedCells: new Set(),
       satellites: [],
       repairDrones: [],
+    debrisFields: [],
       endgameState: { achieved: new Set(), firstAchievedMs: null, victoryBannerShown: false },
       latticeActive: false,
       latticeNodeIslands: [],

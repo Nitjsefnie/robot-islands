@@ -102,6 +102,7 @@ function makeWorld(opts: {
     revealedCells: new Set(),
     satellites: [],
     repairDrones: [],
+    debrisFields: [],
       endgameState: { achieved: new Set(), firstAchievedMs: null, victoryBannerShown: false },
       latticeActive: false,
       latticeNodeIslands: [],

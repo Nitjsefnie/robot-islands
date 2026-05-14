@@ -14,6 +14,7 @@ function makeWorld(over: Partial<WorldState> = {}): WorldState {
     revealedCells: new Set(),
     satellites: [],
     repairDrones: [],
+    debrisFields: [],
     seed: 'test-seed',
     endgameState: { achieved: new Set(), firstAchievedMs: null, victoryBannerShown: false },
     latticeActive: false,

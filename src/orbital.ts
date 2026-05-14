@@ -5,6 +5,7 @@
 //
 // §14.2 Spaceport + §14.7 launch success rolls with failure modes + upgrade lifecycle.
 
+import { tileToCell } from './discovery.js';
 import { inv } from './economy.js';
 import { makeSeededRng } from './rng.js';
 import type { ResourceId } from './recipes.js';
@@ -53,6 +54,27 @@ export interface RepairDrone {
   readonly launchTime: number;
   readonly expectedArrivalTime: number;
 }
+
+/** §14.8 debris field anchored to one stratification cell. Multiple fields
+ *  exist as separate entries in `world.debrisFields`. */
+export interface DebrisField {
+  readonly cellX: number;
+  readonly cellY: number;
+  /** Discrete fragment count. Reduced by Sweeper Sat cleanup (§14.8 / Task
+   *  6.7); never decays over real time. Field is removed when this hits 0. */
+  fragments: number;
+}
+
+export const DEBRIS_HIT_CONSTANT = 0.0005; // Appendix A placeholder
+export const DEBRIS_LODGE_PROBABILITY = 0.9; // §14.8 "high chance"
+export const DEBRIS_LODGE_MAGNITUDE = 0.05; // 5% slowdown per lodge
+export const ORBIT_EXPLOSION_FRAGMENTS = 20; // §14.8 placeholder
+export const SAT_DESTRUCTION_FRAGMENTS = 10; // §14.8 placeholder
+export const SAT_CROSS_SECTION: Record<SatelliteVariant, number> = {
+  scanner: 1.2, // larger optics
+  sweeper: 1.0,
+  comm: 0.8, // sleeker
+};
 
 /** Per-variant payload resource id consumed at launch time. */
 const PAYLOAD_RESOURCE: Record<SatelliteVariant, ResourceId> = {
@@ -125,8 +147,13 @@ export function launchSatellite(
     if (rng() < 0.30) {
       // Pad explosion: destroy spaceport.
       state.buildings = state.buildings.filter((b) => b.defId !== 'spaceport');
+    } else {
+      // Orbit explosion: §14.8 — debris field forms at the failed lock cell.
+      const failedLockX = spec.cx + 100;
+      const failedLockY = spec.cy + 100;
+      const { cellX, cellY } = tileToCell(failedLockX, failedLockY);
+      addDebrisFragments(world, cellX, cellY, ORBIT_EXPLOSION_FRAGMENTS);
     }
-    // Orbit explosion: deferred — no debris field yet.
     return { ok: false, reason: 'launch-failure' };
   }
 
@@ -324,6 +351,89 @@ export function tickRepairDrones(world: WorldState, nowMs: number): void {
  * Returns `{ ok: true }` on success, or `{ ok: false, reason }` when the island
  * or spaceport is missing, the tier is already maxed, or resources are insufficient.
  */
+/** Find or create the debris field anchored to a stratification cell.
+ *  Adds `fragments` to the existing count or creates a new field. */
+export function addDebrisFragments(
+  world: WorldState,
+  cellX: number,
+  cellY: number,
+  fragments: number,
+): DebrisField {
+  let field = world.debrisFields.find(
+    (f) => f.cellX === cellX && f.cellY === cellY,
+  );
+  if (field) {
+    field.fragments += fragments;
+    return field;
+  }
+  field = { cellX, cellY, fragments };
+  world.debrisFields.push(field);
+  return field;
+}
+
+/** Hit probability per tick for one satellite inside a debris field. */
+export function debrisHitProbability(
+  field: DebrisField,
+  sat: Satellite,
+): number {
+  return Math.min(
+    0.99,
+    field.fragments * DEBRIS_HIT_CONSTANT * (SAT_CROSS_SECTION[sat.variant] ?? 1),
+  );
+}
+
+/** Tick debris-field interactions for one frame.
+ *
+ * For each satellite inside a debris field, rolls hit probability. On hit,
+ * rolls lodge (high) vs destruction (low). Lodge: bumps a random sub-stat.
+ * Destruction: removes the satellite and seeds SAT_DESTRUCTION_FRAGMENTS
+ * into the cell — Kessler cascade emerges naturally.
+ *
+ * Deterministic — RNG seeded from `${world.seed}_debris_${nowMs}_${sat.id}`. */
+export function tickDebris(world: WorldState, nowMs: number): void {
+  if (world.debrisFields.length === 0 || world.satellites.length === 0) return;
+  const survivors: Satellite[] = [];
+  for (const sat of world.satellites) {
+    if (!sat.locked) {
+      survivors.push(sat);
+      continue;
+    }
+    const { cellX, cellY } = tileToCell(sat.x, sat.y);
+    const field = world.debrisFields.find(
+      (f) => f.cellX === cellX && f.cellY === cellY,
+    );
+    if (!field || field.fragments <= 0) {
+      survivors.push(sat);
+      continue;
+    }
+    const hitP = debrisHitProbability(field, sat);
+    const rng = makeSeededRng(`${world.seed}_debris_${nowMs}_${sat.id}`);
+    if (rng() >= hitP) {
+      survivors.push(sat);
+      continue;
+    }
+    // HIT — split into lodge vs destruction.
+    if (rng() < DEBRIS_LODGE_PROBABILITY) {
+      // Lodge — pick a random sub-stat and slow it by DEBRIS_LODGE_MAGNITUDE.
+      const which = rng();
+      const subStat: 'scan' | 'weather' | 'comm' =
+        which < 1 / 3 ? 'scan' : which < 2 / 3 ? 'weather' : 'comm';
+      sat.lodges[subStat] = Math.min(
+        1,
+        sat.lodges[subStat] + DEBRIS_LODGE_MAGNITUDE,
+      );
+      survivors.push(sat);
+    } else {
+      // Destruction — sat lost, fragments added to cell.
+      addDebrisFragments(world, cellX, cellY, SAT_DESTRUCTION_FRAGMENTS);
+      // Note: `sat` does NOT make it into `survivors` — destroyed.
+    }
+  }
+  world.satellites = survivors;
+  // Cleanup: drop fields with zero fragments.
+  world.debrisFields = world.debrisFields.filter((f) => f.fragments > 0);
+}
+
 export function upgradeSpaceport(
   world: WorldState,
   islandId: string

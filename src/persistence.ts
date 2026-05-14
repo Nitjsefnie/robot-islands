@@ -149,6 +149,8 @@ export interface SerializedWorld {
   readonly satellites?: ReadonlyArray<import('./orbital.js').Satellite>;
   /** §14.12 T6 Repair Drone fleet. Backfilled to `[]` on legacy saves. */
   readonly repairDrones?: ReadonlyArray<import('./orbital.js').RepairDrone>;
+  /** §14.8 orbital debris fields. Backfilled to `[]` on legacy saves. */
+  readonly debrisFields?: ReadonlyArray<import('./orbital.js').DebrisField>;
   /** Tutorial onboarding state. Backfilled on legacy saves. */
   readonly tutorialState?: { completed: ObjectiveId[]; current: ObjectiveId | null };
   /** §13.4 endgame progress. Backfilled on legacy saves. */
@@ -242,6 +244,8 @@ export function serializeWorld(
       satellites: [...world.satellites],
       // §14.12 repair drones: shallow copy of the mutable array.
       repairDrones: [...world.repairDrones],
+      // §14.8 debris fields: shallow copy of the mutable array.
+      debrisFields: [...world.debrisFields],
       // Tutorial onboarding state.
       tutorialState: {
         completed: Array.from(world.tutorialState?.completed ?? []),
@@ -445,6 +449,9 @@ export function deserializeWorld(
       launchTime: d.launchTime + perfShift,
       expectedArrivalTime: d.expectedArrivalTime + perfShift,
     })),
+    // §14.8 debris fields backfill: legacy saves predate the field.
+    // No timestamp shifting needed — fields are static cell-anchored data.
+    debrisFields: [...(snapshot.world.debrisFields ?? [])],
     // Tutorial onboarding state backfill: legacy saves predate the field.
     // Default to the fresh-game starting objective.
     tutorialState: snapshot.world.tutorialState

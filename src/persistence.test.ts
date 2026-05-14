@@ -1267,3 +1267,41 @@ describe('with a full demo world', () => {
     expect(typeof home.terrainAt).toBe('function');
   });
 });
+
+// ---------------------------------------------------------------------------
+// §14.8 debrisFields round-trip
+// ---------------------------------------------------------------------------
+
+describe('debrisFields persistence', () => {
+  it('round-trips empty debrisFields', () => {
+    const world = makeInitialWorld(0);
+    const snap = serializeWorld(world, new Map(), 0, 0);
+    const json = JSON.parse(JSON.stringify(snap)) as SaveSnapshot;
+    const { world: restored } = deserializeWorld(json, 0, 0);
+    expect(restored.debrisFields).toEqual([]);
+  });
+
+  it('round-trips debrisFields with 2-3 fields', () => {
+    const world = makeInitialWorld(0);
+    world.debrisFields.push(
+      { cellX: 1, cellY: 2, fragments: 20 },
+      { cellX: -3, cellY: 4, fragments: 10 },
+      { cellX: 0, cellY: 0, fragments: 55 },
+    );
+    const snap = serializeWorld(world, new Map(), 0, 0);
+    const json = JSON.parse(JSON.stringify(snap)) as SaveSnapshot;
+    const { world: restored } = deserializeWorld(json, 0, 0);
+    expect(restored.debrisFields).toHaveLength(3);
+    expect(restored.debrisFields[0]).toEqual({ cellX: 1, cellY: 2, fragments: 20 });
+    expect(restored.debrisFields[1]).toEqual({ cellX: -3, cellY: 4, fragments: 10 });
+    expect(restored.debrisFields[2]).toEqual({ cellX: 0, cellY: 0, fragments: 55 });
+  });
+
+  it('backfills missing debrisFields on legacy saves to []', () => {
+    const baseSnap = serializeWorld(makeInitialWorld(0), new Map(), 0, 0);
+    const legacy = JSON.parse(JSON.stringify(baseSnap)) as SaveSnapshot;
+    delete (legacy.world as { debrisFields?: unknown }).debrisFields;
+    const { world: restored } = deserializeWorld(legacy, 0, 0);
+    expect(restored.debrisFields).toEqual([]);
+  });
+});
