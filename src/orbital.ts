@@ -5,13 +5,20 @@
 //
 // §14.2 Spaceport + §14.7 launch success rolls with failure modes + upgrade lifecycle.
 
-import { tileToCell } from './discovery.js';
+import { cellKey, tileToCell } from './discovery.js';
 import { inv } from './economy.js';
 import { makeSeededRng } from './rng.js';
 import type { ResourceId } from './recipes.js';
 import type { WorldState } from './world.js';
 
 export const SAT_BUFFER_CAP = 100;
+
+/** §14.5 / Appendix A scanner discovery placeholders. */
+export const SCANNER_INITIAL_P_PER_TICK = 0.001;
+export const SCANNER_ASYMPTOTE_P_PER_TICK = 0.05;
+/** Time-constant for the exponential ramp toward asymptote.
+ *  ~5 minutes in ms — "a few minutes catches most local islands". */
+export const SCANNER_DWELL_TIME_CONSTANT_MS = 5 * 60 * 1000;
 
 /** §14.2 Orbital Tracking Station detection radius. Placeholder — Appendix A.
  *  Chosen to cover a meaningful slice of the orbital arena (multi-cell)
@@ -50,6 +57,13 @@ export interface Satellite {
    *  unlocked (`locked === false`); on arrival, position is updated and
    *  `movingTo` is cleared. Missing/undefined ≡ stationary. */
   movingTo?: { x: number; y: number; arrivalMs: number };
+  /** §14.5 per-cell dwell tracker. Keyed by stratification cellKey
+   *  ("cellX,cellY"); values are accumulated ms inside that cell while
+   *  locked. Cells that drop out of current coverage on a tick are removed
+   *  from this map (per spec "moving the satellite resets ramps in cells
+   *  outside the new coverage"). Missing/undefined ≡ no dwell anywhere
+   *  (forward-compat for legacy saves). */
+  dwellByCellKey?: Record<string, number>;
 }
 
 export interface RepairDrone {
@@ -500,6 +514,80 @@ export function tickDebris(world: WorldState, nowMs: number): void {
   world.satellites = survivors;
   // Cleanup: drop fields with zero fragments.
   world.debrisFields = world.debrisFields.filter((f) => f.fragments > 0);
+}
+
+/** Compute scanner discovery probability per tick at a given dwell time. */
+export function scannerDiscoveryProbability(dwellMs: number): number {
+  const range = SCANNER_ASYMPTOTE_P_PER_TICK - SCANNER_INITIAL_P_PER_TICK;
+  return (
+    SCANNER_INITIAL_P_PER_TICK +
+    range * (1 - Math.exp(-dwellMs / SCANNER_DWELL_TIME_CONSTANT_MS))
+  );
+}
+
+/** Cells covered by a satellite given its current position + coverage radius.
+ *  Iterates the bounding box of the coverage circle and admits each cell
+ *  whose centre is within `coverageRadius` of the sat. */
+export function cellsCoveredBySat(sat: Satellite): Set<string> {
+  const covered = new Set<string>();
+  if (sat.coverageRadius <= 0) return covered;
+  const r = sat.coverageRadius;
+  for (let x = sat.x - r; x <= sat.x + r; x += 16) {
+    for (let y = sat.y - r; y <= sat.y + r; y += 16) {
+      const dx = x - sat.x;
+      const dy = y - sat.y;
+      if (dx * dx + dy * dy <= r * r) {
+        const { cellX, cellY } = tileToCell(x, y);
+        covered.add(cellKey(cellX, cellY));
+      }
+    }
+  }
+  return covered;
+}
+
+/** §14.5 per-tick scanner discovery. Pure helper called from main.ts (or
+ *  Task 6.7's combined orbital tick). For each locked Scanner Sat:
+ *    1. Compute current covered cell set.
+ *    2. Drop dwell entries for cells no longer covered.
+ *    3. Bump dwell on each covered cell by `tickDeltaMs`.
+ *    4. For each undiscovered island whose centre is in a covered cell,
+ *       roll `scannerDiscoveryProbability(dwell)` and reveal on success.
+ *  Returns the list of newly-discovered island ids for telemetry. */
+export function tickScannerDiscovery(
+  world: WorldState,
+  tickDeltaMs: number,
+  nowMs: number,
+): string[] {
+  const newlyDiscovered: string[] = [];
+  for (const sat of world.satellites) {
+    if (sat.variant !== 'scanner') continue;
+    if (!sat.locked) continue;
+    const covered = cellsCoveredBySat(sat);
+    if (!sat.dwellByCellKey) sat.dwellByCellKey = {};
+    // Drop dwell entries no longer covered.
+    for (const key of Object.keys(sat.dwellByCellKey)) {
+      if (!covered.has(key)) delete sat.dwellByCellKey[key];
+    }
+    // Bump dwell.
+    for (const key of covered) {
+      sat.dwellByCellKey[key] = (sat.dwellByCellKey[key] ?? 0) + tickDeltaMs;
+    }
+    // Discovery rolls per island in covered cells.
+    const rng = makeSeededRng(`${world.seed}_scan_${sat.id}_${nowMs}`);
+    for (const isl of world.islands) {
+      if (isl.discovered) continue;
+      const { cellX, cellY } = tileToCell(isl.cx, isl.cy);
+      const key = cellKey(cellX, cellY);
+      if (!covered.has(key)) continue;
+      const dwell = sat.dwellByCellKey[key] ?? 0;
+      const p = scannerDiscoveryProbability(dwell);
+      if (rng() < p) {
+        isl.discovered = true;
+        newlyDiscovered.push(isl.id);
+      }
+    }
+  }
+  return newlyDiscovered;
 }
 
 export function upgradeSpaceport(

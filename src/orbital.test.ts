@@ -25,6 +25,12 @@ import {
   SAT_FUEL_PER_TILE,
   SAT_MOVE_SPEED_TILES_PER_SEC,
   SAT_MOVE_FAILURE_DEBRIS,
+  SCANNER_INITIAL_P_PER_TICK,
+  SCANNER_ASYMPTOTE_P_PER_TICK,
+  SCANNER_DWELL_TIME_CONSTANT_MS,
+  scannerDiscoveryProbability,
+  cellsCoveredBySat,
+  tickScannerDiscovery,
   type SatelliteVariant,
   type Satellite,
   type SatBufferEntry,
@@ -1167,5 +1173,114 @@ describe('§14.6 requestSatMove + tickSatMovement', () => {
     expect(field.cellX).toBe(6);
     expect(field.cellY).toBe(0);
     expect(field.fragments).toBe(SAT_MOVE_FAILURE_DEBRIS);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// §14.5 Scanner Sat dwell-ramp discovery
+// ---------------------------------------------------------------------------
+
+describe('§14.5 scanner dwell-ramp discovery', () => {
+  it('scannerDiscoveryProbability(0) returns SCANNER_INITIAL_P_PER_TICK', () => {
+    expect(scannerDiscoveryProbability(0)).toBe(SCANNER_INITIAL_P_PER_TICK);
+  });
+
+  it('scannerDiscoveryProbability(infinity) approaches SCANNER_ASYMPTOTE_P_PER_TICK', () => {
+    expect(scannerDiscoveryProbability(Infinity)).toBeCloseTo(SCANNER_ASYMPTOTE_P_PER_TICK, 10);
+  });
+
+  it('scannerDiscoveryProbability(SCANNER_DWELL_TIME_CONSTANT_MS) returns initial + range * (1 - 1/e)', () => {
+    const range = SCANNER_ASYMPTOTE_P_PER_TICK - SCANNER_INITIAL_P_PER_TICK;
+    const expected = SCANNER_INITIAL_P_PER_TICK + range * (1 - 1 / Math.E);
+    expect(scannerDiscoveryProbability(SCANNER_DWELL_TIME_CONSTANT_MS)).toBeCloseTo(expected, 10);
+  });
+
+  it('cellsCoveredBySat with coverageRadius=0 returns empty set', () => {
+    const sat = makeMinimalSat({ id: 'sat1', x: 0, y: 0, coverageRadius: 0 });
+    expect(cellsCoveredBySat(sat).size).toBe(0);
+  });
+
+  it('cellsCoveredBySat with >0 returns at least one cell at the sat position', () => {
+    const sat = makeMinimalSat({ id: 'sat1', x: 0, y: 0, coverageRadius: 400 });
+    const covered = cellsCoveredBySat(sat);
+    expect(covered.size).toBeGreaterThan(0);
+    expect(covered.has('0,0')).toBe(true);
+  });
+
+  it('tickScannerDiscovery no-ops on non-scanner sats', () => {
+    const world = makeBfsWorld({
+      islands: [],
+      islandStates: new Map(),
+      satellites: [makeMinimalSat({ id: 'sat1', x: 0, y: 0, variant: 'comm', coverageRadius: 0 })],
+    });
+    const result = tickScannerDiscovery(world, 1000, 0);
+    expect(result).toEqual([]);
+  });
+
+  it('tickScannerDiscovery no-ops on unlocked sats', () => {
+    const world = makeBfsWorld({
+      islands: [],
+      islandStates: new Map(),
+      satellites: [makeMinimalSat({ id: 'sat1', x: 0, y: 0, variant: 'scanner', locked: false })],
+    });
+    const result = tickScannerDiscovery(world, 1000, 0);
+    expect(result).toEqual([]);
+  });
+
+  it('discovers an undiscovered island in coverage with a forced-success seed', () => {
+    // Island at (0,0) is in the same cell as the scanner at (0,0).
+    const island = makeMinimalIsland({ id: 'target', cx: 0, cy: 0, discovered: false });
+    const sat = makeMinimalSat({ id: 'sat1', x: 0, y: 0, variant: 'scanner', coverageRadius: 400, locked: true });
+    const world = makeBfsWorld({
+      islands: [island],
+      islandStates: new Map(),
+      satellites: [sat],
+    });
+    // Pre-warm dwell so p is at asymptote (≈0.05).
+    sat.dwellByCellKey = { '0,0': SCANNER_DWELL_TIME_CONSTANT_MS * 10 };
+    // nowMs=20 with seed '0_scan_sat1_20' yields rng≈0.018 < 0.05 → success.
+    const result = tickScannerDiscovery(world, 1000, 20);
+    expect(result).toContain('target');
+    expect(world.islands[0]!.discovered).toBe(true);
+  });
+
+  it('leaves out-of-coverage island undiscovered', () => {
+    // Island far away at (10000, 10000) is outside coverage radius 400.
+    const inRange = makeMinimalIsland({ id: 'inRange', cx: 0, cy: 0, discovered: false });
+    const outOfRange = makeMinimalIsland({ id: 'outOfRange', cx: 10000, cy: 10000, discovered: false });
+    const sat = makeMinimalSat({ id: 'sat1', x: 0, y: 0, variant: 'scanner', coverageRadius: 400, locked: true });
+    const world = makeBfsWorld({
+      islands: [inRange, outOfRange],
+      islandStates: new Map(),
+      satellites: [sat],
+    });
+    sat.dwellByCellKey = { '0,0': SCANNER_DWELL_TIME_CONSTANT_MS * 10 };
+    tickScannerDiscovery(world, 1000, 20);
+    expect(inRange.discovered).toBe(true);
+    expect(outOfRange.discovered).toBe(false);
+  });
+
+  it('drops dwell entries for cells no longer covered after the sat moves', () => {
+    const sat = makeMinimalSat({ id: 'sat1', x: 0, y: 0, variant: 'scanner', coverageRadius: 400, locked: true });
+    const world = makeBfsWorld({
+      islands: [],
+      islandStates: new Map(),
+      satellites: [sat],
+    });
+    // First tick: build up dwell in cells around (0,0).
+    tickScannerDiscovery(world, 1000, 0);
+    const dwellAfterFirst = Object.keys(sat.dwellByCellKey!);
+    expect(dwellAfterFirst.length).toBeGreaterThan(0);
+    expect(dwellAfterFirst).toContain('0,0');
+
+    // Move the sat far away.
+    sat.x = 10000;
+    sat.y = 10000;
+
+    // Second tick: old cells should be dropped, new cells added.
+    tickScannerDiscovery(world, 1000, 1);
+    const dwellAfterSecond = Object.keys(sat.dwellByCellKey!);
+    expect(dwellAfterSecond).not.toContain('0,0');
+    expect(dwellAfterSecond).toContain('625,625'); // cell for (10000,10000)
   });
 });

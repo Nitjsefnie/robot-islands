@@ -1362,3 +1362,60 @@ describe('satellite movingTo persistence', () => {
     expect(sat.locked).toBe(true);
   });
 });
+
+// ---------------------------------------------------------------------------
+// §14.5 Scanner Sat dwellByCellKey round-trip
+// ---------------------------------------------------------------------------
+
+describe('§14.5 scanner dwellByCellKey persistence', () => {
+  it('round-trips a Scanner Sat with dwellByCellKey', () => {
+    const world = makeInitialWorld(0);
+    world.satellites.push({
+      id: 'sat1',
+      variant: 'scanner',
+      spaceportIslandId: 'home',
+      x: 0,
+      y: 0,
+      commRange: 200,
+      coverageRadius: 400,
+      fuel: 100,
+      lodges: { scan: 0, weather: 0, comm: 0 },
+      locked: true,
+      pendingRepairDroneId: null,
+      buffer: [],
+      dwellByCellKey: { '0,0': 60000, '1,0': 30000 },
+    });
+    const snap = serializeWorld(world, new Map(), 0, 0);
+    const json = JSON.parse(JSON.stringify(snap)) as SaveSnapshot;
+    const { world: restored } = deserializeWorld(json, 0, 0);
+    expect(restored.satellites).toHaveLength(1);
+    const sat = restored.satellites[0]!;
+    expect(sat.dwellByCellKey).toEqual({ '0,0': 60000, '1,0': 30000 });
+  });
+
+  it('defaults dwellByCellKey to undefined on legacy saves without the field', () => {
+    const world = makeInitialWorld(0);
+    world.satellites.push({
+      id: 'sat1',
+      variant: 'scanner',
+      spaceportIslandId: 'home',
+      x: 0,
+      y: 0,
+      commRange: 200,
+      coverageRadius: 400,
+      fuel: 100,
+      lodges: { scan: 0, weather: 0, comm: 0 },
+      locked: true,
+      pendingRepairDroneId: null,
+      buffer: [],
+    });
+    const snap = serializeWorld(world, new Map(), 0, 0);
+    const json = JSON.parse(JSON.stringify(snap)) as SaveSnapshot;
+    // Strip dwellByCellKey to simulate a pre-§14.5 save.
+    for (const sat of (json.world as { satellites?: Array<{ dwellByCellKey?: unknown }> }).satellites ?? []) {
+      delete sat.dwellByCellKey;
+    }
+    const { world: restored } = deserializeWorld(json, 0, 0);
+    expect(restored.satellites[0]!.dwellByCellKey).toBeUndefined();
+  });
+});
