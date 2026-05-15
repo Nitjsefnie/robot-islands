@@ -82,6 +82,9 @@ export const RESOURCE_STORAGE_CATEGORY: Readonly<Record<ResourceId, StorageCateg
   quicklime: 'dry_goods',
   slaked_lime: 'dry_goods',
   brick: 'dry_goods',
+  mortar: 'dry_goods',
+  cement: 'dry_goods',
+  concrete: 'dry_goods',
 
   // T0 liquids/gases.
   fresh_water: 'liquid_gas',

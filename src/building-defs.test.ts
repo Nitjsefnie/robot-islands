@@ -868,6 +868,52 @@ describe('§7.6 brick_kiln (T1 brick producer)', () => {
   });
 });
 
+describe('§7.8 mortar_mixer (T1 mortar producer)', () => {
+  it('is T1, 2x2, no heat requirement', () => {
+    const def = BUILDING_DEFS.mortar_mixer;
+    expect(def).toBeDefined();
+    expect(def.tier).toBe(1);
+    expect(def.footprint).toEqual(SHAPES.square2);
+    expect(def.requiresHeat).toBeUndefined();
+  });
+  it('produces mortar from sand + quicklime', () => {
+    expect(RECIPES.mortar_mixer).toBeDefined();
+    expect(RECIPES.mortar_mixer!.inputs).toEqual({ sand: 1, quicklime: 1 });
+    expect(RECIPES.mortar_mixer!.outputs).toEqual({ mortar: 1 });
+  });
+});
+
+describe('§7.8 cement_mill (T1 cement producer)', () => {
+  it('is T1, 2x2, requires heat, hard heat_source gate', () => {
+    const def = BUILDING_DEFS.cement_mill;
+    expect(def).toBeDefined();
+    expect(def.tier).toBe(1);
+    expect(def.footprint).toEqual(SHAPES.square2);
+    expect(def.requiresHeat).toBe(true);
+    expect(def.gates).toEqual([{ matchType: 'heat_source', hard: true }]);
+  });
+  it('produces cement from quicklime + sand + clay', () => {
+    expect(RECIPES.cement_mill).toBeDefined();
+    expect(RECIPES.cement_mill!.inputs).toEqual({ quicklime: 1, sand: 1, clay: 1 });
+    expect(RECIPES.cement_mill!.outputs).toEqual({ cement: 1 });
+  });
+});
+
+describe('§7.8 concrete_plant (T1 concrete producer)', () => {
+  it('is T1, 2x2, no heat requirement', () => {
+    const def = BUILDING_DEFS.concrete_plant;
+    expect(def).toBeDefined();
+    expect(def.tier).toBe(1);
+    expect(def.footprint).toEqual(SHAPES.square2);
+    expect(def.requiresHeat).toBeUndefined();
+  });
+  it('produces concrete from cement + sand + fresh_water', () => {
+    expect(RECIPES.concrete_plant).toBeDefined();
+    expect(RECIPES.concrete_plant!.inputs).toEqual({ cement: 1, sand: 2, fresh_water: 1 });
+    expect(RECIPES.concrete_plant!.outputs).toEqual({ concrete: 1 });
+  });
+});
+
 describe('§8.8 shipyard coastal gating', () => {
   it('shipyard has coastal flag', () => {
     expect(BUILDING_DEFS.shipyard.coastal).toBe(true);

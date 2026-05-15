@@ -460,6 +460,39 @@ describe('§6.2 T1 refined — brick (Task 2.2)', () => {
   });
 });
 
+describe('§6.2 T1 refined — mortar + cement + concrete (Task 2.3)', () => {
+  it('mortar is in ALL_RESOURCES with xp_weight 3', () => {
+    expect(ALL_RESOURCES).toContain('mortar' as ResourceId);
+    expect(XP_WEIGHT.mortar).toBe(3);
+  });
+  it('cement is in ALL_RESOURCES with xp_weight 3', () => {
+    expect(ALL_RESOURCES).toContain('cement' as ResourceId);
+    expect(XP_WEIGHT.cement).toBe(3);
+  });
+  it('concrete is in ALL_RESOURCES with xp_weight 3', () => {
+    expect(ALL_RESOURCES).toContain('concrete' as ResourceId);
+    expect(XP_WEIGHT.concrete).toBe(3);
+  });
+  it('mortar_mixer recipe: sand + quicklime → mortar', () => {
+    expect(RECIPES.mortar_mixer).toBeDefined();
+    expect(RECIPES.mortar_mixer!.inputs).toEqual({ sand: 1, quicklime: 1 });
+    expect(RECIPES.mortar_mixer!.outputs).toEqual({ mortar: 1 });
+    expect(RECIPES.mortar_mixer!.cycleSec).toBe(120);
+  });
+  it('cement_mill recipe: quicklime + sand + clay → cement', () => {
+    expect(RECIPES.cement_mill).toBeDefined();
+    expect(RECIPES.cement_mill!.inputs).toEqual({ quicklime: 1, sand: 1, clay: 1 });
+    expect(RECIPES.cement_mill!.outputs).toEqual({ cement: 1 });
+    expect(RECIPES.cement_mill!.cycleSec).toBe(200);
+  });
+  it('concrete_plant recipe: cement + sand + fresh_water → concrete', () => {
+    expect(RECIPES.concrete_plant).toBeDefined();
+    expect(RECIPES.concrete_plant!.inputs).toEqual({ cement: 1, sand: 2, fresh_water: 1 });
+    expect(RECIPES.concrete_plant!.outputs).toEqual({ concrete: 1 });
+    expect(RECIPES.concrete_plant!.cycleSec).toBe(200);
+  });
+});
+
 describe('nextRotateOutputBoundaryMs', () => {
   const rotatingRecipe = {
     cycleSec: 10,

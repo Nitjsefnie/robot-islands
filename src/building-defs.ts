@@ -182,6 +182,9 @@ export type BuildingDefId =
   | 'limekiln'
   | 'lime_slaker'
   | 'brick_kiln'
+  | 'mortar_mixer'
+  | 'cement_mill'
+  | 'concrete_plant'
   | 'lumber_mill'
   | 'glassworks'
   | 'evaporator'
@@ -1937,6 +1940,44 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     gates: [{ matchType: 'heat_source', hard: true }],
     placementCost: { stone: 40, wood: 10 },
     glyph: '△',
+  },
+  mortar_mixer: {
+    id: 'mortar_mixer',
+    displayName: 'Mortar Mixer',
+    category: 'chemistry',
+    tier: 1,
+    footprint: SHAPES.square2,
+    fill: 0xb8a878, // sand-beige
+    stroke: 0x504830,
+    power: { consumes: 30 },
+    placementCost: { stone: 30, wood: 10 },
+    glyph: '⚙',
+  },
+  cement_mill: {
+    id: 'cement_mill',
+    displayName: 'Cement Mill',
+    category: 'chemistry',
+    tier: 1,
+    footprint: SHAPES.square2,
+    fill: 0x888078, // cement grey
+    stroke: 0x403830,
+    power: { consumes: 80 },
+    requiresHeat: true,
+    gates: [{ matchType: 'heat_source', hard: true }],
+    placementCost: { stone: 60, iron_ingot: 10, wood: 15 },
+    glyph: '△',
+  },
+  concrete_plant: {
+    id: 'concrete_plant',
+    displayName: 'Concrete Plant',
+    category: 'chemistry',
+    tier: 1,
+    footprint: SHAPES.square2,
+    fill: 0x9a9488, // concrete grey
+    stroke: 0x4a4538,
+    power: { consumes: 60 },
+    placementCost: { stone: 50, wood: 15 },
+    glyph: '◈',
   },
 
   // T1 manufacturing / chemistry.

@@ -78,6 +78,9 @@ export type ResourceId =
   | 'quicklime'
   | 'slaked_lime'
   | 'brick'
+  | 'mortar'
+  | 'cement'
+  | 'concrete'
   // Byproducts (§6.7)
   | 'oxygen'
   | 'argon'
@@ -208,6 +211,9 @@ export const ALL_RESOURCES: ReadonlyArray<ResourceId> = [
   'quicklime',
   'slaked_lime',
   'brick',
+  'mortar',
+  'cement',
+  'concrete',
   // Byproducts (§6.7)
   'oxygen',
   'argon',
@@ -324,6 +330,9 @@ export const XP_WEIGHT: Readonly<Record<ResourceId, number>> = {
   quicklime: 3,
   slaked_lime: 3,
   brick: 3,
+  mortar: 3,
+  cement: 3,
+  concrete: 3,
   // Byproducts (§6.7) — T1 refined weight per spec §9.1.
   oxygen: 3,
   argon: 3,
@@ -919,6 +928,24 @@ export const RECIPES: Partial<Record<RecipeId, Recipe>> = {
     cycleSec: 120,
     inputs: { clay: 2 },
     outputs: { brick: 1 },
+    category: 'chemistry',
+  },
+  mortar_mixer: {
+    cycleSec: 120,
+    inputs: { sand: 1, quicklime: 1 },
+    outputs: { mortar: 1 },
+    category: 'chemistry',
+  },
+  cement_mill: {
+    cycleSec: 200,
+    inputs: { quicklime: 1, sand: 1, clay: 1 },
+    outputs: { cement: 1 },
+    category: 'chemistry',
+  },
+  concrete_plant: {
+    cycleSec: 200,
+    inputs: { cement: 1, sand: 2, fresh_water: 1 },
+    outputs: { concrete: 1 },
     category: 'chemistry',
   },
 

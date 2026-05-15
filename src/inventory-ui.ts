@@ -61,6 +61,9 @@ export const RESOURCE_CATEGORY: Readonly<Record<ResourceId, ResourceCategory>> =
   quicklime: 'refined',
   slaked_lime: 'refined',
   brick: 'refined',
+  mortar: 'refined',
+  cement: 'refined',
+  concrete: 'refined',
   // §6.4 T3 mineral raws (for slag reprocessing + nuclear fuel)
   gold_ore: 'raw',
   silver_ore: 'raw',
