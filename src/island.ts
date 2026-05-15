@@ -40,7 +40,9 @@ export type TerrainKind =
   // §6.1 T0 mineral raws: copper/tin/lead (Task 1.7)
   | 'copper_vein'
   | 'tin_vein'
-  | 'lead_vein';
+  | 'lead_vein'
+  // §6.1 T0 mineral raw: bauxite (Task 1.8)
+  | 'bauxite_vein';
 
 export interface Tile {
   /** Tile grid x. The tile occupies the unit square [x, x+1) × [y, y+1). */
@@ -75,6 +77,7 @@ const TERRAIN_COLOR: Readonly<Record<TerrainKind, number>> = {
   copper_vein: 0xb87333,       // copper oxide orange
   tin_vein: 0xc0c4cb,          // pale tin-grey
   lead_vein: 0x4a4a52,         // dark lead-grey
+  bauxite_vein: 0xd07845,      // bauxite ochre
 };
 
 /**

@@ -177,6 +177,7 @@ export type BuildingDefId =
   | 'copper_mine'
   | 'tin_mine'
   | 'lead_mine'
+  | 'bauxite_mine'
   | 'lumber_mill'
   | 'glassworks'
   | 'evaporator'
@@ -1876,6 +1877,19 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     stroke: 0x202024,
     power: { consumes: 30 },
     requiredTile: ['lead_vein'],
+    placementCost: { stone: 30, wood: 15 },
+    glyph: '⛏',
+  },
+  bauxite_mine: {
+    id: 'bauxite_mine',
+    displayName: 'Bauxite Mine',
+    category: 'extraction',
+    tier: 1,
+    footprint: SHAPES.square2,
+    fill: 0xd07845, // bauxite ochre
+    stroke: 0x6a4028,
+    power: { consumes: 30 },
+    requiredTile: ['bauxite_vein'],
     placementCost: { stone: 30, wood: 15 },
     glyph: '⛏',
   },

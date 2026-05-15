@@ -77,6 +77,7 @@ export const RESOURCE_STORAGE_CATEGORY: Readonly<Record<ResourceId, StorageCateg
   copper_ore: 'dry_goods',
   tin_ore: 'dry_goods',
   lead_ore: 'dry_goods',
+  bauxite: 'dry_goods',
 
   // T0 liquids/gases.
   fresh_water: 'liquid_gas',

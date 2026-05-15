@@ -73,6 +73,7 @@ export type ResourceId =
   | 'copper_ore'
   | 'tin_ore'
   | 'lead_ore'
+  | 'bauxite'
   // Byproducts (§6.7)
   | 'oxygen'
   | 'argon'
@@ -198,6 +199,7 @@ export const ALL_RESOURCES: ReadonlyArray<ResourceId> = [
   'copper_ore',
   'tin_ore',
   'lead_ore',
+  'bauxite',
   // Byproducts (§6.7)
   'oxygen',
   'argon',
@@ -309,6 +311,7 @@ export const XP_WEIGHT: Readonly<Record<ResourceId, number>> = {
   copper_ore: 1,
   tin_ore: 1,
   lead_ore: 1,
+  bauxite: 1,
   // Byproducts (§6.7) — T1 refined weight per spec §9.1.
   oxygen: 3,
   argon: 3,
@@ -878,6 +881,12 @@ export const RECIPES: Partial<Record<RecipeId, Recipe>> = {
     cycleSec: 60,
     inputs: {},
     outputs: { lead_ore: 1 },
+    category: 'extraction',
+  },
+  bauxite_mine: {
+    cycleSec: 60,
+    inputs: {},
+    outputs: { bauxite: 1 },
     category: 'extraction',
   },
 

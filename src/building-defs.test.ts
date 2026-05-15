@@ -119,6 +119,7 @@ const KNOWN_DEF_IDS: ReadonlyArray<BuildingDefId> = [
   'copper_mine',
   'tin_mine',
   'lead_mine',
+  'bauxite_mine',
   'aetheric_conduit',
   'spacetime_resonator',
   'eldritch_sieve',
@@ -799,6 +800,20 @@ describe('§8.1 copper/tin/lead mines (T1 ore extractors)', () => {
     expect(def.category).toBe('extraction');
     expect(def.requiredTile).toEqual(['lead_vein']);
     expect(RECIPES.lead_mine!.outputs).toEqual({ lead_ore: 1 });
+  });
+});
+
+describe('§8.1 bauxite_mine (T1 bauxite extractor)', () => {
+  it('ships as a T1 extraction def gated to bauxite_vein tile', () => {
+    const def = BUILDING_DEFS.bauxite_mine;
+    expect(def).toBeDefined();
+    expect(def.tier).toBe(1);
+    expect(def.category).toBe('extraction');
+    expect(def.requiredTile).toEqual(['bauxite_vein']);
+  });
+  it('produces 1 bauxite per cycle', () => {
+    expect(RECIPES.bauxite_mine).toBeDefined();
+    expect(RECIPES.bauxite_mine!.outputs).toEqual({ bauxite: 1 });
   });
 });
 

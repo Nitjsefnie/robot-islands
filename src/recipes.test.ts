@@ -417,6 +417,13 @@ describe('§6.1 T0 raws — copper/tin/lead ores', () => {
   });
 });
 
+describe('§6.1 T0 raws — bauxite', () => {
+  it('bauxite is in ALL_RESOURCES with xp_weight 1', () => {
+    expect(ALL_RESOURCES).toContain('bauxite' as ResourceId);
+    expect(XP_WEIGHT.bauxite).toBe(1);
+  });
+});
+
 describe('nextRotateOutputBoundaryMs', () => {
   const rotatingRecipe = {
     cycleSec: 10,
