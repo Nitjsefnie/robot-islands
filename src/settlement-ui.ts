@@ -167,32 +167,18 @@ export function mountSettlementUi(parentEl: HTMLElement, deps: SettlementUiDeps)
 
   const closeBtn = document.createElement('button');
   closeBtn.textContent = '×';
+  closeBtn.classList.add('ri-modal__close');
   styled(
     closeBtn,
     [
-      `color: ${'var(--ri-fg-3)'}`,
-      'background: transparent',
-      `border: 1px solid ${'var(--ri-border-strong)'}`,
       'width: 18px',
       'height: 18px',
       'line-height: 0',
       'border-radius: 2px',
-      'cursor: pointer',
       'font-size: 14px',
-      'display: flex',
-      'align-items: center',
-      'justify-content: center',
     ].join(';'),
   );
   closeBtn.addEventListener('click', () => hide());
-  closeBtn.addEventListener('mouseenter', () => {
-    closeBtn.style.color = 'var(--ri-fg-1)';
-    closeBtn.style.borderColor = 'var(--ri-accent-dim)';
-  });
-  closeBtn.addEventListener('mouseleave', () => {
-    closeBtn.style.color = 'var(--ri-fg-3)';
-    closeBtn.style.borderColor = 'var(--ri-border-strong)';
-  });
   header.appendChild(headLeft);
   header.appendChild(closeBtn);
 
@@ -352,6 +338,7 @@ export function mountSettlementUi(parentEl: HTMLElement, deps: SettlementUiDeps)
       ].join(';'),
     );
     const v = document.createElement('span');
+    v.classList.add('ri-mono');
     styled(v, `color: ${'var(--ri-fg-1)'}; font-size: 11.5px; font-weight: 600`);
     row.appendChild(l);
     row.appendChild(v);
@@ -880,6 +867,7 @@ export function mountSettlementUi(parentEl: HTMLElement, deps: SettlementUiDeps)
     idEl.textContent = `${v.kind === 'ship' ? '◗' : '✈'} ${v.id.toUpperCase()}`;
     styled(idEl, `color: ${'var(--ri-accent)'}; font-size: 10px; letter-spacing: 0.08em; font-weight: 600`);
     const etaEl = document.createElement('span');
+    etaEl.classList.add('ri-mono');
     const remainSec = Math.max(0, (v.expectedArrivalTime - performance.now()) / 1000);
     etaEl.textContent = `T-${remainSec.toFixed(1)}s`;
     styled(etaEl, `color: ${'var(--ri-warn)'}; font-size: 10px; font-weight: 600`);

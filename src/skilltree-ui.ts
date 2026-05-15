@@ -81,9 +81,13 @@ export function mountSkillTreeUi(
 
   // Mutable refs for elements that need updating after mount.
   const levelVal = document.createElement('span');
+  levelVal.classList.add('ri-mono');
   const xpVal = document.createElement('span');
+  xpVal.classList.add('ri-mono');
   const tierVal = document.createElement('span');
+  tierVal.classList.add('ri-mono');
   const pointsVal = document.createElement('span');
+  pointsVal.classList.add('ri-mono');
   const captionStatus = document.createElement('span');
   const cardGrid = document.createElement('div');
   const tierResetDetail = document.createElement('span');

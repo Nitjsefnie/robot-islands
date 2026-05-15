@@ -183,33 +183,19 @@ export function mountDronesUi(parentEl: HTMLElement, deps: DroneUiDeps): DroneUi
 
   const closeBtn = document.createElement('button');
   closeBtn.textContent = '×';
+  closeBtn.classList.add('ri-modal__close');
   styled(
     closeBtn,
     [
-      `color: ${'var(--ri-fg-3)'}`,
-      'background: transparent',
-      `border: 1px solid ${'var(--ri-border-strong)'}`,
       'width: 18px',
       'height: 18px',
       'line-height: 0',
       'border-radius: 2px',
-      'cursor: pointer',
       'font-size: 14px',
-      'display: flex',
-      'align-items: center',
-      'justify-content: center',
     ].join(';'),
   );
   closeBtn.addEventListener('click', () => {
     hide();
-  });
-  closeBtn.addEventListener('mouseenter', () => {
-    closeBtn.style.color = 'var(--ri-fg-1)';
-    closeBtn.style.borderColor = 'var(--ri-accent-dim)';
-  });
-  closeBtn.addEventListener('mouseleave', () => {
-    closeBtn.style.color = 'var(--ri-fg-3)';
-    closeBtn.style.borderColor = 'var(--ri-border-strong)';
   });
 
   header.appendChild(headLeft);
@@ -260,6 +246,7 @@ export function mountDronesUi(parentEl: HTMLElement, deps: DroneUiDeps): DroneUi
       ].join(';'),
     );
     const v = document.createElement('span');
+    v.classList.add('ri-mono');
     styled(v, `color: ${'var(--ri-fg-1)'}; font-size: 11.5px; font-weight: 600`);
     row.appendChild(l);
     row.appendChild(v);
@@ -303,6 +290,7 @@ export function mountDronesUi(parentEl: HTMLElement, deps: DroneUiDeps): DroneUi
     ].join(';'),
   );
   const sliderHeadR = document.createElement('span');
+  sliderHeadR.classList.add('ri-mono');
   styled(sliderHeadR, `color: ${'var(--ri-warn)'}; font-size: 11px; font-weight: 600`);
   sliderHead.appendChild(sliderHeadL);
   sliderHead.appendChild(sliderHeadR);
@@ -709,6 +697,7 @@ export function mountDronesUi(parentEl: HTMLElement, deps: DroneUiDeps): DroneUi
     idEl.textContent = d.id.toUpperCase();
     styled(idEl, `color: ${'var(--ri-accent)'}; font-size: 10px; letter-spacing: 0.08em; font-weight: 600`);
     const etaEl = document.createElement('span');
+    etaEl.classList.add('ri-mono');
     const remainSec = Math.max(0, (d.expectedReturnTime - nowMs) / 1000);
     etaEl.textContent = `T-${remainSec.toFixed(1)}s`;
     styled(etaEl, `color: ${'var(--ri-warn)'}; font-size: 10px; font-weight: 600`);
@@ -745,9 +734,11 @@ export function mountDronesUi(parentEl: HTMLElement, deps: DroneUiDeps): DroneUi
     const meta = document.createElement('div');
     styled(meta, 'display: flex; justify-content: space-between');
     const fuelEl = document.createElement('span');
+    fuelEl.classList.add('ri-mono');
     fuelEl.textContent = `${d.fuelLoaded} fuel · ${d.outboundTiles.toFixed(0)} tiles`;
     styled(fuelEl, `color: ${'var(--ri-fg-3)'}; font-size: 9.5px`);
     const tierEl = document.createElement('span');
+    tierEl.classList.add('ri-mono');
     tierEl.textContent = `T${d.tier}`;
     styled(tierEl, `color: ${'var(--ri-fg-3)'}; font-size: 9.5px; letter-spacing: 0.06em`);
     meta.appendChild(fuelEl);

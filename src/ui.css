@@ -146,6 +146,37 @@ canvas { display: block; }
 .ri-btn--danger { color: var(--ri-danger); border-color: rgba(232,93,74,0.4); }
 .ri-btn--danger:hover { background: rgba(232,93,74,0.10); }
 
+/* Warning-themed action button (demolish, scrap). */
+.ri-warnbtn {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: transparent;
+  color: var(--ri-warn);
+  border: 1px solid rgba(245, 167, 66, 0.4);
+  border-radius: 2px;
+  padding: 5px 10px;
+  font-family: var(--ri-font-mono);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 80ms ease, border-color 80ms ease;
+}
+.ri-warnbtn:hover { background: rgba(245, 167, 66, 0.10); border-color: var(--ri-warn); }
+
+/* Compact delete button used in route cards. */
+.ri-delbtn {
+  width: 20px; height: 20px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: transparent;
+  border: 1px solid var(--ri-border-strong);
+  border-radius: 3px;
+  color: var(--ri-fg-3);
+  cursor: pointer;
+  font-size: 12px;
+  transition: color 100ms, border-color 100ms;
+}
+.ri-delbtn:hover { color: var(--ri-warn); border-color: var(--ri-warn); }
+
 /* Compact icon-button used in panel headers / action strip. */
 .ri-iconbtn {
   width: 28px; height: 28px;

@@ -231,7 +231,7 @@ function recipeToLines(recipe: Recipe, effectiveRate: number): RateLine[] {
 
 /** Format a per-second rate to 2-3 significant digits with a sign prefix. */
 function formatRate(direction: 'in' | 'out', rate: number): string {
-  const sign = direction === 'out' ? '+' : '-';
+  const sign = direction === 'out' ? '+' : '−';
   // Sub-0.01 rates are reported as zero — visual signal that the building is
   // stalled / power-throttled. The recipe lines still appear so the player
   // knows which resources are involved.
@@ -333,33 +333,19 @@ export function mountInspectorUi(
 
   const closeBtn = document.createElement('button');
   closeBtn.textContent = '×';
+  closeBtn.classList.add('ri-modal__close');
   styled(
     closeBtn,
     [
-      `color: ${'var(--ri-fg-3)'}`,
-      'background: transparent',
-      `border: 1px solid ${'var(--ri-border-strong)'}`,
       'width: 18px',
       'height: 18px',
       'line-height: 0',
       'border-radius: 2px',
-      'cursor: pointer',
       'font-size: 14px',
-      'display: flex',
-      'align-items: center',
-      'justify-content: center',
     ].join(';'),
   );
   closeBtn.addEventListener('click', () => {
     close();
-  });
-  closeBtn.addEventListener('mouseenter', () => {
-    closeBtn.style.color = 'var(--ri-fg-1)';
-    closeBtn.style.borderColor = 'var(--ri-accent-dim)';
-  });
-  closeBtn.addEventListener('mouseleave', () => {
-    closeBtn.style.color = 'var(--ri-fg-3)';
-    closeBtn.style.borderColor = 'var(--ri-border-strong)';
   });
   header.appendChild(headLeft);
   header.appendChild(closeBtn);
@@ -570,6 +556,7 @@ export function mountInspectorUi(
     [`color: ${'var(--ri-fg-3)'}`, 'font-size: 9.5px', 'letter-spacing: 0.1em'].join(';'),
   );
   const effectiveValue = document.createElement('span');
+  effectiveValue.classList.add('ri-mono');
   styled(
     effectiveValue,
     [`color: ${'var(--ri-fg-1)'}`, 'font-size: 11px', 'font-weight: 600'].join(';'),
@@ -928,27 +915,15 @@ export function mountInspectorUi(
   styled(
     demolishBtn,
     [
-      'background: transparent',
       `color: ${'var(--ri-warn)'}`,
-      `border: 1px solid ${'rgba(245, 167, 66, 0.4)'}`,
       'padding: 5px 10px',
-      'cursor: pointer',
       'font-family: ui-monospace, monospace',
       'font-size: 11px',
       'letter-spacing: 0.14em',
       'text-transform: uppercase',
-      'border-radius: 2px',
-      'transition: background 80ms ease, border-color 80ms ease',
     ].join(';'),
   );
-  demolishBtn.addEventListener('mouseenter', () => {
-    demolishBtn.style.background = 'rgba(245, 167, 66, 0.10)';
-    demolishBtn.style.borderColor = 'var(--ri-warn)';
-  });
-  demolishBtn.addEventListener('mouseleave', () => {
-    demolishBtn.style.background = 'transparent';
-    demolishBtn.style.borderColor = 'rgba(245, 167, 66, 0.4)';
-  });
+  demolishBtn.classList.add('ri-warnbtn');
   demolishBtn.addEventListener('click', () => {
     if (!target) return;
     const credit = previewScrapForBuilding(target.building.defId);
@@ -1024,6 +999,7 @@ export function mountInspectorUi(
         [`color: ${'var(--ri-fg-1)'}`, 'font-size: 11px', 'letter-spacing: 0.02em'].join(';'),
       );
       const right = document.createElement('span');
+      right.classList.add('ri-mono');
       styled(
         right,
         [`color: ${'var(--ri-fg-1)'}`, 'font-size: 11px', 'font-weight: 600'].join(';'),

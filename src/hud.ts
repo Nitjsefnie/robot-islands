@@ -15,6 +15,7 @@ import type { NetworkConsciousnessState } from './network-consciousness.js';
 import type { Objective } from './objectives.js';
 import { ALL_RESOURCES, type ResourceId } from './recipes.js';
 import { tierForLevel, type Tier } from './skilltree.js';
+import { toDisplayName } from './ui-tokens.js';
 import { mountPanel, Zone } from './ui-zones.js';
 import type { IslandSpec, WorldState } from './world.js';
 
@@ -519,7 +520,7 @@ export function mountHud(
         dot.classList.add('ri-dot');
         dot.dataset.tone = rate > 0 ? 'ok' : 'danger';
         k.appendChild(dot);
-        k.appendChild(document.createTextNode(' ' + r));
+        k.appendChild(document.createTextNode(' ' + toDisplayName(r)));
         const v = document.createElement('span');
         v.classList.add('ri-kv__v');
         v.dataset.tone = rate > 0 ? 'success' : 'danger';

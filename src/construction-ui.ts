@@ -277,18 +277,21 @@ export function mountConstructionUi(
   });
 
   const steelValue = document.createElement('span');
+  steelValue.classList.add('ri-mono');
   steelValue.textContent = '—';
   steelValue.style.color = 'var(--ri-fg-1)';
   steelValue.style.fontSize = '13px';
   steelValue.style.fontWeight = '600';
 
   const ironValue = document.createElement('span');
+  ironValue.classList.add('ri-mono');
   ironValue.textContent = '—';
   ironValue.style.color = 'var(--ri-fg-1)';
   ironValue.style.fontSize = '13px';
   ironValue.style.fontWeight = '600';
 
   const woodValue = document.createElement('span');
+  woodValue.classList.add('ri-mono');
   woodValue.textContent = '—';
   woodValue.style.color = 'var(--ri-fg-1)';
   woodValue.style.fontSize = '13px';

@@ -93,6 +93,10 @@ export const Z = {
   tooltip: 80,
 } as const;
 
+/** Convert a snake_case resource / building id to a human-readable title. */
+export const toDisplayName = (id: string): string =>
+  id.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+
 /** Apply one or more declarations to an element. Filters empty entries. */
 export function applyStyle(el: HTMLElement, ...decls: string[]): void {
   el.style.cssText = decls.filter(Boolean).join(';');

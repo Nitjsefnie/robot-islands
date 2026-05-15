@@ -132,32 +132,18 @@ export function mountRoutesUi(parentEl: HTMLElement, deps: RouteUiDeps): RouteUi
 
   const closeBtn = document.createElement('button');
   closeBtn.textContent = '×';
+  closeBtn.classList.add('ri-modal__close');
   styled(
     closeBtn,
     [
-      `color: ${'var(--ri-fg-3)'}`,
-      'background: transparent',
-      `border: 1px solid ${'var(--ri-border-strong)'}`,
       'width: 18px',
       'height: 18px',
       'line-height: 0',
       'border-radius: 2px',
-      'cursor: pointer',
       'font-size: 14px',
-      'display: flex',
-      'align-items: center',
-      'justify-content: center',
     ].join(';'),
   );
   closeBtn.addEventListener('click', () => hide());
-  closeBtn.addEventListener('mouseenter', () => {
-    closeBtn.style.color = 'var(--ri-fg-1)';
-    closeBtn.style.borderColor = 'var(--ri-accent-dim)';
-  });
-  closeBtn.addEventListener('mouseleave', () => {
-    closeBtn.style.color = 'var(--ri-fg-3)';
-    closeBtn.style.borderColor = 'var(--ri-border-strong)';
-  });
 
   header.appendChild(headLeft);
   header.appendChild(closeBtn);
@@ -205,6 +191,7 @@ export function mountRoutesUi(parentEl: HTMLElement, deps: RouteUiDeps): RouteUi
       ].join(';'),
     );
     const v = document.createElement('span');
+    v.classList.add('ri-mono');
     styled(v, `color: ${'var(--ri-fg-1)'}; font-size: 11.5px; font-weight: 600`);
     row.appendChild(l);
     row.appendChild(v);
@@ -308,6 +295,7 @@ export function mountRoutesUi(parentEl: HTMLElement, deps: RouteUiDeps): RouteUi
 
   // Distance / ETA / capacity readout
   const formReadout = document.createElement('div');
+  formReadout.classList.add('ri-mono');
   styled(
     formReadout,
     [
@@ -574,34 +562,20 @@ export function mountRoutesUi(parentEl: HTMLElement, deps: RouteUiDeps): RouteUi
     styled(idEl, `color: ${'var(--ri-accent)'}; font-size: 10px; letter-spacing: 0.08em; font-weight: 600`);
     const delBtn = document.createElement('button');
     delBtn.textContent = '✕';
+    delBtn.classList.add('ri-delbtn');
     styled(
       delBtn,
       [
-        `color: ${'var(--ri-fg-3)'}`,
-        'background: transparent',
-        `border: 1px solid ${'var(--ri-border-strong)'}`,
         'width: 16px',
         'height: 16px',
         'line-height: 0',
-        'cursor: pointer',
         'font-size: 10px',
-        'display: inline-flex',
-        'align-items: center',
-        'justify-content: center',
       ].join(';'),
     );
     delBtn.addEventListener('click', () => {
       const idx = deps.world.routes.indexOf(route);
       if (idx >= 0) deps.world.routes.splice(idx, 1);
       refresh(performance.now());
-    });
-    delBtn.addEventListener('mouseenter', () => {
-      delBtn.style.color = 'var(--ri-warn)';
-      delBtn.style.borderColor = 'var(--ri-warn)';
-    });
-    delBtn.addEventListener('mouseleave', () => {
-      delBtn.style.color = 'var(--ri-fg-3)';
-      delBtn.style.borderColor = 'var(--ri-border-strong)';
     });
     top.appendChild(idEl);
     top.appendChild(delBtn);
@@ -635,9 +609,11 @@ export function mountRoutesUi(parentEl: HTMLElement, deps: RouteUiDeps): RouteUi
     const meta = document.createElement('div');
     styled(meta, 'display: flex; justify-content: space-between');
     const left = document.createElement('span');
+    left.classList.add('ri-mono');
     left.textContent = `${route.capacityPerSec.toFixed(2)} u/s · ${route.transitTimeSec.toFixed(1)}s`;
     styled(left, `color: ${'var(--ri-fg-3)'}; font-size: 9.5px`);
     const right = document.createElement('span');
+    right.classList.add('ri-mono');
     if (inFlightCount === 0) {
       right.textContent = 'idle';
       styled(right, `color: ${'var(--ri-fg-4)'}; font-size: 9.5px`);
