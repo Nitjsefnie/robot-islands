@@ -47,24 +47,9 @@ import {
   serializeWorld,
   STORAGE_KEY,
 } from './persistence.js';
+import { mountModal } from './ui-modal.js';
 import type { IslandState } from './economy.js';
 import type { WorldState } from './world.js';
-
-// ---------------------------------------------------------------------------
-// Palette — shared vocabulary with skilltree-ui.ts / buildings-ui.ts
-// ---------------------------------------------------------------------------
-const PANEL_BG = 'rgba(14, 18, 26, 0.92)';
-const PANEL_BORDER = '#3a4452';
-const PANEL_HEADER_BORDER = '#4a5a72';
-const FG = '#cdd6f4';
-const FG_DIM = '#6c7791';
-const FG_MUTED = '#4a5365';
-const ACCENT = '#7dd3e8';
-const ACCENT_DIM = '#3d6f7c';
-const WARN = '#f5a742';
-const STRIP_BG = 'rgba(20, 24, 32, 0.6)';
-const ROW_BG_HOVER = 'rgba(125, 211, 232, 0.06)';
-const CAPTURE_BG = 'rgba(245, 167, 66, 0.12)';
 
 // ---------------------------------------------------------------------------
 // Pure helpers — exported for tests
@@ -154,47 +139,6 @@ export function actionRows(
 }
 
 // ---------------------------------------------------------------------------
-// DOM helpers
-// ---------------------------------------------------------------------------
-
-function styled(el: HTMLElement, css: string): void {
-  el.style.cssText = css;
-}
-
-function makeButton(label: string, onClick: () => void): HTMLButtonElement {
-  const b = document.createElement('button');
-  b.textContent = label;
-  styled(
-    b,
-    [
-      'background: #1a1f2a',
-      `color: ${FG}`,
-      `border: 1px solid ${PANEL_BORDER}`,
-      'padding: 3px 9px',
-      'cursor: pointer',
-      'font-family: ui-monospace, monospace',
-      'font-size: 11px',
-      'letter-spacing: 0.04em',
-      'text-transform: uppercase',
-      'transition: background 80ms ease, border-color 80ms ease',
-    ].join(';'),
-  );
-  b.addEventListener('mouseenter', () => {
-    b.style.background = '#252b38';
-    b.style.borderColor = ACCENT_DIM;
-  });
-  b.addEventListener('mouseleave', () => {
-    b.style.background = '#1a1f2a';
-    b.style.borderColor = PANEL_BORDER;
-  });
-  b.addEventListener('click', () => {
-    onClick();
-    b.blur();
-  });
-  return b;
-}
-
-// ---------------------------------------------------------------------------
 // Mount
 // ---------------------------------------------------------------------------
 
@@ -226,370 +170,226 @@ export function mountSettingsUi(
   parentEl: HTMLElement,
   deps: SettingsUiDeps,
 ): SettingsUi {
-  let visible = false;
-  // Action whose row is in capture mode, or null when not capturing.
-  let captureAction: string | null = null;
   // The capture keydown listener registered on window. Reference is held so
   // we can remove it cleanly when capture exits.
   let captureListener: ((e: KeyboardEvent) => void) | null = null;
 
-  // ---- Scrim + panel shell ----------------------------------------------
-  const scrim = document.createElement('div');
-  scrim.id = 'settings-scrim';
-  styled(
-    scrim,
-    [
-      'position: fixed',
-      'inset: 0',
-      'background: rgba(10, 14, 20, 0.55)',
-      'z-index: 200',
-      'display: none',
-      'pointer-events: none',
-      'backdrop-filter: blur(1.5px)',
-    ].join(';'),
-  );
-
-  const panel = document.createElement('div');
-  panel.id = 'settings-panel';
-  styled(
-    panel,
-    [
-      'position: fixed',
-      'top: 50%',
-      'left: 50%',
-      'transform: translate(-50%, -50%)',
-      'width: min(640px, calc(100vw - 32px))',
-      'max-height: calc(100vh - 32px)',
-      `background: ${PANEL_BG}`,
-      `border: 1px solid ${PANEL_BORDER}`,
-      'border-radius: 2px',
-      'box-shadow: 0 24px 48px -12px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(125, 211, 232, 0.05)',
-      'z-index: 201',
-      'pointer-events: auto',
-      `color: ${FG}`,
-      'font-family: ui-monospace, monospace',
-      'font-size: 12px',
-      'line-height: 1.45',
-      'font-variant-numeric: tabular-nums',
-      'display: flex',
-      'flex-direction: column',
-      'overflow: hidden',
-    ].join(';'),
-  );
-
-  // ---- Header -----------------------------------------------------------
-  const header = document.createElement('div');
-  styled(
-    header,
-    [
-      'display: flex',
-      'align-items: center',
-      'justify-content: space-between',
-      'padding: 10px 16px 9px',
-      `border-bottom: 1px solid ${PANEL_HEADER_BORDER}`,
-      `background: ${STRIP_BG}`,
-      'gap: 14px',
-    ].join(';'),
-  );
-
-  const headerTitleWrap = document.createElement('div');
-  styled(
-    headerTitleWrap,
-    'display: flex; align-items: baseline; gap: 10px; flex: 0 0 auto',
-  );
-  const titleEl = document.createElement('span');
-  titleEl.textContent = 'SETTINGS';
-  styled(
-    titleEl,
-    [
-      `color: ${ACCENT}`,
-      'font-size: 12px',
-      'font-weight: 600',
-      'letter-spacing: 0.22em',
-    ].join(';'),
-  );
-  const subtitleEl = document.createElement('span');
-  subtitleEl.textContent = '/ RUN-01';
-  styled(
-    subtitleEl,
-    [
-      `color: ${FG_DIM}`,
-      'font-size: 10px',
-      'letter-spacing: 0.12em',
-      'text-transform: uppercase',
-    ].join(';'),
-  );
-  headerTitleWrap.appendChild(titleEl);
-  headerTitleWrap.appendChild(subtitleEl);
-
-  const closeBtn = makeButton('Close (S)', () => hide());
-  header.appendChild(headerTitleWrap);
-  header.appendChild(closeBtn);
-
-  // ---- Body — scrollable container --------------------------------------
-  const body = document.createElement('div');
-  styled(
-    body,
-    [
-      'display: flex',
-      'flex-direction: column',
-      'gap: 14px',
-      'padding: 12px 16px 16px',
-      'overflow-y: auto',
-      'flex: 1 1 auto',
-    ].join(';'),
-  );
-
-  // ---- Keybindings section ----------------------------------------------
-  const kbSection = document.createElement('div');
-  styled(kbSection, 'display: flex; flex-direction: column; gap: 6px');
-
-  const kbHeading = document.createElement('div');
-  styled(
-    kbHeading,
-    [
-      'display: flex',
-      'align-items: baseline',
-      'justify-content: space-between',
-      `border-bottom: 1px solid ${PANEL_BORDER}`,
-      'padding-bottom: 4px',
-    ].join(';'),
-  );
-  const kbHeadingLabel = document.createElement('span');
-  kbHeadingLabel.textContent = 'KEYBINDINGS';
-  styled(
-    kbHeadingLabel,
-    [
-      `color: ${ACCENT}`,
-      'font-size: 11px',
-      'font-weight: 600',
-      'letter-spacing: 0.22em',
-    ].join(';'),
-  );
-  const kbHeadingHint = document.createElement('span');
-  kbHeadingHint.textContent = 'click rebind, then press a key';
-  styled(
-    kbHeadingHint,
-    [
-      `color: ${FG_DIM}`,
-      'font-size: 9.5px',
-      'letter-spacing: 0.1em',
-      'text-transform: uppercase',
-    ].join(';'),
-  );
-  kbHeading.appendChild(kbHeadingLabel);
-  kbHeading.appendChild(kbHeadingHint);
-  kbSection.appendChild(kbHeading);
-
-  const kbTable = document.createElement('div');
-  styled(
-    kbTable,
-    'display: flex; flex-direction: column; gap: 1px; margin-top: 4px',
-  );
-  kbSection.appendChild(kbTable);
-
-  // Reset bindings button strip.
-  const kbResetRow = document.createElement('div');
-  styled(
-    kbResetRow,
-    [
-      'display: flex',
-      'justify-content: flex-end',
-      'padding-top: 4px',
-    ].join(';'),
-  );
-  const resetBtn = makeButton('Reset Bindings', () => {
-    if (!window.confirm('Reset all keybindings to defaults?')) return;
-    cancelCapture(); // belt-and-braces — Reset cancels any in-progress capture.
-    resetBindingsToDefaults(deps.reg);
-    rebuildKbTable();
-  });
-  kbResetRow.appendChild(resetBtn);
-  kbSection.appendChild(kbResetRow);
-
-  body.appendChild(kbSection);
-
-  // ---- Save section -----------------------------------------------------
-  const saveSection = document.createElement('div');
-  styled(saveSection, 'display: flex; flex-direction: column; gap: 6px');
-
-  const saveHeading = document.createElement('div');
-  styled(
-    saveHeading,
-    [
-      'display: flex',
-      'align-items: baseline',
-      'justify-content: space-between',
-      `border-bottom: 1px solid ${PANEL_BORDER}`,
-      'padding-bottom: 4px',
-    ].join(';'),
-  );
-  const saveHeadingLabel = document.createElement('span');
-  saveHeadingLabel.textContent = 'SAVE';
-  styled(
-    saveHeadingLabel,
-    [
-      `color: ${ACCENT}`,
-      'font-size: 11px',
-      'font-weight: 600',
-      'letter-spacing: 0.22em',
-    ].join(';'),
-  );
+  // Mutable refs to elements that need updating after mount.
+  const kbTbody = document.createElement('tbody');
   const saveHeadingStatus = document.createElement('span');
-  styled(
-    saveHeadingStatus,
-    [
-      `color: ${FG_DIM}`,
-      'font-size: 9.5px',
-      'letter-spacing: 0.1em',
-      'text-transform: uppercase',
-    ].join(';'),
-  );
-  saveHeading.appendChild(saveHeadingLabel);
-  saveHeading.appendChild(saveHeadingStatus);
-  saveSection.appendChild(saveHeading);
 
-  // Save-management button strip — wraps so a narrow viewport doesn't
-  // overflow horizontally.
-  const saveButtonStrip = document.createElement('div');
-  styled(
-    saveButtonStrip,
-    [
-      'display: flex',
-      'flex-wrap: wrap',
-      'gap: 6px',
-      'padding-top: 6px',
-    ].join(';'),
-  );
-
-  const exportBtn = makeButton('Export Save', async () => {
-    try {
-      const snapshot = serializeWorld(deps.world, deps.islandStates);
-      const json = JSON.stringify(snapshot);
-      await navigator.clipboard.writeText(json);
-      window.alert(
-        `Save exported to clipboard (${json.length} characters).`,
-      );
-    } catch (err) {
-      // navigator.clipboard.writeText can reject (no permission, http://
-      // origin, etc.). Surface the error so the user knows nothing was
-      // copied — the clipboard contents are unchanged.
-      console.warn('[robot-islands] export failed:', err);
-      window.alert(
-        'Export failed — clipboard write rejected. See console for details.',
-      );
-    }
-  });
-  saveButtonStrip.appendChild(exportBtn);
-
-  // Hidden file input drives import. Keeping the visible button as the
-  // primary affordance and routing it through the input keeps the styling
-  // consistent with the rest of the panel.
-  const importInput = document.createElement('input');
-  importInput.type = 'file';
-  importInput.accept = 'application/json,.json';
-  importInput.style.display = 'none';
-  importInput.addEventListener('change', async () => {
-    const file = importInput.files?.[0];
-    if (!file) return;
-    try {
-      const text = await file.text();
-      const parsed: unknown = JSON.parse(text);
-      if (!isValidSaveSnapshot(parsed)) {
-        window.alert(
-          'Import failed — file is not a valid save snapshot for this version.',
-        );
-        importInput.value = '';
-        return;
-      }
-      if (
-        !window.confirm(
-          'Import will overwrite the current save and reload the page. Continue?',
-        )
-      ) {
-        importInput.value = '';
-        return;
-      }
-      await importSave(parsed);
-      window.location.reload();
-    } catch (err) {
-      console.warn('[robot-islands] import failed:', err);
-      window.alert('Import failed — could not parse file. See console.');
-      importInput.value = '';
-    }
-  });
-  const importBtn = makeButton('Import Save', () => {
-    importInput.click();
-  });
-  saveButtonStrip.appendChild(importBtn);
-  saveButtonStrip.appendChild(importInput);
-
-  const clearBtn = makeButton('Clear Save', () => {
-    if (
-      !window.confirm(
-        'Clear the saved game and reload? This cannot be undone.',
-      )
-    )
-      return;
-    void clearSave().then(() => {
-      window.location.reload();
+  function makeButton(
+    label: string,
+    onClick: () => void,
+    extraClasses = '',
+  ): HTMLButtonElement {
+    const b = document.createElement('button');
+    b.textContent = label;
+    b.className = 'ri-btn' + (extraClasses ? ' ' + extraClasses : '');
+    b.addEventListener('click', () => {
+      onClick();
+      b.blur();
     });
+    return b;
+  }
+
+  const handle = mountModal(parentEl, {
+    title: 'SETTINGS',
+    subtitle: '/ RUN-01',
+    onClose: () => handle.hide(),
+    buildBody(body) {
+      body.style.display = 'flex';
+      body.style.flexDirection = 'column';
+      body.style.gap = '14px';
+
+      // ---- Keybindings section --------------------------------------------
+      const kbSection = document.createElement('div');
+      kbSection.style.display = 'flex';
+      kbSection.style.flexDirection = 'column';
+      kbSection.style.gap = '6px';
+
+      const kbHeading = document.createElement('div');
+      kbHeading.style.display = 'flex';
+      kbHeading.style.alignItems = 'baseline';
+      kbHeading.style.justifyContent = 'space-between';
+      kbHeading.style.paddingBottom = '4px';
+      kbHeading.style.borderBottom = '1px solid var(--ri-rule)';
+
+      const kbHeadingLabel = document.createElement('span');
+      kbHeadingLabel.textContent = 'KEYBINDINGS';
+      kbHeadingLabel.className = 'ri-caps';
+      kbHeadingLabel.style.color = 'var(--ri-accent)';
+      kbHeading.appendChild(kbHeadingLabel);
+
+      const kbHeadingHint = document.createElement('span');
+      kbHeadingHint.textContent = 'click rebind, then press a key';
+      kbHeadingHint.className = 'ri-muted';
+      kbHeadingHint.style.fontSize = '9.5px';
+      kbHeadingHint.style.letterSpacing = '0.1em';
+      kbHeadingHint.style.textTransform = 'uppercase';
+      kbHeading.appendChild(kbHeadingHint);
+
+      kbSection.appendChild(kbHeading);
+
+      const kbTable = document.createElement('table');
+      kbTable.className = 'ri-table';
+      kbTable.appendChild(kbTbody);
+      kbSection.appendChild(kbTable);
+
+      const kbResetRow = document.createElement('div');
+      kbResetRow.style.display = 'flex';
+      kbResetRow.style.justifyContent = 'flex-end';
+      kbResetRow.style.paddingTop = '4px';
+      const resetBtn = makeButton('Reset Bindings', () => {
+        if (!window.confirm('Reset all keybindings to defaults?')) return;
+        cancelCapture(); // belt-and-braces — Reset cancels any in-progress capture.
+        resetBindingsToDefaults(deps.reg);
+        rebuildKbTable();
+      });
+      kbResetRow.appendChild(resetBtn);
+      kbSection.appendChild(kbResetRow);
+
+      body.appendChild(kbSection);
+
+      // ---- Save section -----------------------------------------------------
+      const saveSection = document.createElement('div');
+      saveSection.style.display = 'flex';
+      saveSection.style.flexDirection = 'column';
+      saveSection.style.gap = '6px';
+
+      const saveHeading = document.createElement('div');
+      saveHeading.style.display = 'flex';
+      saveHeading.style.alignItems = 'baseline';
+      saveHeading.style.justifyContent = 'space-between';
+      saveHeading.style.paddingBottom = '4px';
+      saveHeading.style.borderBottom = '1px solid var(--ri-rule)';
+
+      const saveHeadingLabel = document.createElement('span');
+      saveHeadingLabel.textContent = 'SAVE';
+      saveHeadingLabel.className = 'ri-caps';
+      saveHeadingLabel.style.color = 'var(--ri-accent)';
+      saveHeading.appendChild(saveHeadingLabel);
+
+      saveHeadingStatus.className = 'ri-muted';
+      saveHeadingStatus.style.fontSize = '9.5px';
+      saveHeadingStatus.style.letterSpacing = '0.1em';
+      saveHeadingStatus.style.textTransform = 'uppercase';
+      saveHeading.appendChild(saveHeadingStatus);
+
+      saveSection.appendChild(saveHeading);
+
+      // Save-management button strip — wraps so a narrow viewport doesn't
+      // overflow horizontally.
+      const saveButtonStrip = document.createElement('div');
+      saveButtonStrip.style.display = 'flex';
+      saveButtonStrip.style.flexWrap = 'wrap';
+      saveButtonStrip.style.gap = '6px';
+      saveButtonStrip.style.paddingTop = '6px';
+
+      const exportBtn = makeButton('Export Save', async () => {
+        try {
+          const snapshot = serializeWorld(deps.world, deps.islandStates);
+          const json = JSON.stringify(snapshot);
+          await navigator.clipboard.writeText(json);
+          window.alert(
+            `Save exported to clipboard (${json.length} characters).`,
+          );
+        } catch (err) {
+          // navigator.clipboard.writeText can reject (no permission, http://
+          // origin, etc.). Surface the error so the user knows nothing was
+          // copied — the clipboard contents are unchanged.
+          console.warn('[robot-islands] export failed:', err);
+          window.alert(
+            'Export failed — clipboard write rejected. See console for details.',
+          );
+        }
+      });
+      saveButtonStrip.appendChild(exportBtn);
+
+      // Hidden file input drives import. Keeping the visible button as the
+      // primary affordance and routing it through the input keeps the styling
+      // consistent with the rest of the panel.
+      const importInput = document.createElement('input');
+      importInput.type = 'file';
+      importInput.accept = 'application/json,.json';
+      importInput.style.display = 'none';
+      importInput.addEventListener('change', async () => {
+        const file = importInput.files?.[0];
+        if (!file) return;
+        try {
+          const text = await file.text();
+          const parsed: unknown = JSON.parse(text);
+          if (!isValidSaveSnapshot(parsed)) {
+            window.alert(
+              'Import failed — file is not a valid save snapshot for this version.',
+            );
+            importInput.value = '';
+            return;
+          }
+          if (
+            !window.confirm(
+              'Import will overwrite the current save and reload the page. Continue?',
+            )
+          ) {
+            importInput.value = '';
+            return;
+          }
+          await importSave(parsed);
+          window.location.reload();
+        } catch (err) {
+          console.warn('[robot-islands] import failed:', err);
+          window.alert('Import failed — could not parse file. See console.');
+          importInput.value = '';
+        }
+      });
+      const importBtn = makeButton('Import Save', () => {
+        importInput.click();
+      });
+      saveButtonStrip.appendChild(importBtn);
+      saveButtonStrip.appendChild(importInput);
+
+      const clearBtn = makeButton(
+        'Clear Save',
+        () => {
+          if (
+            !window.confirm(
+              'Clear the saved game and reload? This cannot be undone.',
+            )
+          )
+            return;
+          void clearSave().then(() => {
+            window.location.reload();
+          });
+        },
+        'ri-btn--danger',
+      );
+      saveButtonStrip.appendChild(clearBtn);
+
+      saveSection.appendChild(saveButtonStrip);
+
+      const saveNote = document.createElement('div');
+      saveNote.textContent =
+        'Export copies the full save as JSON to your clipboard. Import reads a JSON file and reloads. Rebound keys are NOT yet persisted across reloads.';
+      saveNote.className = 'ri-muted';
+      saveNote.style.fontSize = '10px';
+      saveNote.style.lineHeight = '1.4';
+      saveNote.style.paddingTop = '4px';
+      saveNote.style.fontStyle = 'italic';
+      saveSection.appendChild(saveNote);
+
+      body.appendChild(saveSection);
+    },
+    buildFooter(footer) {
+      const footerL = document.createElement('span');
+      footerL.textContent = 'S or esc to close · esc during capture cancels';
+      footerL.className = 'ri-muted';
+      const footerR = document.createElement('span');
+      footerR.textContent = 'storage key · ' + STORAGE_KEY;
+      footerR.className = 'ri-muted';
+      footer.prepend(footerL);
+      footer.appendChild(footerR);
+    },
   });
-  // Visually flag the destructive button — same WARN colour vocabulary used
-  // by other modules' "danger" affordances.
-  clearBtn.style.borderColor = WARN;
-  clearBtn.style.color = WARN;
-  saveButtonStrip.appendChild(clearBtn);
-
-  saveSection.appendChild(saveButtonStrip);
-
-  const saveNote = document.createElement('div');
-  saveNote.textContent =
-    'Export copies the full save as JSON to your clipboard. Import reads a JSON file and reloads. Rebound keys are NOT yet persisted across reloads.';
-  styled(
-    saveNote,
-    [
-      `color: ${FG_MUTED}`,
-      'font-size: 10px',
-      'letter-spacing: 0.02em',
-      'line-height: 1.4',
-      'padding-top: 4px',
-      'font-style: italic',
-    ].join(';'),
-  );
-  saveSection.appendChild(saveNote);
-  body.appendChild(saveSection);
-
-  // ---- Footer hint strip ------------------------------------------------
-  const footer = document.createElement('div');
-  styled(
-    footer,
-    [
-      'padding: 7px 16px',
-      `border-top: 1px solid ${PANEL_HEADER_BORDER}`,
-      `background: ${STRIP_BG}`,
-      `color: ${FG_DIM}`,
-      'font-size: 10px',
-      'letter-spacing: 0.06em',
-      'display: flex',
-      'justify-content: space-between',
-      'text-transform: uppercase',
-    ].join(';'),
-  );
-  const footerL = document.createElement('span');
-  footerL.textContent = 'S or esc to close · esc during capture cancels';
-  const footerR = document.createElement('span');
-  footerR.textContent = 'storage key · ' + STORAGE_KEY;
-  footer.appendChild(footerL);
-  footer.appendChild(footerR);
-
-  panel.appendChild(header);
-  panel.appendChild(body);
-  panel.appendChild(footer);
-
-  parentEl.appendChild(scrim);
-  parentEl.appendChild(panel);
-  panel.style.display = 'none';
 
   // ---- Keybind table rendering ------------------------------------------
 
@@ -597,63 +397,36 @@ export function mountSettingsUi(
    *  a rebind changes the registry. The full rebuild keeps the bookkeeping
    *  simple — there's at most ~14 rows. */
   function rebuildKbTable(): void {
-    kbTable.innerHTML = '';
+    kbTbody.innerHTML = '';
     const rows = actionRows(deps.reg);
     for (const r of rows) {
-      const row = document.createElement('div');
-      styled(
-        row,
-        [
-          'display: grid',
-          'grid-template-columns: 1fr 1.2fr 100px',
-          'align-items: center',
-          'gap: 12px',
-          'padding: 4px 8px',
-          `border: 1px solid transparent`,
-          'border-radius: 2px',
-          'transition: background 80ms ease, border-color 80ms ease',
-        ].join(';'),
-      );
+      const tr = document.createElement('tr');
 
-      const actionEl = document.createElement('span');
+      const actionEl = document.createElement('td');
       actionEl.textContent = r.action;
-      styled(
-        actionEl,
-        [`color: ${FG}`, 'font-size: 11px', 'letter-spacing: 0.02em'].join(
-          ';',
-        ),
-      );
+      actionEl.className = 'ri-table__name';
 
-      const keysEl = document.createElement('span');
+      const keysEl = document.createElement('td');
       keysEl.textContent =
         r.codes.length === 0 ? '(unbound)' : r.codes.join(' · ');
-      styled(
-        keysEl,
-        [
-          `color: ${r.codes.length === 0 ? FG_MUTED : FG_DIM}`,
-          'font-size: 11px',
-          'letter-spacing: 0.04em',
-          'font-style: ' + (r.codes.length === 0 ? 'italic' : 'normal'),
-        ].join(';'),
-      );
+      if (r.codes.length === 0) {
+        keysEl.style.color = 'var(--ri-fg-4)';
+        keysEl.style.fontStyle = 'italic';
+      } else {
+        keysEl.style.color = 'var(--ri-fg-3)';
+      }
 
+      const btnTd = document.createElement('td');
       const rebindBtn = makeButton('Rebind', () => {
-        beginCapture(r.action, row, keysEl);
+        beginCapture(r.action, tr, keysEl);
       });
-      // Make the per-row button narrow + flush right.
       rebindBtn.style.width = '100%';
+      btnTd.appendChild(rebindBtn);
 
-      row.addEventListener('mouseenter', () => {
-        if (captureAction !== r.action) row.style.background = ROW_BG_HOVER;
-      });
-      row.addEventListener('mouseleave', () => {
-        if (captureAction !== r.action) row.style.background = '';
-      });
-
-      row.appendChild(actionEl);
-      row.appendChild(keysEl);
-      row.appendChild(rebindBtn);
-      kbTable.appendChild(row);
+      tr.appendChild(actionEl);
+      tr.appendChild(keysEl);
+      tr.appendChild(btnTd);
+      kbTbody.appendChild(tr);
     }
   }
 
@@ -662,16 +435,14 @@ export function mountSettingsUi(
    *  binding, subject to conflict-confirmation. */
   function beginCapture(
     action: string,
-    rowEl: HTMLDivElement,
-    keysEl: HTMLSpanElement,
+    tr: HTMLTableRowElement,
+    keysEl: HTMLTableCellElement,
   ): void {
     // Cancel any prior capture so we don't end up with stacked listeners.
     cancelCapture();
-    captureAction = action;
-    rowEl.style.background = CAPTURE_BG;
-    rowEl.style.borderColor = WARN;
+    tr.style.background = 'var(--ri-pressed)';
     keysEl.textContent = 'press a key…';
-    keysEl.style.color = WARN;
+    keysEl.style.color = 'var(--ri-warn)';
     keysEl.style.fontStyle = 'italic';
 
     const handler = (e: KeyboardEvent): void => {
@@ -711,7 +482,6 @@ export function mountSettingsUi(
       window.removeEventListener('keydown', captureListener, { capture: true });
       captureListener = null;
     }
-    captureAction = null;
   }
 
   // ---- Refresh / show / hide --------------------------------------------
@@ -729,38 +499,34 @@ export function mountSettingsUi(
   }
 
   function refresh(): void {
-    if (!visible) return;
+    if (!handle.isVisible()) return;
     saveHeadingStatus.textContent =
       'last saved · ' + formatSavedAge(performance.now(), deps.getLastSavedAt());
   }
 
   function show(): void {
-    if (visible) return;
-    visible = true;
-    panel.style.display = 'flex';
-    scrim.style.display = 'block';
+    if (handle.isVisible()) return;
+    handle.show();
     rebuildKbTable();
     refresh();
   }
   function hide(): void {
-    if (!visible) return;
-    visible = false;
+    if (!handle.isVisible()) return;
     cancelCapture();
-    panel.style.display = 'none';
-    scrim.style.display = 'none';
+    handle.hide();
   }
   function toggle(): boolean {
-    if (visible) hide();
+    if (handle.isVisible()) hide();
     else show();
-    return visible;
+    return handle.isVisible();
   }
 
   return {
-    el: panel,
+    el: handle.el,
     refresh,
     show,
     hide,
     toggle,
-    isVisible: () => visible,
+    isVisible: handle.isVisible,
   };
 }
