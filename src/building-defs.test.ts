@@ -210,6 +210,8 @@ const KNOWN_DEF_IDS: ReadonlyArray<BuildingDefId> = [
   'resistor_doping',
   // Phase 10 — T3 minerals + alloy (Task 10.1)
   'mercury_well',
+  // Phase 10 — T3 minerals + alloy (Task 10.2)
+  'diamond_quarry',
 ];
 
 // Helper: build a minimal IslandSpec for the canPlaceOnIsland tests. The
@@ -303,6 +305,20 @@ describe('BUILDING_DEFS catalog', () => {
     it('produces 1 mercury per cycle', () => {
       expect(RECIPES.mercury_well).toBeDefined();
       expect(RECIPES.mercury_well!.outputs).toEqual({ mercury: 1 });
+    });
+  });
+
+  describe('§6.4 diamond_quarry (T3 diamond_ore extractor)', () => {
+    it('is T3 extraction gated to diamond_vein tile', () => {
+      const def = BUILDING_DEFS.diamond_quarry;
+      expect(def).toBeDefined();
+      expect(def.tier).toBe(3);
+      expect(def.category).toBe('extraction');
+      expect(def.requiredTile).toEqual(['diamond_vein']);
+    });
+    it('produces 1 diamond_ore per cycle', () => {
+      expect(RECIPES.diamond_quarry).toBeDefined();
+      expect(RECIPES.diamond_quarry!.outputs).toEqual({ diamond_ore: 1 });
     });
   });
 });

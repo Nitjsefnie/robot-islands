@@ -243,7 +243,9 @@ export type ResourceId =
   // §13.4 endgame artifact — victory condition resource. No producer yet.
   | 'genesis_cell'
   // Phase 10 — T3 minerals + alloy (Task 10.1)
-  | 'mercury';
+  | 'mercury'
+  // Phase 10 — T3 minerals + alloy (Task 10.2)
+  | 'diamond_ore';
 
 /** All known resources, useful for iterating to initialise inventories. */
 export const ALL_RESOURCES: ReadonlyArray<ResourceId> = [
@@ -414,6 +416,8 @@ export const ALL_RESOURCES: ReadonlyArray<ResourceId> = [
   'genesis_cell',
   // Phase 10 — T3 minerals + alloy (Task 10.1)
   'mercury',
+  // Phase 10 — T3 minerals + alloy (Task 10.2)
+  'diamond_ore',
 ];
 
 /**
@@ -608,6 +612,8 @@ export const XP_WEIGHT: Readonly<Record<ResourceId, number>> = {
   genesis_cell: 300,
   // Phase 10 — T3 minerals + alloy (Task 10.1)
   mercury: 30,
+  // Phase 10 — T3 minerals + alloy (Task 10.2)
+  diamond_ore: 30,
 };
 
 /**
@@ -1788,6 +1794,13 @@ export const RECIPES: Partial<Record<RecipeId, Recipe>> = {
     cycleSec: 200,
     inputs: {},
     outputs: { mercury: 1 },
+    category: 'extraction',
+  },
+  // Phase 10 — T3 minerals + alloy (Task 10.2)
+  diamond_quarry: {
+    cycleSec: 300,
+    inputs: {},
+    outputs: { diamond_ore: 1 },
     category: 'extraction',
   },
 };

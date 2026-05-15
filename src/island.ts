@@ -50,7 +50,9 @@ export type TerrainKind =
   | 'nickel_vein'
   | 'tungsten_vein'
   // Phase 10 — T3 mineral terrain kinds (Task 10.1)
-  | 'mercury_pit';
+  | 'mercury_pit'
+  // Phase 10 — T3 mineral terrain kinds (Task 10.2)
+  | 'diamond_vein';
 
 export interface Tile {
   /** Tile grid x. The tile occupies the unit square [x, x+1) × [y, y+1). */
@@ -94,6 +96,8 @@ const TERRAIN_COLOR: Readonly<Record<TerrainKind, number>> = {
   tungsten_vein: 0x4a5060,      // dark tungsten blue-grey
   // Phase 10 — T3 mineral terrain colors (Task 10.1)
   mercury_pit: 0xc0c0c8,        // mercury-silver
+  // Phase 10 — T3 mineral terrain colors (Task 10.2)
+  diamond_vein: 0xd0e8f5,       // pale ice-blue
 };
 
 /**

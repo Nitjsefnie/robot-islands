@@ -264,6 +264,8 @@ export type BuildingDefId =
   | 'phase_refiner'
   // Phase 10 — T3 minerals + alloy (Task 10.1)
   | 'mercury_well'
+  // Phase 10 — T3 minerals + alloy (Task 10.2)
+  | 'diamond_quarry'
   // §5.2 / §8.6 Heat Sources. The economy reads `def.heatSource` to identify
   // sources during heat-adjacency resolution. Each free source costs no fuel
   // when serving consumers; coal_furnace burns `coalPerCycle × consumers` per
@@ -2942,6 +2944,20 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     requiredTile: ['mercury_pit'],
     placementCost: { stone: 80, iron_ingot: 25, wood: 10 },
     glyph: '◌',
+  },
+  // Phase 10 — T3 minerals + alloy (Task 10.2)
+  diamond_quarry: {
+    id: 'diamond_quarry',
+    displayName: 'Diamond Quarry',
+    category: 'extraction',
+    tier: 3,
+    footprint: SHAPES.square2,
+    fill: 0xd0e8f5, // pale ice-blue
+    stroke: 0x506070,
+    power: { consumes: 100 },
+    requiredTile: ['diamond_vein'],
+    placementCost: { stone: 80, iron_ingot: 25, wood: 10 },
+    glyph: '◆',
   },
 
   // T5 raw extractors (§8.10). Power draws are placeholder "60-100 kW"

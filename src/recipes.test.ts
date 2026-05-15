@@ -1151,3 +1151,16 @@ describe('§6.4 mercury + mercury_well (Task 10.1)', () => {
     expect(RECIPES.mercury_well!.cycleSec).toBe(200);
   });
 });
+
+describe('§6.4 diamond_ore + diamond_quarry (Task 10.2)', () => {
+  it('diamond_ore is in ALL_RESOURCES with xp_weight 30 (T3 rare)', () => {
+    expect(ALL_RESOURCES).toContain('diamond_ore' as ResourceId);
+    expect(XP_WEIGHT.diamond_ore).toBe(30);
+  });
+  it('diamond_quarry recipe: empty inputs → diamond_ore', () => {
+    expect(RECIPES.diamond_quarry).toBeDefined();
+    expect(RECIPES.diamond_quarry!.inputs).toEqual({});
+    expect(RECIPES.diamond_quarry!.outputs).toEqual({ diamond_ore: 1 });
+    expect(RECIPES.diamond_quarry!.cycleSec).toBe(300);
+  });
+});

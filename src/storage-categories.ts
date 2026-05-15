@@ -241,4 +241,6 @@ export const RESOURCE_STORAGE_CATEGORY: Readonly<Record<ResourceId, StorageCateg
   genesis_cell: 'rare',
   // Phase 10 — T3 minerals + alloy (Task 10.1)
   mercury: 'liquid_gas',
+  // Phase 10 — T3 minerals + alloy (Task 10.2)
+  diamond_ore: 'rare',
 };
