@@ -171,6 +171,7 @@ export type ResourceId =
   | 'transistor'
   | 'capacitor'
   | 'resistor'
+  | 'memory_module'
   | 'nitrogen'
   | 'cryo_coolant'
   | 'aviation_kerosene'
@@ -361,6 +362,7 @@ export const ALL_RESOURCES: ReadonlyArray<ResourceId> = [
   'transistor',
   'capacitor',
   'resistor',
+  'memory_module',
   'nitrogen',
   'cryo_coolant',
   'aviation_kerosene',
@@ -546,6 +548,7 @@ export const XP_WEIGHT: Readonly<Record<ResourceId, number>> = {
   transistor: 30,
   capacitor: 30,
   resistor: 30,
+  memory_module: 30,
   nitrogen: 30,
   cryo_coolant: 30,
   aviation_kerosene: 30,
@@ -1529,6 +1532,13 @@ export const RECIPES: Partial<Record<RecipeId, Recipe>> = {
     cycleSec: 200,
     inputs: { silicon_wafer: 1, graphite: 1 },
     outputs: { resistor: 4 },
+    category: 'electronics',
+  },
+  // Phase 9 — Task 9.3: Memory Lab (§7.7). PCB + transistors + capacitors + resistors + solder → memory_module.
+  memory_lab: {
+    cycleSec: 500,
+    inputs: { pcb: 1, transistor: 4, capacitor: 4, resistor: 4, solder: 1 },
+    outputs: { memory_module: 1 },
     category: 'electronics',
   },
   drilling_rig: {

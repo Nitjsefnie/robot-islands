@@ -184,6 +184,7 @@ export const RESOURCE_STORAGE_CATEGORY: Readonly<Record<ResourceId, StorageCateg
   transistor: 'components',      // §7.7: T3 electronics component.
   capacitor: 'components',       // §7.7: T3 electronics component.
   resistor: 'components',        // §7.7: T3 electronics component.
+  memory_module: 'components',    // §7.7: T3 electronics component.
   nitrogen: 'liquid_gas',
   cryo_coolant: 'temp_sensitive', // §4.6 lists "cryo-coolant" under temp_sensitive.
   aviation_kerosene: 'liquid_gas',

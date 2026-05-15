@@ -1080,6 +1080,26 @@ describe('§7.7 transistor + capacitor + resistor doping chambers (Task 9.2)', (
   });
 });
 
+describe('§7.7 memory_module via memory_lab (Task 9.3)', () => {
+  it('memory_module is in ALL_RESOURCES with xp_weight 30 (T3 component)', () => {
+    expect(ALL_RESOURCES).toContain('memory_module' as ResourceId);
+    expect(XP_WEIGHT.memory_module).toBe(30);
+  });
+  it('memory_lab recipe: pcb + 4×transistor + 4×capacitor + 4×resistor + solder → memory_module', () => {
+    expect(RECIPES.memory_lab).toBeDefined();
+    expect(RECIPES.memory_lab!.inputs).toEqual({
+      pcb: 1,
+      transistor: 4,
+      capacitor: 4,
+      resistor: 4,
+      solder: 1,
+    });
+    expect(RECIPES.memory_lab!.outputs).toEqual({ memory_module: 1 });
+    expect(RECIPES.memory_lab!.cycleSec).toBe(500);
+    expect(RECIPES.memory_lab!.category).toBe('electronics');
+  });
+});
+
 describe('nextRotateOutputBoundaryMs', () => {
   const rotatingRecipe = {
     cycleSec: 10,

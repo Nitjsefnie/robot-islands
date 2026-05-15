@@ -1775,6 +1775,17 @@ describe('§8.1 T2 extraction buildings', () => {
     });
   });
 
+  describe('§7.7 memory_lab (Task 9.3)', () => {
+    it('is T3, 3x3, electronics category, consumes 250W', () => {
+      const def = BUILDING_DEFS.memory_lab;
+      expect(def).toBeDefined();
+      expect(def.tier).toBe(3);
+      expect(def.footprint.tiles.length).toBe(9); // 3x3
+      expect(def.category).toBe('electronics');
+      expect(def.power?.consumes).toBe(250);
+    });
+  });
+
   describe('§8.8 / §8.9 logistics + special buildings', () => {
     it('airship_dock is T3, 3x3', () => {
       const def = BUILDING_DEFS.airship_dock;

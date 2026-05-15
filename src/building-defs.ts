@@ -254,6 +254,7 @@ export type BuildingDefId =
   | 'transistor_doping'
   | 'capacitor_doping'
   | 'resistor_doping'
+  | 'memory_lab'
   | 'drilling_rig'
   | 'aetheric_conduit'
   | 'spacetime_resonator'
@@ -2897,6 +2898,19 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     stroke: 0x203040,
     power: { consumes: 150 },
     placementCost: { steel: 50, microchip: 3 },
+    glyph: '◈',
+  },
+  // Phase 9 — Task 9.3: Memory Lab (§7.7). Assembles memory modules from PCB + passives.
+  memory_lab: {
+    id: 'memory_lab',
+    displayName: 'Memory Lab',
+    category: 'electronics',
+    tier: 3,
+    footprint: SHAPES.square3,
+    fill: 0x405060, // dark memory-lab slate
+    stroke: 0x202830,
+    power: { consumes: 250 },
+    placementCost: { steel: 100, microchip: 8 },
     glyph: '◈',
   },
   drilling_rig: {

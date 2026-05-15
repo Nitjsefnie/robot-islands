@@ -174,6 +174,7 @@ export const RESOURCE_CATEGORY: Readonly<Record<ResourceId, ResourceCategory>> =
   transistor: 'components',
   capacitor: 'components',
   resistor: 'components',
+  memory_module: 'components',
   // T4/T5 raws + components — Rare bucket
   helium_3: 'rare',
   casimir_energy: 'rare',
