@@ -1030,6 +1030,20 @@ describe('§7.3 aluminum + aluminum_smelter (Task 8.2)', () => {
   });
 });
 
+describe('§7.7 silicon_wafer via wafer_lab (Task 9.1)', () => {
+  it('silicon_wafer is in ALL_RESOURCES with xp_weight 30 (T3 component)', () => {
+    expect(ALL_RESOURCES).toContain('silicon_wafer' as ResourceId);
+    expect(XP_WEIGHT.silicon_wafer).toBe(30);
+  });
+  it('wafer_lab recipe: silicon → silicon_wafer', () => {
+    expect(RECIPES.wafer_lab).toBeDefined();
+    expect(RECIPES.wafer_lab!.inputs).toEqual({ silicon: 1 });
+    expect(RECIPES.wafer_lab!.outputs).toEqual({ silicon_wafer: 1 });
+    expect(RECIPES.wafer_lab!.cycleSec).toBe(400);
+    expect(RECIPES.wafer_lab!.category).toBe('electronics');
+  });
+});
+
 describe('nextRotateOutputBoundaryMs', () => {
   const rotatingRecipe = {
     cycleSec: 10,

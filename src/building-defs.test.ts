@@ -203,6 +203,8 @@ const KNOWN_DEF_IDS: ReadonlyArray<BuildingDefId> = [
   'glass_panel_press',
   'coolant_synthesizer',
   'ceramic_kiln',
+  // Phase 9 — Electronics chain (§7.7)
+  'wafer_lab',
 ];
 
 // Helper: build a minimal IslandSpec for the canPlaceOnIsland tests. The
@@ -1729,6 +1731,17 @@ describe('§8.1 T2 extraction buildings', () => {
       expect(def.category).toBe('manufacturing');
       expect(def.power?.consumes).toBe(80);
       expect(def.requiresHeat).toBe(true);
+    });
+  });
+
+  describe('§7.7 wafer_lab (Task 9.1)', () => {
+    it('is T3, 3x3, electronics category, consumes 250W', () => {
+      const def = BUILDING_DEFS.wafer_lab;
+      expect(def).toBeDefined();
+      expect(def.tier).toBe(3);
+      expect(def.footprint.tiles.length).toBe(9); // 3x3
+      expect(def.category).toBe('electronics');
+      expect(def.power?.consumes).toBe(250);
     });
   });
 

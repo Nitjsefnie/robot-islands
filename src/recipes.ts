@@ -167,6 +167,7 @@ export type ResourceId =
   | 'liquid_nitrogen'
   // Step-18 T3 chemistry/electronics (§7.4 / §7.5).
   | 'silicon'
+  | 'silicon_wafer'
   | 'nitrogen'
   | 'cryo_coolant'
   | 'aviation_kerosene'
@@ -353,6 +354,7 @@ export const ALL_RESOURCES: ReadonlyArray<ResourceId> = [
   'liquid_nitrogen',
   // Step-18 T3 chemistry / electronics.
   'silicon',
+  'silicon_wafer',
   'nitrogen',
   'cryo_coolant',
   'aviation_kerosene',
@@ -534,6 +536,7 @@ export const XP_WEIGHT: Readonly<Record<ResourceId, number>> = {
   liquid_nitrogen: 30,
   // Step-18 T3 chemistry / electronics (§9.1 tier-3 weight = 30).
   silicon: 30,
+  silicon_wafer: 30,
   nitrogen: 30,
   cryo_coolant: 30,
   aviation_kerosene: 30,
@@ -1492,6 +1495,13 @@ export const RECIPES: Partial<Record<RecipeId, Recipe>> = {
     // Microchip feeds the §7.7 electronics chain: pcb_etcher (PCBs) →
     // circuit_assembler → processor_fab → compute_module_fab. Those
     // recipes ship below in this same file (search for `pcb_etcher`).
+  },
+  // Phase 9 — Task 9.1: high-purity silicon → wafer (§7.7)
+  wafer_lab: {
+    cycleSec: 400,
+    inputs: { silicon: 1 },
+    outputs: { silicon_wafer: 1 },
+    category: 'electronics',
   },
   drilling_rig: {
     cycleSec: 2400, // rebalanced for idle-game scale, step #19 (×20: was 120s)

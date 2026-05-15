@@ -250,6 +250,7 @@ export type BuildingDefId =
   | 'cryo_compressor'
   | 'kerosene_refinery'
   | 'lithography_lab'
+  | 'wafer_lab'
   | 'drilling_rig'
   | 'aetheric_conduit'
   | 'spacetime_resonator'
@@ -2843,6 +2844,19 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     power: { consumes: 600 },
     // §14 placeholder — tune in Appendix A. 4×4 footprint bumps T3 base.
     placementCost: { steel: 200, microchip: 100, stone: 40 },
+    glyph: '◈',
+  },
+  // Phase 9 — Task 9.1: Wafer Lab (§7.7). High-purity silicon → wafer.
+  wafer_lab: {
+    id: 'wafer_lab',
+    displayName: 'Wafer Lab',
+    category: 'electronics',
+    tier: 3,
+    footprint: SHAPES.square3,
+    fill: 0xb0b8d0, // pale silica-grey
+    stroke: 0x484858,
+    power: { consumes: 250 },
+    placementCost: { steel: 80, microchip: 5 },
     glyph: '◈',
   },
   drilling_rig: {

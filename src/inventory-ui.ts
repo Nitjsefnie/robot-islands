@@ -170,6 +170,7 @@ export const RESOURCE_CATEGORY: Readonly<Record<ResourceId, ResourceCategory>> =
   liquid_nitrogen: 'liquid',
   // T3 refined intermediate
   silicon: 'refined',
+  silicon_wafer: 'components',
   // T4/T5 raws + components — Rare bucket
   helium_3: 'rare',
   casimir_energy: 'rare',
