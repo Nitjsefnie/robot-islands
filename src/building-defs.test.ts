@@ -100,6 +100,8 @@ const KNOWN_DEF_IDS: ReadonlyArray<BuildingDefId> = [
   'rigid_plastic_press',
   'flexible_plastic_press',
   'rubber_synthesizer',
+  'sulfuric_acid_plant',
+  'hcl_plant',
   'chlor_alkali_plant',
   'chemical_reactor',
   'lubricant_refinery',
@@ -1283,6 +1285,32 @@ describe('§7.2 solder_alloyer (T2 solder producer)', () => {
     expect(RECIPES.solder_alloyer).toBeDefined();
     expect(RECIPES.solder_alloyer!.inputs).toEqual({ tin_ingot: 1, lead_ingot: 1 });
     expect(RECIPES.solder_alloyer!.outputs).toEqual({ solder: 2 });
+  });
+});
+
+describe('§7.5 sulfuric_acid_plant (Task 5.1)', () => {
+  it('is T2, 2x2, chemistry category', () => {
+    const def = BUILDING_DEFS.sulfuric_acid_plant;
+    expect(def).toBeDefined();
+    expect(def.tier).toBe(2);
+    expect(def.footprint).toEqual(SHAPES.square2);
+    expect(def.category).toBe('chemistry');
+  });
+  it('has power consumption 120W', () => {
+    expect(BUILDING_DEFS.sulfuric_acid_plant.power?.consumes).toBe(120);
+  });
+});
+
+describe('§7.5 hcl_plant (Task 5.1)', () => {
+  it('is T2, 2x2, chemistry category', () => {
+    const def = BUILDING_DEFS.hcl_plant;
+    expect(def).toBeDefined();
+    expect(def.tier).toBe(2);
+    expect(def.footprint).toEqual(SHAPES.square2);
+    expect(def.category).toBe('chemistry');
+  });
+  it('has power consumption 80W', () => {
+    expect(BUILDING_DEFS.hcl_plant.power?.consumes).toBe(80);
   });
 });
 

@@ -145,6 +145,9 @@ export const RESOURCE_STORAGE_CATEGORY: Readonly<Record<ResourceId, StorageCateg
   rigid_plastic: 'components',
   flexible_plastic: 'components',
   synthetic_rubber: 'components',
+  // Phase 5 — T2 chemistry chain (§7.5)
+  sulfuric_acid: 'liquid_gas',
+  hydrochloric_acid: 'liquid_gas',
 
   // T2 components.
   wire: 'components',

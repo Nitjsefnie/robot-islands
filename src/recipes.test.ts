@@ -789,6 +789,31 @@ describe('§7.4 rigid + flexible plastic + synthetic_rubber presses (Task 4.3)',
   });
 });
 
+describe('§7.5 sulfuric_acid + hydrochloric_acid plants (Task 5.1)', () => {
+  it('sulfuric_acid is in ALL_RESOURCES with xp_weight 10 (T2 liquid)', () => {
+    expect(ALL_RESOURCES).toContain('sulfuric_acid' as ResourceId);
+    expect(XP_WEIGHT.sulfuric_acid).toBe(10);
+  });
+  it('hydrochloric_acid is in ALL_RESOURCES with xp_weight 10 (T2 liquid)', () => {
+    expect(ALL_RESOURCES).toContain('hydrochloric_acid' as ResourceId);
+    expect(XP_WEIGHT.hydrochloric_acid).toBe(10);
+  });
+  it('sulfuric_acid_plant recipe: sulfur + fresh_water → sulfuric_acid', () => {
+    expect(RECIPES.sulfuric_acid_plant).toBeDefined();
+    expect(RECIPES.sulfuric_acid_plant!.inputs).toEqual({ sulfur: 1, fresh_water: 2 });
+    expect(RECIPES.sulfuric_acid_plant!.outputs).toEqual({ sulfuric_acid: 1 });
+    expect(RECIPES.sulfuric_acid_plant!.cycleSec).toBe(400);
+    expect(RECIPES.sulfuric_acid_plant!.category).toBe('chemistry');
+  });
+  it('hcl_plant recipe: salt + sulfuric_acid → hydrochloric_acid', () => {
+    expect(RECIPES.hcl_plant).toBeDefined();
+    expect(RECIPES.hcl_plant!.inputs).toEqual({ salt: 1, sulfuric_acid: 1 });
+    expect(RECIPES.hcl_plant!.outputs).toEqual({ hydrochloric_acid: 1 });
+    expect(RECIPES.hcl_plant!.cycleSec).toBe(400);
+    expect(RECIPES.hcl_plant!.category).toBe('chemistry');
+  });
+});
+
 describe('nextRotateOutputBoundaryMs', () => {
   const rotatingRecipe = {
     cycleSec: 10,

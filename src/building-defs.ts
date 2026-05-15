@@ -219,6 +219,8 @@ export type BuildingDefId =
   | 'rigid_plastic_press'
   | 'flexible_plastic_press'
   | 'rubber_synthesizer'
+  | 'sulfuric_acid_plant'
+  | 'hcl_plant'
   | 'chlor_alkali_plant'
   | 'chemical_reactor'
   | 'lubricant_refinery'
@@ -2442,6 +2444,31 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     power: { consumes: 100 },
     placementCost: { stone: 80, iron_ingot: 20, wood: 10 },
     glyph: '⚙',
+  },
+  // Phase 5 — T2 chemistry chain (§7.5)
+  sulfuric_acid_plant: {
+    id: 'sulfuric_acid_plant',
+    displayName: 'Sulfuric Acid Plant',
+    category: 'chemistry',
+    tier: 2,
+    footprint: SHAPES.square2,
+    fill: 0xc0a020, // sulfuric amber
+    stroke: 0x504010,
+    power: { consumes: 120 },
+    placementCost: { stone: 100, iron_ingot: 30, wood: 10 },
+    glyph: '◇',
+  },
+  hcl_plant: {
+    id: 'hcl_plant',
+    displayName: 'HCl Plant',
+    category: 'chemistry',
+    tier: 2,
+    footprint: SHAPES.square2,
+    fill: 0xa0b020, // chlorine-yellow
+    stroke: 0x404010,
+    power: { consumes: 80 },
+    placementCost: { stone: 80, iron_ingot: 20, wood: 10 },
+    glyph: '◇',
   },
   chlor_alkali_plant: {
     id: 'chlor_alkali_plant',

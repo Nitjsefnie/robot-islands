@@ -136,6 +136,9 @@ export type ResourceId =
   | 'rigid_plastic'
   | 'flexible_plastic'
   | 'synthetic_rubber'
+  // Phase 5 — T2 chemistry chain (§7.5)
+  | 'sulfuric_acid'
+  | 'hydrochloric_acid'
   // Step-18 T3 chemistry/electronics (§7.4 / §7.5).
   | 'silicon'
   | 'nitrogen'
@@ -293,6 +296,9 @@ export const ALL_RESOURCES: ReadonlyArray<ResourceId> = [
   'rigid_plastic',
   'flexible_plastic',
   'synthetic_rubber',
+  // Phase 5 — T2 chemistry chain (§7.5)
+  'sulfuric_acid',
+  'hydrochloric_acid',
   // Step-18 T3 chemistry / electronics.
   'silicon',
   'nitrogen',
@@ -445,6 +451,9 @@ export const XP_WEIGHT: Readonly<Record<ResourceId, number>> = {
   rigid_plastic: 10,
   flexible_plastic: 10,
   synthetic_rubber: 10,
+  // Phase 5 — T2 chemistry chain (§7.5)
+  sulfuric_acid: 10,
+  hydrochloric_acid: 10,
   // Step-18 T3 chemistry / electronics (§9.1 tier-3 weight = 30).
   silicon: 30,
   nitrogen: 30,
@@ -1259,6 +1268,19 @@ export const RECIPES: Partial<Record<RecipeId, Recipe>> = {
     inputs: { plastic_precursor: 1 },
     outputs: { synthetic_rubber: 1 },
     category: 'manufacturing',
+  },
+  // Phase 5 — T2 chemistry chain (§7.5)
+  sulfuric_acid_plant: {
+    cycleSec: 400,
+    inputs: { sulfur: 1, fresh_water: 2 },
+    outputs: { sulfuric_acid: 1 },
+    category: 'chemistry',
+  },
+  hcl_plant: {
+    cycleSec: 400,
+    inputs: { salt: 1, sulfuric_acid: 1 },
+    outputs: { hydrochloric_acid: 1 },
+    category: 'chemistry',
   },
   chlor_alkali_plant: {
     cycleSec: 800, // rebalanced for idle-game scale, step #19 (×40: was 20s)
