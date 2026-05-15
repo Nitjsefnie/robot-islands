@@ -565,6 +565,39 @@ describe('§6.2/§7.2 solder + solder_alloyer (Task 2.7)', () => {
   });
 });
 
+describe('§6.1/§7.1 carbon_steel chain (Task 3.1)', () => {
+  it('manganese_ore is in ALL_RESOURCES with xp_weight 1 (T0 raw)', () => {
+    expect(ALL_RESOURCES).toContain('manganese_ore' as ResourceId);
+    expect(XP_WEIGHT.manganese_ore).toBe(1);
+  });
+  it('manganese_ingot is in ALL_RESOURCES with xp_weight 3 (T1 refined)', () => {
+    expect(ALL_RESOURCES).toContain('manganese_ingot' as ResourceId);
+    expect(XP_WEIGHT.manganese_ingot).toBe(3);
+  });
+  it('carbon_steel is in ALL_RESOURCES with xp_weight 10 (T2 component)', () => {
+    expect(ALL_RESOURCES).toContain('carbon_steel' as ResourceId);
+    expect(XP_WEIGHT.carbon_steel).toBe(10);
+  });
+  it('manganese_mine recipe: empty inputs → manganese_ore', () => {
+    expect(RECIPES.manganese_mine).toBeDefined();
+    expect(RECIPES.manganese_mine!.inputs).toEqual({});
+    expect(RECIPES.manganese_mine!.outputs).toEqual({ manganese_ore: 1 });
+    expect(RECIPES.manganese_mine!.cycleSec).toBe(60);
+  });
+  it('manganese_smelter recipe: manganese_ore + coal → manganese_ingot', () => {
+    expect(RECIPES.manganese_smelter).toBeDefined();
+    expect(RECIPES.manganese_smelter!.inputs).toEqual({ manganese_ore: 1, coal: 1 });
+    expect(RECIPES.manganese_smelter!.outputs).toEqual({ manganese_ingot: 1 });
+    expect(RECIPES.manganese_smelter!.cycleSec).toBe(80);
+  });
+  it('carbon_steel_mill recipe: steel + manganese_ingot → carbon_steel', () => {
+    expect(RECIPES.carbon_steel_mill).toBeDefined();
+    expect(RECIPES.carbon_steel_mill!.inputs).toEqual({ steel: 1, manganese_ingot: 1 });
+    expect(RECIPES.carbon_steel_mill!.outputs).toEqual({ carbon_steel: 1 });
+    expect(RECIPES.carbon_steel_mill!.cycleSec).toBe(250);
+  });
+});
+
 describe('nextRotateOutputBoundaryMs', () => {
   const rotatingRecipe = {
     cycleSec: 10,

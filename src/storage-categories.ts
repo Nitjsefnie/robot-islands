@@ -91,6 +91,21 @@ export const RESOURCE_STORAGE_CATEGORY: Readonly<Record<ResourceId, StorageCateg
   tin_ingot: 'dry_goods',
   lead_ingot: 'dry_goods',
   solder: 'components',
+  // Phase 3 — T2-T3 steel alloy chains
+  manganese_ore: 'dry_goods',
+  manganese_ingot: 'dry_goods',
+  carbon_steel: 'components',
+  zinc_ore: 'dry_goods',
+  zinc_ingot: 'dry_goods',
+  galvanized_steel: 'components',
+  chromium_ore: 'dry_goods',
+  chromium_ingot: 'components',
+  nickel_ore: 'dry_goods',
+  nickel_ingot: 'components',
+  stainless_steel: 'components',
+  tungsten_ore: 'dry_goods',
+  tungsten_ingot: 'components',
+  tool_steel: 'components',
 
   // T0 liquids/gases.
   fresh_water: 'liquid_gas',

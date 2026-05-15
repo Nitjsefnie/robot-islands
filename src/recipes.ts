@@ -74,6 +74,21 @@ export type ResourceId =
   | 'tin_ore'
   | 'lead_ore'
   | 'bauxite'
+  // Phase 3 — T2-T3 steel alloy chains (§6.1 / §6.4 / §7.1)
+  | 'manganese_ore'
+  | 'manganese_ingot'
+  | 'carbon_steel'
+  | 'zinc_ore'
+  | 'zinc_ingot'
+  | 'galvanized_steel'
+  | 'chromium_ore'
+  | 'chromium_ingot'
+  | 'nickel_ore'
+  | 'nickel_ingot'
+  | 'stainless_steel'
+  | 'tungsten_ore'
+  | 'tungsten_ingot'
+  | 'tool_steel'
   // Phase 2 — T1 refined chains (§6.2 / §7.5)
   | 'quicklime'
   | 'slaked_lime'
@@ -213,6 +228,21 @@ export const ALL_RESOURCES: ReadonlyArray<ResourceId> = [
   'tin_ore',
   'lead_ore',
   'bauxite',
+  // Phase 3 — T2-T3 steel alloy chains (§6.1 / §6.4 / §7.1)
+  'manganese_ore',
+  'manganese_ingot',
+  'carbon_steel',
+  'zinc_ore',
+  'zinc_ingot',
+  'galvanized_steel',
+  'chromium_ore',
+  'chromium_ingot',
+  'nickel_ore',
+  'nickel_ingot',
+  'stainless_steel',
+  'tungsten_ore',
+  'tungsten_ingot',
+  'tool_steel',
   // Phase 2 — T1 refined chains (§6.2 / §7.5)
   'quicklime',
   'slaked_lime',
@@ -338,6 +368,21 @@ export const XP_WEIGHT: Readonly<Record<ResourceId, number>> = {
   tin_ore: 1,
   lead_ore: 1,
   bauxite: 1,
+  // Phase 3 — T2-T3 steel alloy chains (§6.1 / §6.4 / §7.1)
+  manganese_ore: 1,
+  manganese_ingot: 3,
+  carbon_steel: 10,
+  zinc_ore: 1,
+  zinc_ingot: 3,
+  galvanized_steel: 10,
+  chromium_ore: 1,
+  chromium_ingot: 30,
+  nickel_ore: 1,
+  nickel_ingot: 30,
+  stainless_steel: 30,
+  tungsten_ore: 1,
+  tungsten_ingot: 30,
+  tool_steel: 30,
   // Phase 2 — T1 refined chains (§6.2 / §7.5)
   quicklime: 3,
   slaked_lime: 3,
@@ -1000,6 +1045,92 @@ export const RECIPES: Partial<Record<RecipeId, Recipe>> = {
     cycleSec: 200,
     inputs: { tin_ingot: 1, lead_ingot: 1 },
     outputs: { solder: 2 },
+    category: 'manufacturing',
+  },
+
+  // Phase 3 — T2-T3 steel alloy chains (§6.1 / §6.4 / §7.1)
+  manganese_mine: {
+    cycleSec: 60,
+    inputs: {},
+    outputs: { manganese_ore: 1 },
+    category: 'extraction',
+  },
+  manganese_smelter: {
+    cycleSec: 80,
+    inputs: { manganese_ore: 1, coal: 1 },
+    outputs: { manganese_ingot: 1 },
+    category: 'smelting',
+  },
+  carbon_steel_mill: {
+    cycleSec: 250,
+    inputs: { steel: 1, manganese_ingot: 1 },
+    outputs: { carbon_steel: 1 },
+    category: 'manufacturing',
+  },
+  zinc_mine: {
+    cycleSec: 60,
+    inputs: {},
+    outputs: { zinc_ore: 1 },
+    category: 'extraction',
+  },
+  zinc_smelter: {
+    cycleSec: 80,
+    inputs: { zinc_ore: 1, coal: 1 },
+    outputs: { zinc_ingot: 1 },
+    category: 'smelting',
+  },
+  galvanizing_bath: {
+    cycleSec: 250,
+    inputs: { steel: 1, zinc_ingot: 1 },
+    outputs: { galvanized_steel: 1 },
+    category: 'manufacturing',
+  },
+  chromium_mine: {
+    cycleSec: 60,
+    inputs: {},
+    outputs: { chromium_ore: 1 },
+    category: 'extraction',
+  },
+  chromium_smelter: {
+    cycleSec: 80,
+    inputs: { chromium_ore: 1, coal: 1 },
+    outputs: { chromium_ingot: 1 },
+    category: 'smelting',
+  },
+  nickel_mine: {
+    cycleSec: 60,
+    inputs: {},
+    outputs: { nickel_ore: 1 },
+    category: 'extraction',
+  },
+  nickel_smelter: {
+    cycleSec: 80,
+    inputs: { nickel_ore: 1, coal: 1 },
+    outputs: { nickel_ingot: 1 },
+    category: 'smelting',
+  },
+  stainless_steel_mill: {
+    cycleSec: 400,
+    inputs: { steel: 1, chromium_ingot: 1, nickel_ingot: 1 },
+    outputs: { stainless_steel: 1 },
+    category: 'manufacturing',
+  },
+  tungsten_mine: {
+    cycleSec: 60,
+    inputs: {},
+    outputs: { tungsten_ore: 1 },
+    category: 'extraction',
+  },
+  tungsten_smelter: {
+    cycleSec: 80,
+    inputs: { tungsten_ore: 1, coal: 1 },
+    outputs: { tungsten_ingot: 1 },
+    category: 'smelting',
+  },
+  tool_steel_mill: {
+    cycleSec: 400,
+    inputs: { steel: 1, tungsten_ingot: 1 },
+    outputs: { tool_steel: 1 },
     category: 'manufacturing',
   },
 

@@ -191,6 +191,10 @@ export type BuildingDefId =
   | 'tin_smelter'
   | 'lead_smelter'
   | 'solder_alloyer'
+  // Phase 3 — T2-T3 steel alloy chains (§6.1 / §6.4 / §7.1)
+  | 'manganese_mine'
+  | 'manganese_smelter'
+  | 'carbon_steel_mill'
   | 'lumber_mill'
   | 'glassworks'
   | 'evaporator'
@@ -2058,6 +2062,48 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     power: { consumes: 80 },
     placementCost: { stone: 50, iron_ingot: 15, wood: 10 },
     glyph: '⚙',
+  },
+
+  // ---------------------------------------------------------------------------
+  // Phase 3 — T2-T3 steel alloy chains (§6.1 / §6.4 / §7.1)
+  // ---------------------------------------------------------------------------
+  // Task 3.1: Carbon steel — manganese_ore + manganese_ingot + carbon_steel
+  manganese_mine: {
+    id: 'manganese_mine',
+    displayName: 'Manganese Mine',
+    category: 'extraction',
+    tier: 1,
+    footprint: SHAPES.square2,
+    fill: 0x7e4d6f,
+    stroke: 0x3a2030,
+    power: { consumes: 40 },
+    requiredTile: ['manganese_vein'],
+    placementCost: { stone: 30, wood: 15 },
+    glyph: '⛏',
+  },
+  manganese_smelter: {
+    id: 'manganese_smelter',
+    displayName: 'Manganese Smelter',
+    category: 'smelting',
+    tier: 1,
+    footprint: SHAPES.square2,
+    fill: 0x7e4d6f,
+    stroke: 0x3a2030,
+    power: { consumes: 50 },
+    placementCost: { stone: 30, iron_ingot: 10, wood: 10 },
+    glyph: '△',
+  },
+  carbon_steel_mill: {
+    id: 'carbon_steel_mill',
+    displayName: 'Carbon Steel Mill',
+    category: 'manufacturing',
+    tier: 2,
+    footprint: SHAPES.square3,
+    fill: 0x9a3030,
+    stroke: 0x3a1010,
+    power: { consumes: 150 },
+    placementCost: { stone: 150, iron_ingot: 50, wood: 20 },
+    glyph: '◈',
   },
 
   // T1 manufacturing / chemistry.

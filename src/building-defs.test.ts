@@ -120,6 +120,10 @@ const KNOWN_DEF_IDS: ReadonlyArray<BuildingDefId> = [
   'tin_mine',
   'lead_mine',
   'bauxite_mine',
+  // Phase 3 — T2 steel alloy chains (§6.1 / §7.1)
+  'manganese_mine',
+  'manganese_smelter',
+  'carbon_steel_mill',
   // Phase 2 — T1 refined chains (§6.2 / §7.5)
   'limekiln',
   'lime_slaker',
@@ -969,6 +973,51 @@ describe('§7.2 copper/tin/lead smelters (Task 2.6)', () => {
     expect(def.footprint).toEqual(SHAPES.square2);
     expect(def.category).toBe('smelting');
     expect(def.requiresHeat).toBeUndefined();
+  });
+});
+
+describe('§7.1 manganese_mine (T1 manganese extractor)', () => {
+  it('is T1 extraction gated to manganese_vein tile', () => {
+    const def = BUILDING_DEFS.manganese_mine;
+    expect(def).toBeDefined();
+    expect(def.tier).toBe(1);
+    expect(def.category).toBe('extraction');
+    expect(def.requiredTile).toEqual(['manganese_vein']);
+  });
+  it('produces 1 manganese_ore per cycle', () => {
+    expect(RECIPES.manganese_mine).toBeDefined();
+    expect(RECIPES.manganese_mine!.outputs).toEqual({ manganese_ore: 1 });
+  });
+});
+
+describe('§7.1 manganese_smelter (T1 manganese ingot smelter)', () => {
+  it('is T1, 2x2, smelting, no heat requirement', () => {
+    const def = BUILDING_DEFS.manganese_smelter;
+    expect(def).toBeDefined();
+    expect(def.tier).toBe(1);
+    expect(def.footprint).toEqual(SHAPES.square2);
+    expect(def.category).toBe('smelting');
+    expect(def.requiresHeat).toBeUndefined();
+  });
+  it('produces manganese_ingot from manganese_ore + coal', () => {
+    expect(RECIPES.manganese_smelter).toBeDefined();
+    expect(RECIPES.manganese_smelter!.inputs).toEqual({ manganese_ore: 1, coal: 1 });
+    expect(RECIPES.manganese_smelter!.outputs).toEqual({ manganese_ingot: 1 });
+  });
+});
+
+describe('§7.1 carbon_steel_mill (T2 carbon steel producer)', () => {
+  it('is T2, 3x3, manufacturing category', () => {
+    const def = BUILDING_DEFS.carbon_steel_mill;
+    expect(def).toBeDefined();
+    expect(def.tier).toBe(2);
+    expect(def.footprint.tiles.length).toBe(9); // 3x3
+    expect(def.category).toBe('manufacturing');
+  });
+  it('produces carbon_steel from steel + manganese_ingot', () => {
+    expect(RECIPES.carbon_steel_mill).toBeDefined();
+    expect(RECIPES.carbon_steel_mill!.inputs).toEqual({ steel: 1, manganese_ingot: 1 });
+    expect(RECIPES.carbon_steel_mill!.outputs).toEqual({ carbon_steel: 1 });
   });
 });
 

@@ -42,7 +42,13 @@ export type TerrainKind =
   | 'tin_vein'
   | 'lead_vein'
   // §6.1 T0 mineral raw: bauxite (Task 1.8)
-  | 'bauxite_vein';
+  | 'bauxite_vein'
+  // Phase 3 — T2-T3 steel alloy chain terrain kinds
+  | 'manganese_vein'
+  | 'zinc_vein'
+  | 'chromium_vein'
+  | 'nickel_vein'
+  | 'tungsten_vein';
 
 export interface Tile {
   /** Tile grid x. The tile occupies the unit square [x, x+1) × [y, y+1). */
@@ -78,6 +84,12 @@ const TERRAIN_COLOR: Readonly<Record<TerrainKind, number>> = {
   tin_vein: 0xc0c4cb,          // pale tin-grey
   lead_vein: 0x4a4a52,         // dark lead-grey
   bauxite_vein: 0xd07845,      // bauxite ochre
+  // Phase 3 — T2-T3 steel alloy chain terrain colors
+  manganese_vein: 0x7e4d6f,    // muted manganese purple
+  zinc_vein: 0x8c93a0,          // pale zinc blue-grey
+  chromium_vein: 0x5c6068,      // dark chromium grey
+  nickel_vein: 0xa0a098,        // pale nickel grey-green
+  tungsten_vein: 0x4a5060,      // dark tungsten blue-grey
 };
 
 /**
