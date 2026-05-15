@@ -739,6 +739,20 @@ describe('§7.4 crude_oil_cracker — heavy_oil + tar + asphalt (Task 4.1)', () 
   });
 });
 
+describe('§7.4 plastic_precursor via plastic_polymerizer_a (Task 4.2)', () => {
+  it('plastic_precursor is in ALL_RESOURCES with xp_weight 10 (T2 liquid)', () => {
+    expect(ALL_RESOURCES).toContain('plastic_precursor' as ResourceId);
+    expect(XP_WEIGHT.plastic_precursor).toBe(10);
+  });
+  it('plastic_polymerizer_a recipe: 1 naphtha → 1 plastic_precursor', () => {
+    expect(RECIPES.plastic_polymerizer_a).toBeDefined();
+    expect(RECIPES.plastic_polymerizer_a!.inputs).toEqual({ naphtha: 1 });
+    expect(RECIPES.plastic_polymerizer_a!.outputs).toEqual({ plastic_precursor: 1 });
+    expect(RECIPES.plastic_polymerizer_a!.cycleSec).toBe(400);
+    expect(RECIPES.plastic_polymerizer_a!.category).toBe('chemistry');
+  });
+});
+
 describe('nextRotateOutputBoundaryMs', () => {
   const rotatingRecipe = {
     cycleSec: 10,

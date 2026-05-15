@@ -96,6 +96,7 @@ const KNOWN_DEF_IDS: ReadonlyArray<BuildingDefId> = [
   'gas_extractor',
   'naphtha_cracker',
   'crude_oil_cracker',
+  'plastic_polymerizer_a',
   'chlor_alkali_plant',
   'chemical_reactor',
   'lubricant_refinery',
@@ -1199,6 +1200,19 @@ describe('§7.1 tool_steel_mill (T3 tool steel producer)', () => {
     expect(RECIPES.tool_steel_mill).toBeDefined();
     expect(RECIPES.tool_steel_mill!.inputs).toEqual({ steel: 1, tungsten_ingot: 1 });
     expect(RECIPES.tool_steel_mill!.outputs).toEqual({ tool_steel: 1 });
+  });
+});
+
+describe('§7.4 plastic_polymerizer_a (T2 plastic precursor producer)', () => {
+  it('is T2, 2x2, chemistry category', () => {
+    const def = BUILDING_DEFS.plastic_polymerizer_a;
+    expect(def).toBeDefined();
+    expect(def.tier).toBe(2);
+    expect(def.footprint.tiles.length).toBe(4); // 2x2
+    expect(def.category).toBe('chemistry');
+  });
+  it('has power consumption 120W', () => {
+    expect(BUILDING_DEFS.plastic_polymerizer_a.power?.consumes).toBe(120);
   });
 });
 

@@ -135,6 +135,7 @@ export const RESOURCE_CATEGORY: Readonly<Record<ResourceId, ResourceCategory>> =
   heavy_oil: 'liquid',
   tar: 'liquid',
   asphalt: 'liquid',
+  plastic_precursor: 'liquid',
   // T3 refined intermediate
   silicon: 'refined',
   // T4/T5 raws + components — Rare bucket

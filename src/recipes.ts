@@ -132,6 +132,7 @@ export type ResourceId =
   | 'heavy_oil'
   | 'tar'
   | 'asphalt'
+  | 'plastic_precursor'
   // Step-18 T3 chemistry/electronics (§7.4 / §7.5).
   | 'silicon'
   | 'nitrogen'
@@ -285,6 +286,7 @@ export const ALL_RESOURCES: ReadonlyArray<ResourceId> = [
   'heavy_oil',
   'tar',
   'asphalt',
+  'plastic_precursor',
   // Step-18 T3 chemistry / electronics.
   'silicon',
   'nitrogen',
@@ -433,6 +435,7 @@ export const XP_WEIGHT: Readonly<Record<ResourceId, number>> = {
   heavy_oil: 10,
   tar: 10,
   asphalt: 10,
+  plastic_precursor: 10,
   // Step-18 T3 chemistry / electronics (§9.1 tier-3 weight = 30).
   silicon: 30,
   nitrogen: 30,
@@ -1220,6 +1223,13 @@ export const RECIPES: Partial<Record<RecipeId, Recipe>> = {
     cycleSec: 600,
     inputs: { crude_oil: 3 },
     outputs: { heavy_oil: 1, tar: 1, asphalt: 1 },
+    category: 'chemistry',
+  },
+  // Phase 4 — T2 plastic precursor polymerizer (§7.4)
+  plastic_polymerizer_a: {
+    cycleSec: 400,
+    inputs: { naphtha: 1 },
+    outputs: { plastic_precursor: 1 },
     category: 'chemistry',
   },
   chlor_alkali_plant: {

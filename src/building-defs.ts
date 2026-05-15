@@ -215,6 +215,7 @@ export type BuildingDefId =
   | 'gas_extractor'
   | 'naphtha_cracker'
   | 'crude_oil_cracker'
+  | 'plastic_polymerizer_a'
   | 'chlor_alkali_plant'
   | 'chemical_reactor'
   | 'lubricant_refinery'
@@ -2387,6 +2388,19 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     stroke: 0x1a0a08,
     power: { consumes: 250 },
     placementCost: { stone: 200, iron_ingot: 60, wood: 20 },
+    glyph: '◇',
+  },
+  // Phase 4 — T2 plastic precursor polymerizer (§7.4)
+  plastic_polymerizer_a: {
+    id: 'plastic_polymerizer_a',
+    displayName: 'Plastic Polymerizer A',
+    category: 'chemistry',
+    tier: 2,
+    footprint: SHAPES.square2,
+    fill: 0xe0c0a0, // pale polymer beige
+    stroke: 0x504030,
+    power: { consumes: 120 },
+    placementCost: { stone: 100, iron_ingot: 30, wood: 10 },
     glyph: '◇',
   },
   chlor_alkali_plant: {
