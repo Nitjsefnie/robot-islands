@@ -216,6 +216,9 @@ export type BuildingDefId =
   | 'naphtha_cracker'
   | 'crude_oil_cracker'
   | 'plastic_polymerizer_a'
+  | 'rigid_plastic_press'
+  | 'flexible_plastic_press'
+  | 'rubber_synthesizer'
   | 'chlor_alkali_plant'
   | 'chemical_reactor'
   | 'lubricant_refinery'
@@ -2402,6 +2405,43 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     power: { consumes: 120 },
     placementCost: { stone: 100, iron_ingot: 30, wood: 10 },
     glyph: '◇',
+  },
+  // Phase 4 — T2 split plastic presses (§7.4)
+  rigid_plastic_press: {
+    id: 'rigid_plastic_press',
+    displayName: 'Rigid Plastic Press',
+    category: 'manufacturing',
+    tier: 2,
+    footprint: SHAPES.square2,
+    fill: 0xc0c0c8, // cool grey plastic
+    stroke: 0x505058,
+    power: { consumes: 100 },
+    placementCost: { stone: 80, iron_ingot: 20, wood: 10 },
+    glyph: '⚙',
+  },
+  flexible_plastic_press: {
+    id: 'flexible_plastic_press',
+    displayName: 'Flexible Plastic Press',
+    category: 'manufacturing',
+    tier: 2,
+    footprint: SHAPES.square2,
+    fill: 0xd0b8a0, // warm flexible tan
+    stroke: 0x504838,
+    power: { consumes: 100 },
+    placementCost: { stone: 80, iron_ingot: 20, wood: 10 },
+    glyph: '⚙',
+  },
+  rubber_synthesizer: {
+    id: 'rubber_synthesizer',
+    displayName: 'Rubber Synthesizer',
+    category: 'manufacturing',
+    tier: 2,
+    footprint: SHAPES.square2,
+    fill: 0x3a3a30, // dark rubber-grey
+    stroke: 0x1a1a10,
+    power: { consumes: 100 },
+    placementCost: { stone: 80, iron_ingot: 20, wood: 10 },
+    glyph: '⚙',
   },
   chlor_alkali_plant: {
     id: 'chlor_alkali_plant',

@@ -753,6 +753,42 @@ describe('§7.4 plastic_precursor via plastic_polymerizer_a (Task 4.2)', () => {
   });
 });
 
+describe('§7.4 rigid + flexible plastic + synthetic_rubber presses (Task 4.3)', () => {
+  it('rigid_plastic is in ALL_RESOURCES with xp_weight 10 (T2 component)', () => {
+    expect(ALL_RESOURCES).toContain('rigid_plastic' as ResourceId);
+    expect(XP_WEIGHT.rigid_plastic).toBe(10);
+  });
+  it('flexible_plastic is in ALL_RESOURCES with xp_weight 10 (T2 component)', () => {
+    expect(ALL_RESOURCES).toContain('flexible_plastic' as ResourceId);
+    expect(XP_WEIGHT.flexible_plastic).toBe(10);
+  });
+  it('synthetic_rubber is in ALL_RESOURCES with xp_weight 10 (T2 component)', () => {
+    expect(ALL_RESOURCES).toContain('synthetic_rubber' as ResourceId);
+    expect(XP_WEIGHT.synthetic_rubber).toBe(10);
+  });
+  it('rigid_plastic_press recipe: 1 plastic_precursor → 1 rigid_plastic', () => {
+    expect(RECIPES.rigid_plastic_press).toBeDefined();
+    expect(RECIPES.rigid_plastic_press!.inputs).toEqual({ plastic_precursor: 1 });
+    expect(RECIPES.rigid_plastic_press!.outputs).toEqual({ rigid_plastic: 1 });
+    expect(RECIPES.rigid_plastic_press!.cycleSec).toBe(300);
+    expect(RECIPES.rigid_plastic_press!.category).toBe('manufacturing');
+  });
+  it('flexible_plastic_press recipe: 1 plastic_precursor → 1 flexible_plastic', () => {
+    expect(RECIPES.flexible_plastic_press).toBeDefined();
+    expect(RECIPES.flexible_plastic_press!.inputs).toEqual({ plastic_precursor: 1 });
+    expect(RECIPES.flexible_plastic_press!.outputs).toEqual({ flexible_plastic: 1 });
+    expect(RECIPES.flexible_plastic_press!.cycleSec).toBe(300);
+    expect(RECIPES.flexible_plastic_press!.category).toBe('manufacturing');
+  });
+  it('rubber_synthesizer recipe: 1 plastic_precursor → 1 synthetic_rubber', () => {
+    expect(RECIPES.rubber_synthesizer).toBeDefined();
+    expect(RECIPES.rubber_synthesizer!.inputs).toEqual({ plastic_precursor: 1 });
+    expect(RECIPES.rubber_synthesizer!.outputs).toEqual({ synthetic_rubber: 1 });
+    expect(RECIPES.rubber_synthesizer!.cycleSec).toBe(300);
+    expect(RECIPES.rubber_synthesizer!.category).toBe('manufacturing');
+  });
+});
+
 describe('nextRotateOutputBoundaryMs', () => {
   const rotatingRecipe = {
     cycleSec: 10,

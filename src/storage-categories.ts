@@ -142,6 +142,9 @@ export const RESOURCE_STORAGE_CATEGORY: Readonly<Record<ResourceId, StorageCateg
   tar: 'liquid_gas',
   asphalt: 'liquid_gas',
   plastic_precursor: 'liquid_gas',
+  rigid_plastic: 'components',
+  flexible_plastic: 'components',
+  synthetic_rubber: 'components',
 
   // T2 components.
   wire: 'components',

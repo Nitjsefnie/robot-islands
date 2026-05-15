@@ -97,6 +97,9 @@ const KNOWN_DEF_IDS: ReadonlyArray<BuildingDefId> = [
   'naphtha_cracker',
   'crude_oil_cracker',
   'plastic_polymerizer_a',
+  'rigid_plastic_press',
+  'flexible_plastic_press',
+  'rubber_synthesizer',
   'chlor_alkali_plant',
   'chemical_reactor',
   'lubricant_refinery',
@@ -1200,6 +1203,45 @@ describe('§7.1 tool_steel_mill (T3 tool steel producer)', () => {
     expect(RECIPES.tool_steel_mill).toBeDefined();
     expect(RECIPES.tool_steel_mill!.inputs).toEqual({ steel: 1, tungsten_ingot: 1 });
     expect(RECIPES.tool_steel_mill!.outputs).toEqual({ tool_steel: 1 });
+  });
+});
+
+describe('§7.4 rigid_plastic_press (T2 rigid plastic producer)', () => {
+  it('is T2, 2x2, manufacturing category', () => {
+    const def = BUILDING_DEFS.rigid_plastic_press;
+    expect(def).toBeDefined();
+    expect(def.tier).toBe(2);
+    expect(def.footprint.tiles.length).toBe(4); // 2x2
+    expect(def.category).toBe('manufacturing');
+  });
+  it('has power consumption 100W', () => {
+    expect(BUILDING_DEFS.rigid_plastic_press.power?.consumes).toBe(100);
+  });
+});
+
+describe('§7.4 flexible_plastic_press (T2 flexible plastic producer)', () => {
+  it('is T2, 2x2, manufacturing category', () => {
+    const def = BUILDING_DEFS.flexible_plastic_press;
+    expect(def).toBeDefined();
+    expect(def.tier).toBe(2);
+    expect(def.footprint.tiles.length).toBe(4); // 2x2
+    expect(def.category).toBe('manufacturing');
+  });
+  it('has power consumption 100W', () => {
+    expect(BUILDING_DEFS.flexible_plastic_press.power?.consumes).toBe(100);
+  });
+});
+
+describe('§7.4 rubber_synthesizer (T2 synthetic rubber producer)', () => {
+  it('is T2, 2x2, manufacturing category', () => {
+    const def = BUILDING_DEFS.rubber_synthesizer;
+    expect(def).toBeDefined();
+    expect(def.tier).toBe(2);
+    expect(def.footprint.tiles.length).toBe(4); // 2x2
+    expect(def.category).toBe('manufacturing');
+  });
+  it('has power consumption 100W', () => {
+    expect(BUILDING_DEFS.rubber_synthesizer.power?.consumes).toBe(100);
   });
 });
 

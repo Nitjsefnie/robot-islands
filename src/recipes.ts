@@ -133,6 +133,9 @@ export type ResourceId =
   | 'tar'
   | 'asphalt'
   | 'plastic_precursor'
+  | 'rigid_plastic'
+  | 'flexible_plastic'
+  | 'synthetic_rubber'
   // Step-18 T3 chemistry/electronics (§7.4 / §7.5).
   | 'silicon'
   | 'nitrogen'
@@ -287,6 +290,9 @@ export const ALL_RESOURCES: ReadonlyArray<ResourceId> = [
   'tar',
   'asphalt',
   'plastic_precursor',
+  'rigid_plastic',
+  'flexible_plastic',
+  'synthetic_rubber',
   // Step-18 T3 chemistry / electronics.
   'silicon',
   'nitrogen',
@@ -436,6 +442,9 @@ export const XP_WEIGHT: Readonly<Record<ResourceId, number>> = {
   tar: 10,
   asphalt: 10,
   plastic_precursor: 10,
+  rigid_plastic: 10,
+  flexible_plastic: 10,
+  synthetic_rubber: 10,
   // Step-18 T3 chemistry / electronics (§9.1 tier-3 weight = 30).
   silicon: 30,
   nitrogen: 30,
@@ -1231,6 +1240,25 @@ export const RECIPES: Partial<Record<RecipeId, Recipe>> = {
     inputs: { naphtha: 1 },
     outputs: { plastic_precursor: 1 },
     category: 'chemistry',
+  },
+  // Phase 4 — T2 split plastic presses (§7.4)
+  rigid_plastic_press: {
+    cycleSec: 300,
+    inputs: { plastic_precursor: 1 },
+    outputs: { rigid_plastic: 1 },
+    category: 'manufacturing',
+  },
+  flexible_plastic_press: {
+    cycleSec: 300,
+    inputs: { plastic_precursor: 1 },
+    outputs: { flexible_plastic: 1 },
+    category: 'manufacturing',
+  },
+  rubber_synthesizer: {
+    cycleSec: 300,
+    inputs: { plastic_precursor: 1 },
+    outputs: { synthetic_rubber: 1 },
+    category: 'manufacturing',
   },
   chlor_alkali_plant: {
     cycleSec: 800, // rebalanced for idle-game scale, step #19 (×40: was 20s)
