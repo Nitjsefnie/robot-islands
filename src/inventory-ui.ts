@@ -64,6 +64,7 @@ export const RESOURCE_CATEGORY: Readonly<Record<ResourceId, ResourceCategory>> =
   mortar: 'refined',
   cement: 'refined',
   concrete: 'refined',
+  charcoal: 'refined',
   // §6.4 T3 mineral raws (for slag reprocessing + nuclear fuel)
   gold_ore: 'raw',
   silver_ore: 'raw',

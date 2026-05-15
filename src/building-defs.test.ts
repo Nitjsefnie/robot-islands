@@ -914,6 +914,22 @@ describe('§7.8 concrete_plant (T1 concrete producer)', () => {
   });
 });
 
+describe('§6.2 charcoal_kiln (T1 charcoal producer)', () => {
+  it('is T1, 2x2, requires heat, hard heat_source gate', () => {
+    const def = BUILDING_DEFS.charcoal_kiln;
+    expect(def).toBeDefined();
+    expect(def.tier).toBe(1);
+    expect(def.footprint).toEqual(SHAPES.square2);
+    expect(def.requiresHeat).toBe(true);
+    expect(def.gates).toEqual([{ matchType: 'heat_source', hard: true }]);
+  });
+  it('produces charcoal from wood', () => {
+    expect(RECIPES.charcoal_kiln).toBeDefined();
+    expect(RECIPES.charcoal_kiln!.inputs).toEqual({ wood: 2 });
+    expect(RECIPES.charcoal_kiln!.outputs).toEqual({ charcoal: 1 });
+  });
+});
+
 describe('§8.8 shipyard coastal gating', () => {
   it('shipyard has coastal flag', () => {
     expect(BUILDING_DEFS.shipyard.coastal).toBe(true);

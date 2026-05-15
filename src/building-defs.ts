@@ -185,6 +185,7 @@ export type BuildingDefId =
   | 'mortar_mixer'
   | 'cement_mill'
   | 'concrete_plant'
+  | 'charcoal_kiln'
   | 'lumber_mill'
   | 'glassworks'
   | 'evaporator'
@@ -1978,6 +1979,20 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     power: { consumes: 60 },
     placementCost: { stone: 50, wood: 15 },
     glyph: '◈',
+  },
+  charcoal_kiln: {
+    id: 'charcoal_kiln',
+    displayName: 'Charcoal Kiln',
+    category: 'chemistry',
+    tier: 1,
+    footprint: SHAPES.square2,
+    fill: 0x1a1a1a, // anthracite
+    stroke: 0x080808,
+    power: { consumes: 40 },
+    requiresHeat: true,
+    gates: [{ matchType: 'heat_source', hard: true }],
+    placementCost: { stone: 30, wood: 10 },
+    glyph: '△',
   },
 
   // T1 manufacturing / chemistry.

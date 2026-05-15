@@ -85,6 +85,7 @@ export const RESOURCE_STORAGE_CATEGORY: Readonly<Record<ResourceId, StorageCateg
   mortar: 'dry_goods',
   cement: 'dry_goods',
   concrete: 'dry_goods',
+  charcoal: 'dry_goods',
 
   // T0 liquids/gases.
   fresh_water: 'liquid_gas',

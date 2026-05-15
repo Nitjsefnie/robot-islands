@@ -493,6 +493,19 @@ describe('§6.2 T1 refined — mortar + cement + concrete (Task 2.3)', () => {
   });
 });
 
+describe('§6.2 T1 refined — charcoal (Task 2.4)', () => {
+  it('charcoal is in ALL_RESOURCES with xp_weight 3', () => {
+    expect(ALL_RESOURCES).toContain('charcoal' as ResourceId);
+    expect(XP_WEIGHT.charcoal).toBe(3);
+  });
+  it('charcoal_kiln recipe: 2 wood → 1 charcoal', () => {
+    expect(RECIPES.charcoal_kiln).toBeDefined();
+    expect(RECIPES.charcoal_kiln!.inputs).toEqual({ wood: 2 });
+    expect(RECIPES.charcoal_kiln!.outputs).toEqual({ charcoal: 1 });
+    expect(RECIPES.charcoal_kiln!.cycleSec).toBe(100);
+  });
+});
+
 describe('nextRotateOutputBoundaryMs', () => {
   const rotatingRecipe = {
     cycleSec: 10,
