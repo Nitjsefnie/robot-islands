@@ -24,6 +24,7 @@
 import { Container, Graphics } from 'pixi.js';
 
 import type { IslandState } from './economy.js';
+import { mountPanel, Zone } from './ui-zones.js';
 import { inv } from './economy.js';
 import {
   DRONE_SPEED_TILES_PER_SEC,
@@ -40,20 +41,6 @@ import { TILE_PX } from './island.js';
 import { fuelForTier } from './recipes.js';
 import { tierForLevel } from './skilltree.js';
 import { VISION_BLUE, type IslandSpec, type WorldState } from './world.js';
-
-// ---------------------------------------------------------------------------
-// Palette — derived from skill-tree-ui for visual continuity
-// ---------------------------------------------------------------------------
-const PANEL_BG = 'rgba(14, 18, 26, 0.92)';
-const PANEL_BORDER = '#3a4452';
-const FG = '#cdd6f4';
-const FG_DIM = '#6c7791';
-const FG_MUTED = '#4a5365';
-const ACCENT = '#7dd3e8';
-const ACCENT_DIM = '#3d6f7c';
-const WARN = '#f5a742';
-const STRIP_BG = 'rgba(20, 24, 32, 0.6)';
-const RAIL = '#2a3240';
 
 function styled(el: HTMLElement, css: string): void {
   el.style.cssText = css;
@@ -133,26 +120,17 @@ export function mountDronesUi(parentEl: HTMLElement, deps: DroneUiDeps): DroneUi
   // -------------------------------------------------------------------------
   const panel = document.createElement('div');
   panel.id = 'drones-panel';
+  panel.classList.add('ri-panel');
   styled(
     panel,
     [
-      'position: fixed',
-      'top: 50%',
-      'left: 8px',
-      'transform: translateY(-50%)',
       'width: 248px',
       'max-height: calc(100vh - 32px)',
-      `background: ${PANEL_BG}`,
-      `border: 1px solid ${PANEL_BORDER}`,
-      'border-radius: 2px',
-      'box-shadow: 0 18px 36px -12px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(125, 211, 232, 0.04)',
-      'z-index: 110',
-      `color: ${FG}`,
       'font-family: ui-monospace, monospace',
       'font-size: 12px',
       'line-height: 1.45',
       'font-variant-numeric: tabular-nums',
-      'display: none',
+      'display: flex',
       'flex-direction: column',
       'overflow: hidden',
       'pointer-events: auto',
@@ -169,21 +147,21 @@ export function mountDronesUi(parentEl: HTMLElement, deps: DroneUiDeps): DroneUi
       'justify-content: space-between',
       'gap: 8px',
       'padding: 9px 12px 8px',
-      `border-bottom: 1px solid ${PANEL_BORDER}`,
-      `background: ${STRIP_BG}`,
+      `border-bottom: 1px solid ${'var(--ri-border-strong)'}`,
+      `background: ${'rgba(24, 29, 39, 0.6)'}`,
     ].join(';'),
   );
   const headLeft = document.createElement('div');
   styled(headLeft, 'display: flex; align-items: baseline; gap: 7px');
   const dot = document.createElement('span');
   dot.textContent = '◉';
-  styled(dot, `color: ${ACCENT}; font-size: 10px`);
+  styled(dot, `color: ${'var(--ri-accent)'}; font-size: 10px`);
   const headTitle = document.createElement('span');
   headTitle.textContent = 'DRONE OPS';
   styled(
     headTitle,
     [
-      `color: ${ACCENT}`,
+      `color: ${'var(--ri-accent)'}`,
       'font-size: 11px',
       'font-weight: 600',
       'letter-spacing: 0.22em',
@@ -194,7 +172,7 @@ export function mountDronesUi(parentEl: HTMLElement, deps: DroneUiDeps): DroneUi
   styled(
     headSub,
     [
-      `color: ${FG_DIM}`,
+      `color: ${'var(--ri-fg-3)'}`,
       'font-size: 9.5px',
       'letter-spacing: 0.16em',
     ].join(';'),
@@ -208,9 +186,9 @@ export function mountDronesUi(parentEl: HTMLElement, deps: DroneUiDeps): DroneUi
   styled(
     closeBtn,
     [
-      `color: ${FG_DIM}`,
+      `color: ${'var(--ri-fg-3)'}`,
       'background: transparent',
-      `border: 1px solid ${PANEL_BORDER}`,
+      `border: 1px solid ${'var(--ri-border-strong)'}`,
       'width: 18px',
       'height: 18px',
       'line-height: 0',
@@ -226,12 +204,12 @@ export function mountDronesUi(parentEl: HTMLElement, deps: DroneUiDeps): DroneUi
     hide();
   });
   closeBtn.addEventListener('mouseenter', () => {
-    closeBtn.style.color = FG;
-    closeBtn.style.borderColor = ACCENT_DIM;
+    closeBtn.style.color = 'var(--ri-fg-1)';
+    closeBtn.style.borderColor = 'var(--ri-accent-dim)';
   });
   closeBtn.addEventListener('mouseleave', () => {
-    closeBtn.style.color = FG_DIM;
-    closeBtn.style.borderColor = PANEL_BORDER;
+    closeBtn.style.color = 'var(--ri-fg-3)';
+    closeBtn.style.borderColor = 'var(--ri-border-strong)';
   });
 
   header.appendChild(headLeft);
@@ -262,8 +240,8 @@ export function mountDronesUi(parentEl: HTMLElement, deps: DroneUiDeps): DroneUi
       'grid-template-columns: 1fr 1fr',
       'gap: 4px 12px',
       'padding: 6px 8px',
-      `border: 1px solid ${PANEL_BORDER}`,
-      `background: ${STRIP_BG}`,
+      `border: 1px solid ${'var(--ri-border-strong)'}`,
+      `background: ${'rgba(24, 29, 39, 0.6)'}`,
     ].join(';'),
   );
 
@@ -275,14 +253,14 @@ export function mountDronesUi(parentEl: HTMLElement, deps: DroneUiDeps): DroneUi
     styled(
       l,
       [
-        `color: ${FG_DIM}`,
+        `color: ${'var(--ri-fg-3)'}`,
         'font-size: 9.5px',
         'letter-spacing: 0.1em',
         'text-transform: uppercase',
       ].join(';'),
     );
     const v = document.createElement('span');
-    styled(v, `color: ${FG}; font-size: 11.5px; font-weight: 600`);
+    styled(v, `color: ${'var(--ri-fg-1)'}; font-size: 11.5px; font-weight: 600`);
     row.appendChild(l);
     row.appendChild(v);
     return { row, valueEl: v };
@@ -290,7 +268,7 @@ export function mountDronesUi(parentEl: HTMLElement, deps: DroneUiDeps): DroneUi
 
   const tierStat = statRow('TIER');
   tierStat.valueEl.textContent = 'T2';
-  tierStat.valueEl.style.color = ACCENT;
+  tierStat.valueEl.style.color = 'var(--ri-accent)';
   // Fuel label is dynamic — §11.7 tier-matched grade per the launching
   // island's tier. The row's left-hand label is overwritten in refresh()
   // (e.g. BIOFUEL on a T1 island, AVIATION KEROSENE on a T3 island).
@@ -319,13 +297,13 @@ export function mountDronesUi(parentEl: HTMLElement, deps: DroneUiDeps): DroneUi
   styled(
     sliderHeadL,
     [
-      `color: ${FG_DIM}`,
+      `color: ${'var(--ri-fg-3)'}`,
       'font-size: 9.5px',
       'letter-spacing: 0.12em',
     ].join(';'),
   );
   const sliderHeadR = document.createElement('span');
-  styled(sliderHeadR, `color: ${WARN}; font-size: 11px; font-weight: 600`);
+  styled(sliderHeadR, `color: ${'var(--ri-warn)'}; font-size: 11px; font-weight: 600`);
   sliderHead.appendChild(sliderHeadL);
   sliderHead.appendChild(sliderHeadR);
 
@@ -357,7 +335,7 @@ export function mountDronesUi(parentEl: HTMLElement, deps: DroneUiDeps): DroneUi
     [
       'display: flex',
       'justify-content: space-between',
-      `color: ${FG_MUTED}`,
+      `color: ${'var(--ri-fg-4)'}`,
       'font-size: 9px',
       'letter-spacing: 0.08em',
       'padding: 0 2px',
@@ -382,8 +360,8 @@ export function mountDronesUi(parentEl: HTMLElement, deps: DroneUiDeps): DroneUi
     armBtn,
     [
       'background: #1a1f2a',
-      `color: ${FG}`,
-      `border: 1px solid ${PANEL_BORDER}`,
+      `color: ${'var(--ri-fg-1)'}`,
+      `border: 1px solid ${'var(--ri-border-strong)'}`,
       'padding: 8px 12px',
       'cursor: pointer',
       'font-family: ui-monospace, monospace',
@@ -409,8 +387,8 @@ export function mountDronesUi(parentEl: HTMLElement, deps: DroneUiDeps): DroneUi
     pulseBtn,
     [
       'background: #1a1f2a',
-      `color: ${FG}`,
-      `border: 1px solid ${PANEL_BORDER}`,
+      `color: ${'var(--ri-fg-1)'}`,
+      `border: 1px solid ${'var(--ri-border-strong)'}`,
       'padding: 8px 12px',
       'cursor: pointer',
       'font-family: ui-monospace, monospace',
@@ -438,14 +416,14 @@ export function mountDronesUi(parentEl: HTMLElement, deps: DroneUiDeps): DroneUi
     launchMode = on;
     if (on) {
       armBtn.textContent = '◆ DISARM';
-      armBtn.style.color = WARN;
-      armBtn.style.borderColor = WARN;
+      armBtn.style.color = 'var(--ri-warn)';
+      armBtn.style.borderColor = 'var(--ri-warn)';
       armBtn.style.background = 'rgba(245, 167, 66, 0.08)';
       reticleLayer.visible = true;
     } else {
       armBtn.textContent = '◇ ARM LAUNCH';
-      armBtn.style.color = FG;
-      armBtn.style.borderColor = PANEL_BORDER;
+      armBtn.style.color = 'var(--ri-fg-1)';
+      armBtn.style.borderColor = 'var(--ri-border-strong)';
       armBtn.style.background = '#1a1f2a';
       reticleLayer.visible = false;
     }
@@ -465,7 +443,7 @@ export function mountDronesUi(parentEl: HTMLElement, deps: DroneUiDeps): DroneUi
       'display: flex',
       'justify-content: space-between',
       'align-items: baseline',
-      `border-bottom: 1px solid ${PANEL_BORDER}`,
+      `border-bottom: 1px solid ${'var(--ri-border-strong)'}`,
       'padding-bottom: 3px',
     ].join(';'),
   );
@@ -474,14 +452,14 @@ export function mountDronesUi(parentEl: HTMLElement, deps: DroneUiDeps): DroneUi
   styled(
     ledgerL,
     [
-      `color: ${ACCENT}`,
+      `color: ${'var(--ri-accent)'}`,
       'font-size: 10px',
       'font-weight: 600',
       'letter-spacing: 0.18em',
     ].join(';'),
   );
   const ledgerR = document.createElement('span');
-  styled(ledgerR, `color: ${FG_DIM}; font-size: 9.5px; letter-spacing: 0.08em`);
+  styled(ledgerR, `color: ${'var(--ri-fg-3)'}; font-size: 9.5px; letter-spacing: 0.08em`);
   ledgerHead.appendChild(ledgerL);
   ledgerHead.appendChild(ledgerR);
 
@@ -493,7 +471,7 @@ export function mountDronesUi(parentEl: HTMLElement, deps: DroneUiDeps): DroneUi
   styled(
     ledgerEmpty,
     [
-      `color: ${FG_MUTED}`,
+      `color: ${'var(--ri-fg-4)'}`,
       'font-size: 10px',
       'letter-spacing: 0.06em',
       'font-style: italic',
@@ -513,9 +491,9 @@ export function mountDronesUi(parentEl: HTMLElement, deps: DroneUiDeps): DroneUi
     footer,
     [
       'padding: 6px 12px',
-      `border-top: 1px solid ${PANEL_BORDER}`,
-      `background: ${STRIP_BG}`,
-      `color: ${FG_DIM}`,
+      `border-top: 1px solid ${'var(--ri-border-strong)'}`,
+      `background: ${'rgba(24, 29, 39, 0.6)'}`,
+      `color: ${'var(--ri-fg-3)'}`,
       'font-size: 9.5px',
       'letter-spacing: 0.06em',
       'text-transform: uppercase',
@@ -527,6 +505,13 @@ export function mountDronesUi(parentEl: HTMLElement, deps: DroneUiDeps): DroneUi
   panel.appendChild(body);
   panel.appendChild(footer);
   parentEl.appendChild(panel);
+
+  const panelHandle = mountPanel(panel, {
+    id: 'drones-panel',
+    zone: Zone.R,
+    order: 0,
+  });
+  panelHandle.setVisible(false);
 
   // -------------------------------------------------------------------------
   // Pixi layer: in-flight drone dots + breadcrumb trail
@@ -713,7 +698,7 @@ export function mountDronesUi(parentEl: HTMLElement, deps: DroneUiDeps): DroneUi
         'flex-direction: column',
         'gap: 2px',
         'padding: 4px 6px',
-        `border-left: 2px solid ${ACCENT_DIM}`,
+        `border-left: 2px solid ${'var(--ri-accent-dim)'}`,
         `background: rgba(125, 211, 232, 0.04)`,
       ].join(';'),
     );
@@ -722,11 +707,11 @@ export function mountDronesUi(parentEl: HTMLElement, deps: DroneUiDeps): DroneUi
     styled(top, 'display: flex; justify-content: space-between; align-items: baseline');
     const idEl = document.createElement('span');
     idEl.textContent = d.id.toUpperCase();
-    styled(idEl, `color: ${ACCENT}; font-size: 10px; letter-spacing: 0.08em; font-weight: 600`);
+    styled(idEl, `color: ${'var(--ri-accent)'}; font-size: 10px; letter-spacing: 0.08em; font-weight: 600`);
     const etaEl = document.createElement('span');
     const remainSec = Math.max(0, (d.expectedReturnTime - nowMs) / 1000);
     etaEl.textContent = `T-${remainSec.toFixed(1)}s`;
-    styled(etaEl, `color: ${WARN}; font-size: 10px; font-weight: 600`);
+    styled(etaEl, `color: ${'var(--ri-warn)'}; font-size: 10px; font-weight: 600`);
     top.appendChild(idEl);
     top.appendChild(etaEl);
 
@@ -739,7 +724,7 @@ export function mountDronesUi(parentEl: HTMLElement, deps: DroneUiDeps): DroneUi
       ruleWrap,
       [
         'height: 2px',
-        `background: ${RAIL}`,
+        `background: ${'var(--ri-border)'}`,
         'position: relative',
       ].join(';'),
     );
@@ -751,7 +736,7 @@ export function mountDronesUi(parentEl: HTMLElement, deps: DroneUiDeps): DroneUi
         'top: 0',
         'left: 0',
         'height: 100%',
-        `background: ${WARN}`,
+        `background: ${'var(--ri-warn)'}`,
         `width: ${(pct * 100).toFixed(2)}%`,
       ].join(';'),
     );
@@ -761,10 +746,10 @@ export function mountDronesUi(parentEl: HTMLElement, deps: DroneUiDeps): DroneUi
     styled(meta, 'display: flex; justify-content: space-between');
     const fuelEl = document.createElement('span');
     fuelEl.textContent = `${d.fuelLoaded} fuel · ${d.outboundTiles.toFixed(0)} tiles`;
-    styled(fuelEl, `color: ${FG_DIM}; font-size: 9.5px`);
+    styled(fuelEl, `color: ${'var(--ri-fg-3)'}; font-size: 9.5px`);
     const tierEl = document.createElement('span');
     tierEl.textContent = `T${d.tier}`;
-    styled(tierEl, `color: ${FG_DIM}; font-size: 9.5px; letter-spacing: 0.06em`);
+    styled(tierEl, `color: ${'var(--ri-fg-3)'}; font-size: 9.5px; letter-spacing: 0.06em`);
     meta.appendChild(fuelEl);
     meta.appendChild(tierEl);
 
@@ -787,7 +772,7 @@ export function mountDronesUi(parentEl: HTMLElement, deps: DroneUiDeps): DroneUi
     fuelStatLabelEl.textContent = fuelResource.toUpperCase().replace(/_/g, ' ');
     const onhand = inv(origin, fuelResource);
     fuelStat.valueEl.textContent = `${onhand.toFixed(0)} u`;
-    fuelStat.valueEl.style.color = onhand >= fuelLoaded ? FG : WARN;
+    fuelStat.valueEl.style.color = onhand >= fuelLoaded ? 'var(--ri-fg-1)' : 'var(--ri-warn)';
     sliderHeadR.textContent = `${fuelLoaded} u`;
     rangeStat.valueEl.textContent = `${(fuelLoaded * DRONE_TIER_EFFICIENCY) / 2} t`;
     const flightSec = (fuelLoaded * DRONE_TIER_EFFICIENCY) / DRONE_SPEED_TILES_PER_SEC;
@@ -843,13 +828,13 @@ export function mountDronesUi(parentEl: HTMLElement, deps: DroneUiDeps): DroneUi
   function show(): void {
     if (visible) return;
     visible = true;
-    panel.style.display = 'flex';
+    panelHandle.setVisible(true);
     refresh(performance.now());
   }
   function hide(): void {
     if (!visible) return;
     visible = false;
-    panel.style.display = 'none';
+    panelHandle.setVisible(false);
     if (launchMode) setLaunchMode(false);
   }
   function toggle(): boolean {

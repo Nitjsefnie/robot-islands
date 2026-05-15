@@ -20,6 +20,7 @@
 import { Container, Graphics } from 'pixi.js';
 
 import type { IslandState } from './economy.js';
+import { mountPanel, Zone } from './ui-zones.js';
 import { TILE_PX } from './island.js';
 import { ALL_RESOURCES, type ResourceId } from './recipes.js';
 import {
@@ -30,19 +31,6 @@ import {
   type Route,
 } from './routes.js';
 import { VISION_BLUE, type IslandSpec, type WorldState } from './world.js';
-
-// ---------------------------------------------------------------------------
-// Palette — derived from drones-ui for visual continuity
-// ---------------------------------------------------------------------------
-const PANEL_BG = 'rgba(14, 18, 26, 0.92)';
-const PANEL_BORDER = '#3a4452';
-const FG = '#cdd6f4';
-const FG_DIM = '#6c7791';
-const FG_MUTED = '#4a5365';
-const ACCENT = '#7dd3e8';
-const ACCENT_DIM = '#3d6f7c';
-const WARN = '#f5a742';
-const STRIP_BG = 'rgba(20, 24, 32, 0.6)';
 
 function styled(el: HTMLElement, css: string): void {
   el.style.cssText = css;
@@ -85,26 +73,17 @@ export function mountRoutesUi(parentEl: HTMLElement, deps: RouteUiDeps): RouteUi
   // ---- Panel chrome ----------------------------------------------------------
   const panel = document.createElement('div');
   panel.id = 'routes-panel';
+  panel.classList.add('ri-panel');
   styled(
     panel,
     [
-      'position: fixed',
-      'top: 50%',
-      'left: 270px', // right of the drone panel (drone panel = left:8 + width:248 + gap)
-      'transform: translateY(-50%)',
       'width: 268px',
       'max-height: calc(100vh - 32px)',
-      `background: ${PANEL_BG}`,
-      `border: 1px solid ${PANEL_BORDER}`,
-      'border-radius: 2px',
-      'box-shadow: 0 18px 36px -12px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(125, 211, 232, 0.04)',
-      'z-index: 110',
-      `color: ${FG}`,
       'font-family: ui-monospace, monospace',
       'font-size: 12px',
       'line-height: 1.45',
       'font-variant-numeric: tabular-nums',
-      'display: none',
+      'display: flex',
       'flex-direction: column',
       'overflow: hidden',
       'pointer-events: auto',
@@ -121,21 +100,21 @@ export function mountRoutesUi(parentEl: HTMLElement, deps: RouteUiDeps): RouteUi
       'justify-content: space-between',
       'gap: 8px',
       'padding: 9px 12px 8px',
-      `border-bottom: 1px solid ${PANEL_BORDER}`,
-      `background: ${STRIP_BG}`,
+      `border-bottom: 1px solid ${'var(--ri-border-strong)'}`,
+      `background: ${'rgba(24, 29, 39, 0.6)'}`,
     ].join(';'),
   );
   const headLeft = document.createElement('div');
   styled(headLeft, 'display: flex; align-items: baseline; gap: 7px');
   const stamp = document.createElement('span');
   stamp.textContent = '▰';
-  styled(stamp, `color: ${ACCENT}; font-size: 10px`);
+  styled(stamp, `color: ${'var(--ri-accent)'}; font-size: 10px`);
   const headTitle = document.createElement('span');
   headTitle.textContent = 'FREIGHT GRID';
   styled(
     headTitle,
     [
-      `color: ${ACCENT}`,
+      `color: ${'var(--ri-accent)'}`,
       'font-size: 11px',
       'font-weight: 600',
       'letter-spacing: 0.22em',
@@ -145,7 +124,7 @@ export function mountRoutesUi(parentEl: HTMLElement, deps: RouteUiDeps): RouteUi
   headSub.textContent = 'LCS-01';
   styled(
     headSub,
-    [`color: ${FG_DIM}`, 'font-size: 9.5px', 'letter-spacing: 0.16em'].join(';'),
+    [`color: ${'var(--ri-fg-3)'}`, 'font-size: 9.5px', 'letter-spacing: 0.16em'].join(';'),
   );
   headLeft.appendChild(stamp);
   headLeft.appendChild(headTitle);
@@ -156,9 +135,9 @@ export function mountRoutesUi(parentEl: HTMLElement, deps: RouteUiDeps): RouteUi
   styled(
     closeBtn,
     [
-      `color: ${FG_DIM}`,
+      `color: ${'var(--ri-fg-3)'}`,
       'background: transparent',
-      `border: 1px solid ${PANEL_BORDER}`,
+      `border: 1px solid ${'var(--ri-border-strong)'}`,
       'width: 18px',
       'height: 18px',
       'line-height: 0',
@@ -172,12 +151,12 @@ export function mountRoutesUi(parentEl: HTMLElement, deps: RouteUiDeps): RouteUi
   );
   closeBtn.addEventListener('click', () => hide());
   closeBtn.addEventListener('mouseenter', () => {
-    closeBtn.style.color = FG;
-    closeBtn.style.borderColor = ACCENT_DIM;
+    closeBtn.style.color = 'var(--ri-fg-1)';
+    closeBtn.style.borderColor = 'var(--ri-accent-dim)';
   });
   closeBtn.addEventListener('mouseleave', () => {
-    closeBtn.style.color = FG_DIM;
-    closeBtn.style.borderColor = PANEL_BORDER;
+    closeBtn.style.color = 'var(--ri-fg-3)';
+    closeBtn.style.borderColor = 'var(--ri-border-strong)';
   });
 
   header.appendChild(headLeft);
@@ -206,8 +185,8 @@ export function mountRoutesUi(parentEl: HTMLElement, deps: RouteUiDeps): RouteUi
       'grid-template-columns: 1fr 1fr',
       'gap: 4px 12px',
       'padding: 6px 8px',
-      `border: 1px solid ${PANEL_BORDER}`,
-      `background: ${STRIP_BG}`,
+      `border: 1px solid ${'var(--ri-border-strong)'}`,
+      `background: ${'rgba(24, 29, 39, 0.6)'}`,
     ].join(';'),
   );
 
@@ -219,14 +198,14 @@ export function mountRoutesUi(parentEl: HTMLElement, deps: RouteUiDeps): RouteUi
     styled(
       l,
       [
-        `color: ${FG_DIM}`,
+        `color: ${'var(--ri-fg-3)'}`,
         'font-size: 9.5px',
         'letter-spacing: 0.1em',
         'text-transform: uppercase',
       ].join(';'),
     );
     const v = document.createElement('span');
-    styled(v, `color: ${FG}; font-size: 11.5px; font-weight: 600`);
+    styled(v, `color: ${'var(--ri-fg-1)'}; font-size: 11.5px; font-weight: 600`);
     row.appendChild(l);
     row.appendChild(v);
     return { row, valueEl: v };
@@ -236,7 +215,7 @@ export function mountRoutesUi(parentEl: HTMLElement, deps: RouteUiDeps): RouteUi
   const capStat = statRow('CAP/S');
   const flightStat = statRow('IN-FLIGHT');
   const funnelStat = statRow('FUNNEL');
-  routesStat.valueEl.style.color = ACCENT;
+  routesStat.valueEl.style.color = 'var(--ri-accent)';
   statBlock.appendChild(routesStat.row);
   statBlock.appendChild(capStat.row);
   statBlock.appendChild(flightStat.row);
@@ -252,7 +231,7 @@ export function mountRoutesUi(parentEl: HTMLElement, deps: RouteUiDeps): RouteUi
       'flex-direction: column',
       'gap: 6px',
       'padding: 6px 6px 8px 10px',
-      `border-left: 2px solid ${ACCENT_DIM}`,
+      `border-left: 2px solid ${'var(--ri-accent-dim)'}`,
       `background: rgba(125, 211, 232, 0.03)`,
     ].join(';'),
   );
@@ -262,7 +241,7 @@ export function mountRoutesUi(parentEl: HTMLElement, deps: RouteUiDeps): RouteUi
   styled(
     formHeader,
     [
-      `color: ${ACCENT}`,
+      `color: ${'var(--ri-accent)'}`,
       'font-size: 10px',
       'letter-spacing: 0.18em',
       'font-weight: 600',
@@ -277,7 +256,7 @@ export function mountRoutesUi(parentEl: HTMLElement, deps: RouteUiDeps): RouteUi
     styled(
       l,
       [
-        `color: ${FG_DIM}`,
+        `color: ${'var(--ri-fg-3)'}`,
         'font-size: 9.5px',
         'letter-spacing: 0.1em',
         'text-transform: uppercase',
@@ -291,8 +270,8 @@ export function mountRoutesUi(parentEl: HTMLElement, deps: RouteUiDeps): RouteUi
       s,
       [
         `background: #1a1f2a`,
-        `color: ${FG}`,
-        `border: 1px solid ${PANEL_BORDER}`,
+        `color: ${'var(--ri-fg-1)'}`,
+        `border: 1px solid ${'var(--ri-border-strong)'}`,
         'font-family: ui-monospace, monospace',
         'font-size: 11px',
         'padding: 3px 6px',
@@ -332,7 +311,7 @@ export function mountRoutesUi(parentEl: HTMLElement, deps: RouteUiDeps): RouteUi
   styled(
     formReadout,
     [
-      `color: ${FG_DIM}`,
+      `color: ${'var(--ri-fg-3)'}`,
       'font-size: 9.5px',
       'letter-spacing: 0.08em',
       'padding: 2px 0',
@@ -347,8 +326,8 @@ export function mountRoutesUi(parentEl: HTMLElement, deps: RouteUiDeps): RouteUi
     commitBtn,
     [
       'background: #1a1f2a',
-      `color: ${FG}`,
-      `border: 1px solid ${PANEL_BORDER}`,
+      `color: ${'var(--ri-fg-1)'}`,
+      `border: 1px solid ${'var(--ri-border-strong)'}`,
       'padding: 6px 10px',
       'cursor: pointer',
       'font-family: ui-monospace, monospace',
@@ -361,13 +340,13 @@ export function mountRoutesUi(parentEl: HTMLElement, deps: RouteUiDeps): RouteUi
   );
   commitBtn.addEventListener('mouseenter', () => {
     if (commitBtn.disabled) return;
-    commitBtn.style.color = ACCENT;
-    commitBtn.style.borderColor = ACCENT_DIM;
+    commitBtn.style.color = 'var(--ri-accent)';
+    commitBtn.style.borderColor = 'var(--ri-accent-dim)';
   });
   commitBtn.addEventListener('mouseleave', () => {
     if (commitBtn.disabled) return;
-    commitBtn.style.color = FG;
-    commitBtn.style.borderColor = PANEL_BORDER;
+    commitBtn.style.color = 'var(--ri-fg-1)';
+    commitBtn.style.borderColor = 'var(--ri-border-strong)';
   });
   commitBtn.addEventListener('click', () => commissionRoute());
   formWrap.appendChild(commitBtn);
@@ -385,7 +364,7 @@ export function mountRoutesUi(parentEl: HTMLElement, deps: RouteUiDeps): RouteUi
       'display: flex',
       'justify-content: space-between',
       'align-items: baseline',
-      `border-bottom: 1px solid ${PANEL_BORDER}`,
+      `border-bottom: 1px solid ${'var(--ri-border-strong)'}`,
       'padding-bottom: 3px',
     ].join(';'),
   );
@@ -394,14 +373,14 @@ export function mountRoutesUi(parentEl: HTMLElement, deps: RouteUiDeps): RouteUi
   styled(
     ledgerL,
     [
-      `color: ${ACCENT}`,
+      `color: ${'var(--ri-accent)'}`,
       'font-size: 10px',
       'font-weight: 600',
       'letter-spacing: 0.18em',
     ].join(';'),
   );
   const ledgerR = document.createElement('span');
-  styled(ledgerR, `color: ${FG_DIM}; font-size: 9.5px; letter-spacing: 0.08em`);
+  styled(ledgerR, `color: ${'var(--ri-fg-3)'}; font-size: 9.5px; letter-spacing: 0.08em`);
   ledgerHead.appendChild(ledgerL);
   ledgerHead.appendChild(ledgerR);
 
@@ -413,7 +392,7 @@ export function mountRoutesUi(parentEl: HTMLElement, deps: RouteUiDeps): RouteUi
   styled(
     ledgerEmpty,
     [
-      `color: ${FG_MUTED}`,
+      `color: ${'var(--ri-fg-4)'}`,
       'font-size: 10px',
       'letter-spacing: 0.06em',
       'font-style: italic',
@@ -431,9 +410,9 @@ export function mountRoutesUi(parentEl: HTMLElement, deps: RouteUiDeps): RouteUi
     footer,
     [
       'padding: 6px 12px',
-      `border-top: 1px solid ${PANEL_BORDER}`,
-      `background: ${STRIP_BG}`,
-      `color: ${FG_DIM}`,
+      `border-top: 1px solid ${'var(--ri-border-strong)'}`,
+      `background: ${'rgba(24, 29, 39, 0.6)'}`,
+      `color: ${'var(--ri-fg-3)'}`,
       'font-size: 9.5px',
       'letter-spacing: 0.06em',
       'text-transform: uppercase',
@@ -445,6 +424,13 @@ export function mountRoutesUi(parentEl: HTMLElement, deps: RouteUiDeps): RouteUi
   panel.appendChild(body);
   panel.appendChild(footer);
   parentEl.appendChild(panel);
+
+  const panelHandle = mountPanel(panel, {
+    id: 'routes-panel',
+    zone: Zone.R,
+    order: 1,
+  });
+  panelHandle.setVisible(false);
 
   // ---- Form helpers ----------------------------------------------------------
   function populatedIslands(): IslandSpec[] {
@@ -576,7 +562,7 @@ export function mountRoutesUi(parentEl: HTMLElement, deps: RouteUiDeps): RouteUi
         'flex-direction: column',
         'gap: 2px',
         'padding: 4px 6px',
-        `border-left: 2px solid ${ACCENT_DIM}`,
+        `border-left: 2px solid ${'var(--ri-accent-dim)'}`,
         `background: rgba(125, 211, 232, 0.04)`,
       ].join(';'),
     );
@@ -585,15 +571,15 @@ export function mountRoutesUi(parentEl: HTMLElement, deps: RouteUiDeps): RouteUi
     styled(top, 'display: flex; justify-content: space-between; align-items: baseline; gap: 6px');
     const idEl = document.createElement('span');
     idEl.textContent = route.id.toUpperCase();
-    styled(idEl, `color: ${ACCENT}; font-size: 10px; letter-spacing: 0.08em; font-weight: 600`);
+    styled(idEl, `color: ${'var(--ri-accent)'}; font-size: 10px; letter-spacing: 0.08em; font-weight: 600`);
     const delBtn = document.createElement('button');
     delBtn.textContent = '✕';
     styled(
       delBtn,
       [
-        `color: ${FG_DIM}`,
+        `color: ${'var(--ri-fg-3)'}`,
         'background: transparent',
-        `border: 1px solid ${PANEL_BORDER}`,
+        `border: 1px solid ${'var(--ri-border-strong)'}`,
         'width: 16px',
         'height: 16px',
         'line-height: 0',
@@ -610,18 +596,18 @@ export function mountRoutesUi(parentEl: HTMLElement, deps: RouteUiDeps): RouteUi
       refresh(performance.now());
     });
     delBtn.addEventListener('mouseenter', () => {
-      delBtn.style.color = WARN;
-      delBtn.style.borderColor = WARN;
+      delBtn.style.color = 'var(--ri-warn)';
+      delBtn.style.borderColor = 'var(--ri-warn)';
     });
     delBtn.addEventListener('mouseleave', () => {
-      delBtn.style.color = FG_DIM;
-      delBtn.style.borderColor = PANEL_BORDER;
+      delBtn.style.color = 'var(--ri-fg-3)';
+      delBtn.style.borderColor = 'var(--ri-border-strong)';
     });
     top.appendChild(idEl);
     top.appendChild(delBtn);
 
     const mid = document.createElement('div');
-    styled(mid, `color: ${FG}; font-size: 10.5px; letter-spacing: 0.04em`);
+    styled(mid, `color: ${'var(--ri-fg-1)'}; font-size: 10.5px; letter-spacing: 0.04em`);
     const cargo = route.filter ?? 'any';
     mid.textContent = `${route.from} → ${route.to}  ${cargo}`;
 
@@ -629,7 +615,7 @@ export function mountRoutesUi(parentEl: HTMLElement, deps: RouteUiDeps): RouteUi
     // utilization (in-flight count vs an arbitrary 10-batch ceiling for the
     // visual scale).
     const ruleWrap = document.createElement('div');
-    styled(ruleWrap, [`height: 2px`, `background: ${PANEL_BORDER}`, 'position: relative'].join(';'));
+    styled(ruleWrap, [`height: 2px`, `background: ${'var(--ri-border-strong)'}`, 'position: relative'].join(';'));
     const ruleFill = document.createElement('div');
     const inFlightCount = route.inFlight.length;
     const utilPct = Math.min(1, inFlightCount / 10);
@@ -640,7 +626,7 @@ export function mountRoutesUi(parentEl: HTMLElement, deps: RouteUiDeps): RouteUi
         'top: 0',
         'left: 0',
         'height: 100%',
-        `background: ${ACCENT}`,
+        `background: ${'var(--ri-accent)'}`,
         `width: ${(utilPct * 100).toFixed(2)}%`,
       ].join(';'),
     );
@@ -650,18 +636,18 @@ export function mountRoutesUi(parentEl: HTMLElement, deps: RouteUiDeps): RouteUi
     styled(meta, 'display: flex; justify-content: space-between');
     const left = document.createElement('span');
     left.textContent = `${route.capacityPerSec.toFixed(2)} u/s · ${route.transitTimeSec.toFixed(1)}s`;
-    styled(left, `color: ${FG_DIM}; font-size: 9.5px`);
+    styled(left, `color: ${'var(--ri-fg-3)'}; font-size: 9.5px`);
     const right = document.createElement('span');
     if (inFlightCount === 0) {
       right.textContent = 'idle';
-      styled(right, `color: ${FG_MUTED}; font-size: 9.5px`);
+      styled(right, `color: ${'var(--ri-fg-4)'}; font-size: 9.5px`);
     } else {
       const nextArrival = route.inFlight
         .map((b) => b.arrivalTime)
         .reduce((a, b) => Math.min(a, b), Infinity);
       const eta = Math.max(0, (nextArrival - nowMs) / 1000);
       right.textContent = `${inFlightCount} pkg · ETA ${eta.toFixed(1)}s`;
-      styled(right, `color: ${WARN}; font-size: 9.5px; font-weight: 600`);
+      styled(right, `color: ${'var(--ri-warn)'}; font-size: 9.5px; font-weight: 600`);
     }
     meta.appendChild(left);
     meta.appendChild(right);
@@ -752,7 +738,7 @@ export function mountRoutesUi(parentEl: HTMLElement, deps: RouteUiDeps): RouteUi
       for (const r of ALL_RESOURCES) totalFunnel += s.funnelPending[r] ?? 0;
     }
     funnelStat.valueEl.textContent = `${totalFunnel.toFixed(1)}`;
-    funnelStat.valueEl.style.color = totalFunnel > 0 ? ACCENT : FG;
+    funnelStat.valueEl.style.color = totalFunnel > 0 ? 'var(--ri-accent)' : 'var(--ri-fg-1)';
   }
 
   // ---- Pixi route layer ------------------------------------------------------
@@ -919,13 +905,13 @@ export function mountRoutesUi(parentEl: HTMLElement, deps: RouteUiDeps): RouteUi
   function show(): void {
     if (visible) return;
     visible = true;
-    panel.style.display = 'flex';
+    panelHandle.setVisible(true);
     refresh(performance.now());
   }
   function hide(): void {
     if (!visible) return;
     visible = false;
-    panel.style.display = 'none';
+    panelHandle.setVisible(false);
   }
   function toggle(): boolean {
     if (visible) hide();

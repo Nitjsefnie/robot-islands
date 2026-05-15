@@ -29,6 +29,7 @@
 import { Container, Graphics } from 'pixi.js';
 
 import type { IslandState } from './economy.js';
+import { mountPanel, Zone } from './ui-zones.js';
 import { inv } from './economy.js';
 import { TILE_PX } from './island.js';
 import { fuelForTier } from './recipes.js';
@@ -43,21 +44,6 @@ import {
 } from './settlement.js';
 import { tierForLevel } from './skilltree.js';
 import { VISION_BLUE, type IslandSpec, type WorldState } from './world.js';
-
-// ---------------------------------------------------------------------------
-// Palette — derived from drones-ui for visual continuity
-// ---------------------------------------------------------------------------
-const PANEL_BG = 'rgba(14, 18, 26, 0.92)';
-const PANEL_BORDER = '#3a4452';
-const FG = '#cdd6f4';
-const FG_DIM = '#6c7791';
-const FG_MUTED = '#4a5365';
-const ACCENT = '#7dd3e8';
-const ACCENT_DIM = '#3d6f7c';
-const WARN = '#f5a742';
-const ERR = '#e85d4a';
-const STRIP_BG = 'rgba(20, 24, 32, 0.6)';
-const RAIL = '#2a3240';
 
 function styled(el: HTMLElement, css: string): void {
   el.style.cssText = css;
@@ -130,26 +116,17 @@ export function mountSettlementUi(parentEl: HTMLElement, deps: SettlementUiDeps)
   // ---- Panel chrome --------------------------------------------------------
   const panel = document.createElement('div');
   panel.id = 'settlement-panel';
+  panel.classList.add('ri-panel');
   styled(
     panel,
     [
-      'position: fixed',
-      'top: 50%',
-      'left: 548px', // right of the routes panel (routes = left:270 + width:268 + gap)
-      'transform: translateY(-50%)',
       'width: 280px',
       'max-height: calc(100vh - 32px)',
-      `background: ${PANEL_BG}`,
-      `border: 1px solid ${PANEL_BORDER}`,
-      'border-radius: 2px',
-      'box-shadow: 0 18px 36px -12px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(125, 211, 232, 0.04)',
-      'z-index: 110',
-      `color: ${FG}`,
       'font-family: ui-monospace, monospace',
       'font-size: 12px',
       'line-height: 1.45',
       'font-variant-numeric: tabular-nums',
-      'display: none',
+      'display: flex',
       'flex-direction: column',
       'overflow: hidden',
       'pointer-events: auto',
@@ -166,24 +143,24 @@ export function mountSettlementUi(parentEl: HTMLElement, deps: SettlementUiDeps)
       'justify-content: space-between',
       'gap: 8px',
       'padding: 9px 12px 8px',
-      `border-bottom: 1px solid ${PANEL_BORDER}`,
-      `background: ${STRIP_BG}`,
+      `border-bottom: 1px solid ${'var(--ri-border-strong)'}`,
+      `background: ${'rgba(24, 29, 39, 0.6)'}`,
     ].join(';'),
   );
   const headLeft = document.createElement('div');
   styled(headLeft, 'display: flex; align-items: baseline; gap: 7px');
   const stamp = document.createElement('span');
   stamp.textContent = '▲';
-  styled(stamp, `color: ${ACCENT}; font-size: 10px`);
+  styled(stamp, `color: ${'var(--ri-accent)'}; font-size: 10px`);
   const headTitle = document.createElement('span');
   headTitle.textContent = 'SETTLE OPS';
   styled(
     headTitle,
-    [`color: ${ACCENT}`, 'font-size: 11px', 'font-weight: 600', 'letter-spacing: 0.22em'].join(';'),
+    [`color: ${'var(--ri-accent)'}`, 'font-size: 11px', 'font-weight: 600', 'letter-spacing: 0.22em'].join(';'),
   );
   const headSub = document.createElement('span');
   headSub.textContent = 'SCV-01';
-  styled(headSub, [`color: ${FG_DIM}`, 'font-size: 9.5px', 'letter-spacing: 0.16em'].join(';'));
+  styled(headSub, [`color: ${'var(--ri-fg-3)'}`, 'font-size: 9.5px', 'letter-spacing: 0.16em'].join(';'));
   headLeft.appendChild(stamp);
   headLeft.appendChild(headTitle);
   headLeft.appendChild(headSub);
@@ -193,9 +170,9 @@ export function mountSettlementUi(parentEl: HTMLElement, deps: SettlementUiDeps)
   styled(
     closeBtn,
     [
-      `color: ${FG_DIM}`,
+      `color: ${'var(--ri-fg-3)'}`,
       'background: transparent',
-      `border: 1px solid ${PANEL_BORDER}`,
+      `border: 1px solid ${'var(--ri-border-strong)'}`,
       'width: 18px',
       'height: 18px',
       'line-height: 0',
@@ -209,12 +186,12 @@ export function mountSettlementUi(parentEl: HTMLElement, deps: SettlementUiDeps)
   );
   closeBtn.addEventListener('click', () => hide());
   closeBtn.addEventListener('mouseenter', () => {
-    closeBtn.style.color = FG;
-    closeBtn.style.borderColor = ACCENT_DIM;
+    closeBtn.style.color = 'var(--ri-fg-1)';
+    closeBtn.style.borderColor = 'var(--ri-accent-dim)';
   });
   closeBtn.addEventListener('mouseleave', () => {
-    closeBtn.style.color = FG_DIM;
-    closeBtn.style.borderColor = PANEL_BORDER;
+    closeBtn.style.color = 'var(--ri-fg-3)';
+    closeBtn.style.borderColor = 'var(--ri-border-strong)';
   });
   header.appendChild(headLeft);
   header.appendChild(closeBtn);
@@ -246,8 +223,8 @@ export function mountSettlementUi(parentEl: HTMLElement, deps: SettlementUiDeps)
       b,
       [
         'background: #1a1f2a',
-        `color: ${FG}`,
-        `border: 1px solid ${PANEL_BORDER}`,
+        `color: ${'var(--ri-fg-1)'}`,
+        `border: 1px solid ${'var(--ri-border-strong)'}`,
         'padding: 6px 4px',
         'cursor: pointer',
         'font-family: ui-monospace, monospace',
@@ -275,12 +252,12 @@ export function mountSettlementUi(parentEl: HTMLElement, deps: SettlementUiDeps)
     ];
     for (const [btn, k] of entries) {
       if (kind === k) {
-        btn.style.color = ACCENT;
-        btn.style.borderColor = ACCENT_DIM;
+        btn.style.color = 'var(--ri-accent)';
+        btn.style.borderColor = 'var(--ri-accent-dim)';
         btn.style.background = 'rgba(125, 211, 232, 0.08)';
       } else {
-        btn.style.color = FG_DIM;
-        btn.style.borderColor = PANEL_BORDER;
+        btn.style.color = 'var(--ri-fg-3)';
+        btn.style.borderColor = 'var(--ri-border-strong)';
         btn.style.background = '#1a1f2a';
       }
     }
@@ -297,7 +274,7 @@ export function mountSettlementUi(parentEl: HTMLElement, deps: SettlementUiDeps)
     styled(
       l,
       [
-        `color: ${FG_DIM}`,
+        `color: ${'var(--ri-fg-3)'}`,
         'font-size: 9.5px',
         'letter-spacing: 0.1em',
         'text-transform: uppercase',
@@ -311,8 +288,8 @@ export function mountSettlementUi(parentEl: HTMLElement, deps: SettlementUiDeps)
       s,
       [
         `background: #1a1f2a`,
-        `color: ${FG}`,
-        `border: 1px solid ${PANEL_BORDER}`,
+        `color: ${'var(--ri-fg-1)'}`,
+        `border: 1px solid ${'var(--ri-border-strong)'}`,
         'font-family: ui-monospace, monospace',
         'font-size: 11px',
         'padding: 3px 6px',
@@ -356,8 +333,8 @@ export function mountSettlementUi(parentEl: HTMLElement, deps: SettlementUiDeps)
       'grid-template-columns: 1fr 1fr',
       'gap: 4px 12px',
       'padding: 6px 8px',
-      `border: 1px solid ${PANEL_BORDER}`,
-      `background: ${STRIP_BG}`,
+      `border: 1px solid ${'var(--ri-border-strong)'}`,
+      `background: ${'rgba(24, 29, 39, 0.6)'}`,
     ].join(';'),
   );
   function statRow(labelText: string): { row: HTMLDivElement; valueEl: HTMLSpanElement } {
@@ -368,14 +345,14 @@ export function mountSettlementUi(parentEl: HTMLElement, deps: SettlementUiDeps)
     styled(
       l,
       [
-        `color: ${FG_DIM}`,
+        `color: ${'var(--ri-fg-3)'}`,
         'font-size: 9.5px',
         'letter-spacing: 0.1em',
         'text-transform: uppercase',
       ].join(';'),
     );
     const v = document.createElement('span');
-    styled(v, `color: ${FG}; font-size: 11.5px; font-weight: 600`);
+    styled(v, `color: ${'var(--ri-fg-1)'}; font-size: 11.5px; font-weight: 600`);
     row.appendChild(l);
     row.appendChild(v);
     return { row, valueEl: v };
@@ -384,7 +361,7 @@ export function mountSettlementUi(parentEl: HTMLElement, deps: SettlementUiDeps)
   const distStat = statRow('DIST');
   const rangeStat = statRow('RANGE');
   const etaStat = statRow('ETA');
-  tierStat.valueEl.style.color = ACCENT;
+  tierStat.valueEl.style.color = 'var(--ri-accent)';
   statBlock.appendChild(tierStat.row);
   statBlock.appendChild(distStat.row);
   statBlock.appendChild(rangeStat.row);
@@ -400,10 +377,10 @@ export function mountSettlementUi(parentEl: HTMLElement, deps: SettlementUiDeps)
   fuelHeadL.textContent = 'FUEL LOAD';
   styled(
     fuelHeadL,
-    [`color: ${FG_DIM}`, 'font-size: 9.5px', 'letter-spacing: 0.12em'].join(';'),
+    [`color: ${'var(--ri-fg-3)'}`, 'font-size: 9.5px', 'letter-spacing: 0.12em'].join(';'),
   );
   const fuelHeadR = document.createElement('span');
-  styled(fuelHeadR, `color: ${WARN}; font-size: 11px; font-weight: 600`);
+  styled(fuelHeadR, `color: ${'var(--ri-warn)'}; font-size: 11px; font-weight: 600`);
   fuelHead.appendChild(fuelHeadL);
   fuelHead.appendChild(fuelHeadR);
   const fuelSlider = document.createElement('input');
@@ -439,10 +416,10 @@ export function mountSettlementUi(parentEl: HTMLElement, deps: SettlementUiDeps)
   kitHeadL.textContent = 'FOUNDATION KITS';
   styled(
     kitHeadL,
-    [`color: ${FG_DIM}`, 'font-size: 9.5px', 'letter-spacing: 0.12em'].join(';'),
+    [`color: ${'var(--ri-fg-3)'}`, 'font-size: 9.5px', 'letter-spacing: 0.12em'].join(';'),
   );
   const kitHeadR = document.createElement('span');
-  styled(kitHeadR, `color: ${ACCENT}; font-size: 11px; font-weight: 600`);
+  styled(kitHeadR, `color: ${'var(--ri-accent)'}; font-size: 11px; font-weight: 600`);
   kitHead.appendChild(kitHeadL);
   kitHead.appendChild(kitHeadR);
   const kitSlider = document.createElement('input');
@@ -474,7 +451,7 @@ export function mountSettlementUi(parentEl: HTMLElement, deps: SettlementUiDeps)
   styled(
     statusEl,
     [
-      `color: ${FG_DIM}`,
+      `color: ${'var(--ri-fg-3)'}`,
       'font-size: 10px',
       'letter-spacing: 0.06em',
       'min-height: 14px',
@@ -489,8 +466,8 @@ export function mountSettlementUi(parentEl: HTMLElement, deps: SettlementUiDeps)
     armBtn,
     [
       'background: #1a1f2a',
-      `color: ${FG}`,
-      `border: 1px solid ${PANEL_BORDER}`,
+      `color: ${'var(--ri-fg-1)'}`,
+      `border: 1px solid ${'var(--ri-border-strong)'}`,
       'padding: 8px 12px',
       'cursor: pointer',
       'font-family: ui-monospace, monospace',
@@ -513,14 +490,14 @@ export function mountSettlementUi(parentEl: HTMLElement, deps: SettlementUiDeps)
     launchMode = on;
     if (on) {
       armBtn.textContent = '◆ DISARM';
-      armBtn.style.color = WARN;
-      armBtn.style.borderColor = WARN;
+      armBtn.style.color = 'var(--ri-warn)';
+      armBtn.style.borderColor = 'var(--ri-warn)';
       armBtn.style.background = 'rgba(245, 167, 66, 0.08)';
       reticleLayer.visible = true;
     } else {
       armBtn.textContent = '◇ ARM SETTLE';
-      armBtn.style.color = FG;
-      armBtn.style.borderColor = PANEL_BORDER;
+      armBtn.style.color = 'var(--ri-fg-1)';
+      armBtn.style.borderColor = 'var(--ri-border-strong)';
       armBtn.style.background = '#1a1f2a';
       reticleLayer.visible = false;
     }
@@ -537,7 +514,7 @@ export function mountSettlementUi(parentEl: HTMLElement, deps: SettlementUiDeps)
       'display: flex',
       'justify-content: space-between',
       'align-items: baseline',
-      `border-bottom: 1px solid ${PANEL_BORDER}`,
+      `border-bottom: 1px solid ${'var(--ri-border-strong)'}`,
       'padding-bottom: 3px',
     ].join(';'),
   );
@@ -545,10 +522,10 @@ export function mountSettlementUi(parentEl: HTMLElement, deps: SettlementUiDeps)
   ledgerL.textContent = 'EN ROUTE';
   styled(
     ledgerL,
-    [`color: ${ACCENT}`, 'font-size: 10px', 'font-weight: 600', 'letter-spacing: 0.18em'].join(';'),
+    [`color: ${'var(--ri-accent)'}`, 'font-size: 10px', 'font-weight: 600', 'letter-spacing: 0.18em'].join(';'),
   );
   const ledgerR = document.createElement('span');
-  styled(ledgerR, `color: ${FG_DIM}; font-size: 9.5px; letter-spacing: 0.08em`);
+  styled(ledgerR, `color: ${'var(--ri-fg-3)'}; font-size: 9.5px; letter-spacing: 0.08em`);
   ledgerHead.appendChild(ledgerL);
   ledgerHead.appendChild(ledgerR);
   const ledgerList = document.createElement('div');
@@ -558,7 +535,7 @@ export function mountSettlementUi(parentEl: HTMLElement, deps: SettlementUiDeps)
   styled(
     ledgerEmpty,
     [
-      `color: ${FG_MUTED}`,
+      `color: ${'var(--ri-fg-4)'}`,
       'font-size: 10px',
       'letter-spacing: 0.06em',
       'font-style: italic',
@@ -575,9 +552,9 @@ export function mountSettlementUi(parentEl: HTMLElement, deps: SettlementUiDeps)
     footer,
     [
       'padding: 6px 12px',
-      `border-top: 1px solid ${PANEL_BORDER}`,
-      `background: ${STRIP_BG}`,
-      `color: ${FG_DIM}`,
+      `border-top: 1px solid ${'var(--ri-border-strong)'}`,
+      `background: ${'rgba(24, 29, 39, 0.6)'}`,
+      `color: ${'var(--ri-fg-3)'}`,
       'font-size: 9.5px',
       'letter-spacing: 0.06em',
       'text-transform: uppercase',
@@ -589,6 +566,13 @@ export function mountSettlementUi(parentEl: HTMLElement, deps: SettlementUiDeps)
   panel.appendChild(body);
   panel.appendChild(footer);
   parentEl.appendChild(panel);
+
+  const panelHandle = mountPanel(panel, {
+    id: 'settlement-panel',
+    zone: Zone.R,
+    order: 2,
+  });
+  panelHandle.setVisible(false);
 
   // ---- In-flight vehicle dots (world space) -------------------------------
   const vehicleLayer = new Container();
@@ -807,14 +791,14 @@ export function mountSettlementUi(parentEl: HTMLElement, deps: SettlementUiDeps)
     const reason = validationReason(originSpec, targetSpec);
     if (reason) {
       statusEl.textContent = reason;
-      statusEl.style.color = ERR;
+      statusEl.style.color = 'var(--ri-danger)';
       armBtn.disabled = true;
       armBtn.style.opacity = '0.5';
       armBtn.style.cursor = 'not-allowed';
       if (launchMode) setLaunchMode(false);
     } else {
       statusEl.textContent = 'ready · click target on map';
-      statusEl.style.color = FG_DIM;
+      statusEl.style.color = 'var(--ri-fg-3)';
       armBtn.disabled = false;
       armBtn.style.opacity = '1';
       armBtn.style.cursor = 'pointer';
@@ -886,7 +870,7 @@ export function mountSettlementUi(parentEl: HTMLElement, deps: SettlementUiDeps)
         'flex-direction: column',
         'gap: 2px',
         'padding: 4px 6px',
-        `border-left: 2px solid ${ACCENT_DIM}`,
+        `border-left: 2px solid ${'var(--ri-accent-dim)'}`,
         `background: rgba(125, 211, 232, 0.04)`,
       ].join(';'),
     );
@@ -894,18 +878,18 @@ export function mountSettlementUi(parentEl: HTMLElement, deps: SettlementUiDeps)
     styled(top, 'display: flex; justify-content: space-between; align-items: baseline');
     const idEl = document.createElement('span');
     idEl.textContent = `${v.kind === 'ship' ? '◗' : '✈'} ${v.id.toUpperCase()}`;
-    styled(idEl, `color: ${ACCENT}; font-size: 10px; letter-spacing: 0.08em; font-weight: 600`);
+    styled(idEl, `color: ${'var(--ri-accent)'}; font-size: 10px; letter-spacing: 0.08em; font-weight: 600`);
     const etaEl = document.createElement('span');
     const remainSec = Math.max(0, (v.expectedArrivalTime - performance.now()) / 1000);
     etaEl.textContent = `T-${remainSec.toFixed(1)}s`;
-    styled(etaEl, `color: ${WARN}; font-size: 10px; font-weight: 600`);
+    styled(etaEl, `color: ${'var(--ri-warn)'}; font-size: 10px; font-weight: 600`);
     top.appendChild(idEl);
     top.appendChild(etaEl);
     const totalMs = v.expectedArrivalTime - v.launchTime;
     const elapsedMs = Math.max(0, Math.min(totalMs, performance.now() - v.launchTime));
     const pct = totalMs > 0 ? elapsedMs / totalMs : 0;
     const ruleWrap = document.createElement('div');
-    styled(ruleWrap, ['height: 2px', `background: ${RAIL}`, 'position: relative'].join(';'));
+    styled(ruleWrap, ['height: 2px', `background: ${'var(--ri-border)'}`, 'position: relative'].join(';'));
     const ruleFill = document.createElement('div');
     styled(
       ruleFill,
@@ -914,7 +898,7 @@ export function mountSettlementUi(parentEl: HTMLElement, deps: SettlementUiDeps)
         'top: 0',
         'left: 0',
         'height: 100%',
-        `background: ${WARN}`,
+        `background: ${'var(--ri-warn)'}`,
         `width: ${(pct * 100).toFixed(2)}%`,
       ].join(';'),
     );
@@ -923,12 +907,12 @@ export function mountSettlementUi(parentEl: HTMLElement, deps: SettlementUiDeps)
     styled(meta, 'display: flex; justify-content: space-between');
     const metaL = document.createElement('span');
     metaL.textContent = `${v.from} → ${v.target}`;
-    styled(metaL, `color: ${FG_DIM}; font-size: 9.5px`);
+    styled(metaL, `color: ${'var(--ri-fg-3)'}; font-size: 9.5px`);
     const metaR = document.createElement('span');
     metaR.textContent = `${v.fuelLoaded} fuel · ${v.foundationKitCount} kit${
       v.foundationKitCount > 1 ? 's' : ''
     } · T${v.tier}`;
-    styled(metaR, `color: ${FG_DIM}; font-size: 9.5px`);
+    styled(metaR, `color: ${'var(--ri-fg-3)'}; font-size: 9.5px`);
     meta.appendChild(metaL);
     meta.appendChild(metaR);
     row.appendChild(top);
@@ -940,13 +924,13 @@ export function mountSettlementUi(parentEl: HTMLElement, deps: SettlementUiDeps)
   function show(): void {
     if (visible) return;
     visible = true;
-    panel.style.display = 'flex';
+    panelHandle.setVisible(true);
     refresh(performance.now());
   }
   function hide(): void {
     if (!visible) return;
     visible = false;
-    panel.style.display = 'none';
+    panelHandle.setVisible(false);
     if (launchMode) setLaunchMode(false);
   }
   function toggle(): boolean {
@@ -998,7 +982,7 @@ export function mountSettlementUi(parentEl: HTMLElement, deps: SettlementUiDeps)
       return { ok: true };
     }
     statusEl.textContent = `rejected: ${r.reason}`;
-    statusEl.style.color = ERR;
+    statusEl.style.color = 'var(--ri-danger)';
     return { ok: false, reason: r.reason };
   }
 

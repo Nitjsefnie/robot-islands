@@ -1,6 +1,6 @@
 // Building Inspector — side dock that opens when a placed building is
 // selected on the map. Sister to drones-ui / routes-ui / settlement-ui:
-// same industrial-readout vocabulary (ACCENT cyan title, FG_DIM secondary
+// same industrial-readout vocabulary (var(--ri-accent) cyan title, var(--ri-fg-3) secondary
 // labels, monospace tabular numerics), same dock idiom.
 //
 // Position: top-right, anchored beneath the existing UI button strip (which
@@ -56,20 +56,9 @@ import {
   renameIsland,
   type IslandSpec,
 } from './world.js';
+import { mountPanel, Zone } from './ui-zones.js';
 
-// ---------------------------------------------------------------------------
-// Palette — shared vocabulary with drones-ui / buildings-ui / skilltree-ui
-// ---------------------------------------------------------------------------
-const PANEL_BG = 'rgba(14, 18, 26, 0.92)';
-const PANEL_BORDER = '#3a4452';
-const FG = '#cdd6f4';
-const FG_DIM = '#6c7791';
-const FG_MUTED = '#4a5365';
-const ACCENT = '#7dd3e8';
-const ACCENT_DIM = '#3d6f7c';
-const WARN = '#f5a742';
-const WARN_DIM = '#7a5530';
-const STRIP_BG = 'rgba(20, 24, 32, 0.6)';
+
 
 const CATEGORY_LABEL: Readonly<Record<BuildingCategory, string>> = {
   extraction: 'Extraction',
@@ -273,32 +262,23 @@ export function mountInspectorUi(
   let target: InspectorTarget | null = null;
 
   // -------------------------------------------------------------------------
-  // Panel shell — top-right, beneath the UI button strip (top: 8 + 6 buttons
-  // × ~26px ≈ 168px). We pick top: 184px to clear comfortably and keep the
-  // bottom anchored so a tall building (lots of meta) scrolls inside the
-  // dock rather than overflowing the viewport.
+  // Panel shell — mounted via zone manager on the left edge so it doesn't
+  // fight the side docks for the right edge.
   // -------------------------------------------------------------------------
   const panel = document.createElement('div');
   panel.id = 'inspector-panel';
+  panel.classList.add('ri-panel');
+  panel.dataset.screenLabel = 'Inspector';
   styled(
     panel,
     [
-      'position: fixed',
-      'top: 232px',
-      'right: 8px',
       'width: 268px',
       'max-height: calc(100vh - 248px)',
-      `background: ${PANEL_BG}`,
-      `border: 1px solid ${PANEL_BORDER}`,
-      'border-radius: 2px',
-      'box-shadow: 0 18px 36px -12px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(125, 211, 232, 0.04)',
-      'z-index: 110',
-      `color: ${FG}`,
       'font-family: ui-monospace, monospace',
       'font-size: 12px',
       'line-height: 1.45',
       'font-variant-numeric: tabular-nums',
-      'display: none',
+      'display: flex',
       'flex-direction: column',
       'overflow: hidden',
       'pointer-events: auto',
@@ -317,21 +297,21 @@ export function mountInspectorUi(
       'justify-content: space-between',
       'gap: 8px',
       'padding: 9px 12px 8px',
-      `border-bottom: 1px solid ${PANEL_BORDER}`,
-      `background: ${STRIP_BG}`,
+      `border-bottom: 1px solid ${'var(--ri-border-strong)'}`,
+      `background: ${'rgba(24, 29, 39, 0.6)'}`,
     ].join(';'),
   );
   const headLeft = document.createElement('div');
   styled(headLeft, 'display: flex; align-items: baseline; gap: 7px');
   const dot = document.createElement('span');
   dot.textContent = '◉';
-  styled(dot, `color: ${ACCENT}; font-size: 10px`);
+  styled(dot, `color: ${'var(--ri-accent)'}; font-size: 10px`);
   const headTitle = document.createElement('span');
   headTitle.textContent = 'INSPECT';
   styled(
     headTitle,
     [
-      `color: ${ACCENT}`,
+      `color: ${'var(--ri-accent)'}`,
       'font-size: 11px',
       'font-weight: 600',
       'letter-spacing: 0.22em',
@@ -342,7 +322,7 @@ export function mountInspectorUi(
   styled(
     headSub,
     [
-      `color: ${FG_DIM}`,
+      `color: ${'var(--ri-fg-3)'}`,
       'font-size: 9.5px',
       'letter-spacing: 0.16em',
     ].join(';'),
@@ -356,9 +336,9 @@ export function mountInspectorUi(
   styled(
     closeBtn,
     [
-      `color: ${FG_DIM}`,
+      `color: ${'var(--ri-fg-3)'}`,
       'background: transparent',
-      `border: 1px solid ${PANEL_BORDER}`,
+      `border: 1px solid ${'var(--ri-border-strong)'}`,
       'width: 18px',
       'height: 18px',
       'line-height: 0',
@@ -374,12 +354,12 @@ export function mountInspectorUi(
     close();
   });
   closeBtn.addEventListener('mouseenter', () => {
-    closeBtn.style.color = FG;
-    closeBtn.style.borderColor = ACCENT_DIM;
+    closeBtn.style.color = 'var(--ri-fg-1)';
+    closeBtn.style.borderColor = 'var(--ri-accent-dim)';
   });
   closeBtn.addEventListener('mouseleave', () => {
-    closeBtn.style.color = FG_DIM;
-    closeBtn.style.borderColor = PANEL_BORDER;
+    closeBtn.style.color = 'var(--ri-fg-3)';
+    closeBtn.style.borderColor = 'var(--ri-border-strong)';
   });
   header.appendChild(headLeft);
   header.appendChild(closeBtn);
@@ -425,7 +405,7 @@ export function mountInspectorUi(
   nameLabel.textContent = 'NAME';
   styled(
     nameLabel,
-    [`color: ${FG_DIM}`, 'font-size: 9.5px', 'letter-spacing: 0.14em', 'flex: 0 0 auto'].join(';'),
+    [`color: ${'var(--ri-fg-3)'}`, 'font-size: 9.5px', 'letter-spacing: 0.14em', 'flex: 0 0 auto'].join(';'),
   );
   const nameInput = document.createElement('input');
   nameInput.type = 'text';
@@ -434,9 +414,9 @@ export function mountInspectorUi(
     nameInput,
     [
       'flex: 1 1 auto',
-      `color: ${FG}`,
-      `background: ${STRIP_BG}`,
-      `border: 1px solid ${PANEL_BORDER}`,
+      `color: ${'var(--ri-fg-1)'}`,
+      `background: ${'rgba(24, 29, 39, 0.6)'}`,
+      `border: 1px solid ${'var(--ri-border-strong)'}`,
       'border-radius: 2px',
       'padding: 2px 6px',
       'font-family: ui-monospace, monospace',
@@ -495,14 +475,14 @@ export function mountInspectorUi(
   const nameEl = document.createElement('span');
   styled(
     nameEl,
-    [`color: ${FG}`, 'font-size: 13px', 'font-weight: 600', 'letter-spacing: 0.02em'].join(';'),
+    [`color: ${'var(--ri-fg-1)'}`, 'font-size: 13px', 'font-weight: 600', 'letter-spacing: 0.02em'].join(';'),
   );
   const tierBadge = document.createElement('span');
   styled(
     tierBadge,
     [
-      `color: ${ACCENT}`,
-      `border: 1px solid ${ACCENT_DIM}`,
+      `color: ${'var(--ri-accent)'}`,
+      `border: 1px solid ${'var(--ri-accent-dim)'}`,
       'padding: 0 6px',
       'font-size: 10px',
       'letter-spacing: 0.08em',
@@ -526,12 +506,12 @@ export function mountInspectorUi(
   const categoryEl = document.createElement('span');
   styled(
     categoryEl,
-    [`color: ${FG_DIM}`, 'font-size: 10px', 'letter-spacing: 0.14em', 'text-transform: uppercase'].join(';'),
+    [`color: ${'var(--ri-fg-3)'}`, 'font-size: 10px', 'letter-spacing: 0.14em', 'text-transform: uppercase'].join(';'),
   );
   const footprintEl = document.createElement('span');
   styled(
     footprintEl,
-    [`color: ${FG_DIM}`, 'font-size: 10px', 'letter-spacing: 0.05em'].join(';'),
+    [`color: ${'var(--ri-fg-3)'}`, 'font-size: 10px', 'letter-spacing: 0.05em'].join(';'),
   );
   subtitleRow.appendChild(categoryEl);
   subtitleRow.appendChild(footprintEl);
@@ -545,7 +525,7 @@ export function mountInspectorUi(
         'flex-direction: column',
         'gap: 4px',
         'padding: 8px 12px 10px',
-        `border-top: 1px solid ${PANEL_BORDER}`,
+        `border-top: 1px solid ${'var(--ri-border-strong)'}`,
       ].join(';'),
     );
     const hdr = document.createElement('span');
@@ -553,7 +533,7 @@ export function mountInspectorUi(
     styled(
       hdr,
       [
-        `color: ${FG_DIM}`,
+        `color: ${'var(--ri-fg-3)'}`,
         'font-size: 9.5px',
         'letter-spacing: 0.14em',
         'text-transform: uppercase',
@@ -571,7 +551,7 @@ export function mountInspectorUi(
   const recipeStatus = document.createElement('span');
   styled(
     recipeStatus,
-    [`color: ${FG_MUTED}`, 'font-size: 10.5px', 'letter-spacing: 0.04em'].join(';'),
+    [`color: ${'var(--ri-fg-4)'}`, 'font-size: 10.5px', 'letter-spacing: 0.04em'].join(';'),
   );
   recipeSection.body.appendChild(recipeStatus);
   // The list of input/output rate lines is rebuilt every refresh — clear &
@@ -587,12 +567,12 @@ export function mountInspectorUi(
   effectiveLabel.textContent = 'CYCLES/S';
   styled(
     effectiveLabel,
-    [`color: ${FG_DIM}`, 'font-size: 9.5px', 'letter-spacing: 0.1em'].join(';'),
+    [`color: ${'var(--ri-fg-3)'}`, 'font-size: 9.5px', 'letter-spacing: 0.1em'].join(';'),
   );
   const effectiveValue = document.createElement('span');
   styled(
     effectiveValue,
-    [`color: ${FG}`, 'font-size: 11px', 'font-weight: 600'].join(';'),
+    [`color: ${'var(--ri-fg-1)'}`, 'font-size: 11px', 'font-weight: 600'].join(';'),
   );
   effectiveRow.appendChild(effectiveLabel);
   effectiveRow.appendChild(effectiveValue);
@@ -602,7 +582,7 @@ export function mountInspectorUi(
   const powerLine = document.createElement('span');
   styled(
     powerLine,
-    [`color: ${FG}`, 'font-size: 11px', 'letter-spacing: 0.02em'].join(';'),
+    [`color: ${'var(--ri-fg-1)'}`, 'font-size: 11px', 'letter-spacing: 0.02em'].join(';'),
   );
   powerSection.body.appendChild(powerLine);
 
@@ -614,7 +594,7 @@ export function mountInspectorUi(
   const storageLine = document.createElement('span');
   styled(
     storageLine,
-    [`color: ${FG}`, 'font-size: 11px', 'letter-spacing: 0.02em'].join(';'),
+    [`color: ${'var(--ri-fg-1)'}`, 'font-size: 11px', 'letter-spacing: 0.02em'].join(';'),
   );
   storageSection.body.appendChild(storageLine);
 
@@ -639,16 +619,16 @@ export function mountInspectorUi(
     labelTxt.textContent = 'LABEL';
     styled(
       labelTxt,
-      [`color: ${FG_DIM}`, 'font-size: 9.5px', 'letter-spacing: 0.14em'].join(';'),
+      [`color: ${'var(--ri-fg-3)'}`, 'font-size: 9.5px', 'letter-spacing: 0.14em'].join(';'),
     );
     const select = document.createElement('select');
     styled(
       select,
       [
         'flex: 1 1 auto',
-        `color: ${FG}`,
-        `background: ${STRIP_BG}`,
-        `border: 1px solid ${PANEL_BORDER}`,
+        `color: ${'var(--ri-fg-1)'}`,
+        `background: ${'rgba(24, 29, 39, 0.6)'}`,
+        `border: 1px solid ${'var(--ri-border-strong)'}`,
         'border-radius: 2px',
         'padding: 2px 4px',
         'font-family: ui-monospace, monospace',
@@ -669,15 +649,15 @@ export function mountInspectorUi(
     const blockedNote = document.createElement('span');
     styled(
       blockedNote,
-      [`color: ${WARN}`, 'font-size: 10px', 'letter-spacing: 0.02em'].join(';'),
+      [`color: ${'var(--ri-warn)'}`, 'font-size: 10px', 'letter-spacing: 0.02em'].join(';'),
     );
     const forceClearBtn = document.createElement('button');
     styled(
       forceClearBtn,
       [
         'background: transparent',
-        `color: ${WARN}`,
-        `border: 1px solid ${WARN_DIM}`,
+        `color: ${'var(--ri-warn)'}`,
+        `border: 1px solid ${'rgba(245, 167, 66, 0.4)'}`,
         'padding: 3px 8px',
         'cursor: pointer',
         'font-family: ui-monospace, monospace',
@@ -777,10 +757,10 @@ export function mountInspectorUi(
     cargoLabelControls.select.value = (proposed ?? 'iron_ore') as string;
     if (current === undefined) {
       storageLine.textContent = `+${capacity} cap (unlabeled — pick a resource)`;
-      storageLine.style.color = FG_DIM;
+      storageLine.style.color = 'var(--ri-fg-3)';
     } else {
       storageLine.textContent = `+${capacity} cap on ${current}`;
-      storageLine.style.color = FG;
+      storageLine.style.color = 'var(--ri-fg-1)';
     }
     const held = current !== undefined ? (state.inventory[current] ?? 0) : 0;
     // Force-clear path: visible only when player has staged a new label AND
@@ -808,7 +788,7 @@ export function mountInspectorUi(
   const heatLine = document.createElement('span');
   styled(
     heatLine,
-    [`color: ${FG}`, 'font-size: 11px', 'letter-spacing: 0.02em'].join(';'),
+    [`color: ${'var(--ri-fg-1)'}`, 'font-size: 11px', 'letter-spacing: 0.02em'].join(';'),
   );
   heatSection.body.appendChild(heatLine);
 
@@ -819,12 +799,12 @@ export function mountInspectorUi(
   const maintenanceStatus = document.createElement('span');
   styled(
     maintenanceStatus,
-    [`color: ${FG}`, 'font-size: 11px', 'letter-spacing: 0.02em'].join(';'),
+    [`color: ${'var(--ri-fg-1)'}`, 'font-size: 11px', 'letter-spacing: 0.02em'].join(';'),
   );
   const maintenanceRecipeLine = document.createElement('span');
   styled(
     maintenanceRecipeLine,
-    [`color: ${FG_DIM}`, 'font-size: 10.5px', 'letter-spacing: 0.02em'].join(';'),
+    [`color: ${'var(--ri-fg-3)'}`, 'font-size: 10.5px', 'letter-spacing: 0.02em'].join(';'),
   );
   maintenanceSection.body.appendChild(maintenanceStatus);
   maintenanceSection.body.appendChild(maintenanceRecipeLine);
@@ -836,8 +816,8 @@ export function mountInspectorUi(
     convertBtn,
     [
       'background: transparent',
-      `color: ${ACCENT}`,
-      `border: 1px solid ${ACCENT_DIM}`,
+      `color: ${'var(--ri-accent)'}`,
+      `border: 1px solid ${'var(--ri-accent-dim)'}`,
       'padding: 4px 8px',
       'cursor: pointer',
       'font-family: ui-monospace, monospace',
@@ -853,11 +833,11 @@ export function mountInspectorUi(
   convertBtn.addEventListener('mouseenter', () => {
     if (convertBtn.disabled) return;
     convertBtn.style.background = 'rgba(125, 211, 232, 0.08)';
-    convertBtn.style.borderColor = ACCENT;
+    convertBtn.style.borderColor = 'var(--ri-accent)';
   });
   convertBtn.addEventListener('mouseleave', () => {
     convertBtn.style.background = 'transparent';
-    convertBtn.style.borderColor = convertBtn.disabled ? FG_MUTED : ACCENT_DIM;
+    convertBtn.style.borderColor = convertBtn.disabled ? 'var(--ri-fg-4)' : 'var(--ri-accent-dim)';
   });
   convertBtn.addEventListener('click', () => {
     if (!target) return;
@@ -876,7 +856,7 @@ export function mountInspectorUi(
   const reclamationCaption = document.createElement('span');
   styled(
     reclamationCaption,
-    [`color: ${FG_DIM}`, 'font-size: 10.5px', 'letter-spacing: 0.02em'].join(';'),
+    [`color: ${'var(--ri-fg-3)'}`, 'font-size: 10.5px', 'letter-spacing: 0.02em'].join(';'),
   );
   reclamationSection.body.appendChild(reclamationCaption);
   function makeExpandButton(): HTMLButtonElement {
@@ -885,8 +865,8 @@ export function mountInspectorUi(
       btn,
       [
         'background: transparent',
-        `color: ${ACCENT}`,
-        `border: 1px solid ${ACCENT_DIM}`,
+        `color: ${'var(--ri-accent)'}`,
+        `border: 1px solid ${'var(--ri-accent-dim)'}`,
         'padding: 4px 8px',
         'cursor: pointer',
         'font-family: ui-monospace, monospace',
@@ -901,11 +881,11 @@ export function mountInspectorUi(
     btn.addEventListener('mouseenter', () => {
       if (btn.disabled) return;
       btn.style.background = 'rgba(125, 211, 232, 0.08)';
-      btn.style.borderColor = ACCENT;
+      btn.style.borderColor = 'var(--ri-accent)';
     });
     btn.addEventListener('mouseleave', () => {
       btn.style.background = 'transparent';
-      btn.style.borderColor = btn.disabled ? FG_MUTED : ACCENT_DIM;
+      btn.style.borderColor = btn.disabled ? 'var(--ri-fg-4)' : 'var(--ri-accent-dim)';
     });
     return btn;
   }
@@ -927,7 +907,7 @@ export function mountInspectorUi(
   const constraintsLine = document.createElement('span');
   styled(
     constraintsLine,
-    [`color: ${FG_DIM}`, 'font-size: 11px', 'letter-spacing: 0.02em'].join(';'),
+    [`color: ${'var(--ri-fg-3)'}`, 'font-size: 11px', 'letter-spacing: 0.02em'].join(';'),
   );
   constraintsSection.body.appendChild(constraintsLine);
 
@@ -940,8 +920,8 @@ export function mountInspectorUi(
       'flex-direction: column',
       'gap: 4px',
       'padding: 10px 12px 12px',
-      `border-top: 1px solid ${PANEL_BORDER}`,
-      `background: ${STRIP_BG}`,
+      `border-top: 1px solid ${'var(--ri-border-strong)'}`,
+      `background: ${'rgba(24, 29, 39, 0.6)'}`,
     ].join(';'),
   );
   const demolishBtn = document.createElement('button');
@@ -949,8 +929,8 @@ export function mountInspectorUi(
     demolishBtn,
     [
       'background: transparent',
-      `color: ${WARN}`,
-      `border: 1px solid ${WARN_DIM}`,
+      `color: ${'var(--ri-warn)'}`,
+      `border: 1px solid ${'rgba(245, 167, 66, 0.4)'}`,
       'padding: 5px 10px',
       'cursor: pointer',
       'font-family: ui-monospace, monospace',
@@ -963,11 +943,11 @@ export function mountInspectorUi(
   );
   demolishBtn.addEventListener('mouseenter', () => {
     demolishBtn.style.background = 'rgba(245, 167, 66, 0.10)';
-    demolishBtn.style.borderColor = WARN;
+    demolishBtn.style.borderColor = 'var(--ri-warn)';
   });
   demolishBtn.addEventListener('mouseleave', () => {
     demolishBtn.style.background = 'transparent';
-    demolishBtn.style.borderColor = WARN_DIM;
+    demolishBtn.style.borderColor = 'rgba(245, 167, 66, 0.4)';
   });
   demolishBtn.addEventListener('click', () => {
     if (!target) return;
@@ -1019,6 +999,13 @@ export function mountInspectorUi(
   panel.appendChild(footerSection);
   parentEl.appendChild(panel);
 
+  const panelHandle = mountPanel(panel, {
+    id: 'inspector-panel',
+    zone: Zone.L,
+    order: 0,
+  });
+  panelHandle.setVisible(false);
+
   // -------------------------------------------------------------------------
   // Recipe-line management — variable count, so we lazy-track existing rows
   // and recycle them by index rather than create/destroy on every refresh.
@@ -1034,12 +1021,12 @@ export function mountInspectorUi(
       const left = document.createElement('span');
       styled(
         left,
-        [`color: ${FG}`, 'font-size: 11px', 'letter-spacing: 0.02em'].join(';'),
+        [`color: ${'var(--ri-fg-1)'}`, 'font-size: 11px', 'letter-spacing: 0.02em'].join(';'),
       );
       const right = document.createElement('span');
       styled(
         right,
-        [`color: ${FG}`, 'font-size: 11px', 'font-weight: 600'].join(';'),
+        [`color: ${'var(--ri-fg-1)'}`, 'font-size: 11px', 'font-weight: 600'].join(';'),
       );
       row.appendChild(left);
       row.appendChild(right);
@@ -1077,13 +1064,13 @@ export function mountInspectorUi(
   function setExpandButtonState(btn: HTMLButtonElement, gate: ExpandResult): void {
     btn.disabled = !gate.ok;
     if (gate.ok) {
-      btn.style.color = ACCENT;
-      btn.style.borderColor = ACCENT_DIM;
+      btn.style.color = 'var(--ri-accent)';
+      btn.style.borderColor = 'var(--ri-accent-dim)';
       btn.style.cursor = 'pointer';
       btn.style.opacity = '1';
     } else {
-      btn.style.color = FG_MUTED;
-      btn.style.borderColor = FG_MUTED;
+      btn.style.color = 'var(--ri-fg-4)';
+      btn.style.borderColor = 'var(--ri-fg-4)';
       btn.style.cursor = 'not-allowed';
       btn.style.opacity = '0.6';
     }
@@ -1125,11 +1112,11 @@ export function mountInspectorUi(
     const recipe = resolveRecipe(BUILDING_DEFS[building.defId], building, spec.terrainAt);
     if (!recipe) {
       recipeStatus.textContent = '— no recipe';
-      recipeStatus.style.color = FG_MUTED;
+      recipeStatus.style.color = 'var(--ri-fg-4)';
       recipeStatus.style.display = '';
       ensureRecipeLineCount(0);
       effectiveValue.textContent = '—';
-      effectiveValue.style.color = FG_DIM;
+      effectiveValue.style.color = 'var(--ri-fg-3)';
     } else {
       // Find the per-building effective rate from a fresh computeRates pass.
       // The HUD also calls computeRates each frame, so the second call here
@@ -1140,7 +1127,7 @@ export function mountInspectorUi(
       const effective = br?.effectiveRate ?? 0;
       // Header status line — show cycle time + base rate (= 1 / cycleSec).
       recipeStatus.textContent = `cycle ${recipe.cycleSec}s · base ${(1 / recipe.cycleSec).toFixed(3)}/s`;
-      recipeStatus.style.color = FG_DIM;
+      recipeStatus.style.color = 'var(--ri-fg-3)';
       recipeStatus.style.display = '';
 
       const lines = recipeToLines(recipe, effective);
@@ -1153,16 +1140,16 @@ export function mountInspectorUi(
         const right = row.lastChild as HTMLSpanElement;
         if (left) {
           left.textContent = ln.resource;
-          left.style.color = ln.direction === 'out' ? FG : FG_DIM;
+          left.style.color = ln.direction === 'out' ? 'var(--ri-fg-1)' : 'var(--ri-fg-3)';
         }
         if (right) {
           right.textContent = formatRate(ln.direction, ln.rate);
-          right.style.color = ln.direction === 'out' ? ACCENT : WARN;
+          right.style.color = ln.direction === 'out' ? 'var(--ri-accent)' : 'var(--ri-warn)';
         }
       }
 
       effectiveValue.textContent = effective.toFixed(3);
-      effectiveValue.style.color = effective > 0 ? ACCENT : FG_MUTED;
+      effectiveValue.style.color = effective > 0 ? 'var(--ri-accent)' : 'var(--ri-fg-4)';
     }
 
     // Power section
@@ -1170,14 +1157,14 @@ export function mountInspectorUi(
     const cons = def.power?.consumes ?? 0;
     if (prod === 0 && cons === 0) {
       powerLine.textContent = '— no power';
-      powerLine.style.color = FG_MUTED;
+      powerLine.style.color = 'var(--ri-fg-4)';
       powerSection.wrap.style.display = '';
     } else {
       const parts: string[] = [];
       if (prod > 0) parts.push(`+${prod}W produced`);
       if (cons > 0) parts.push(`-${cons}W consumed`);
       powerLine.textContent = parts.join('  ·  ');
-      powerLine.style.color = FG;
+      powerLine.style.color = 'var(--ri-fg-1)';
       powerSection.wrap.style.display = '';
     }
 
@@ -1219,7 +1206,7 @@ export function mountInspectorUi(
         cargoLabelControls.wrap.style.display = 'none';
         const catLabel = STORAGE_CATEGORY_LABEL[def.storage.category];
         storageLine.textContent = `+${cap} cap on ${catLabel}`;
-        storageLine.style.color = FG;
+        storageLine.style.color = 'var(--ri-fg-1)';
       }
       storageSection.wrap.style.display = '';
     } else {
@@ -1238,10 +1225,10 @@ export function mountInspectorUi(
         if (has) {
           const src = heat.assignedSource.get(building.id) ?? '?';
           heatLine.textContent = `✓ heat OK  ·  source: ${src}`;
-          heatLine.style.color = ACCENT;
+          heatLine.style.color = 'var(--ri-accent)';
         } else {
           heatLine.textContent = 'NO HEAT SOURCE ADJACENT';
-          heatLine.style.color = WARN;
+          heatLine.style.color = 'var(--ri-warn)';
         }
       } else if (def.heatSource) {
         // Source: report served consumers. Free sources show their tag, coal
@@ -1256,7 +1243,7 @@ export function mountInspectorUi(
               ).length;
         const tag = def.heatSource.freeOrCoal === 'free' ? 'free' : 'coal';
         heatLine.textContent = `${tag} source  ·  serving ${served} consumer${served === 1 ? '' : 's'}`;
-        heatLine.style.color = FG;
+        heatLine.style.color = 'var(--ri-fg-1)';
       }
       heatSection.wrap.style.display = '';
     } else {
@@ -1269,7 +1256,7 @@ export function mountInspectorUi(
     //   - Over threshold → "OVERDUE — degraded to 67%" + recipe + warning color.
     if (building.eternalServitor === true) {
       maintenanceStatus.textContent = 'ETERNAL SERVITOR — exempt';
-      maintenanceStatus.style.color = ACCENT;
+      maintenanceStatus.style.color = 'var(--ri-accent)';
       maintenanceRecipeLine.textContent = '';
       maintenanceRecipeLine.style.display = 'none';
     } else {
@@ -1278,11 +1265,11 @@ export function mountInspectorUi(
       const factor = maintenanceFactor(building, def);
       if (operating < threshold) {
         maintenanceStatus.textContent = `${formatHM(operating)} / ${formatHM(threshold)}`;
-        maintenanceStatus.style.color = FG;
+        maintenanceStatus.style.color = 'var(--ri-fg-1)';
       } else {
         const pct = Math.round(factor * 100);
         maintenanceStatus.textContent = `OVERDUE — degraded to ${pct}%`;
-        maintenanceStatus.style.color = WARN;
+        maintenanceStatus.style.color = 'var(--ri-warn)';
       }
       const recipe = MAINTENANCE_RECIPES[def.tier];
       const recipeParts: string[] = [];
@@ -1323,13 +1310,13 @@ export function mountInspectorUi(
       convertBtn.disabled = !canAfford;
       convertBtn.style.display = '';
       if (!canAfford) {
-        convertBtn.style.color = FG_MUTED;
-        convertBtn.style.borderColor = FG_MUTED;
+        convertBtn.style.color = 'var(--ri-fg-4)';
+        convertBtn.style.borderColor = 'var(--ri-fg-4)';
         convertBtn.style.cursor = 'not-allowed';
         convertBtn.style.opacity = '0.6';
       } else {
-        convertBtn.style.color = ACCENT;
-        convertBtn.style.borderColor = ACCENT_DIM;
+        convertBtn.style.color = 'var(--ri-accent)';
+        convertBtn.style.borderColor = 'var(--ri-accent-dim)';
         convertBtn.style.cursor = 'pointer';
         convertBtn.style.opacity = '1';
       }
@@ -1376,14 +1363,14 @@ export function mountInspectorUi(
     // Reset any staged relabel from a previous inspection — pendingRelabel
     // is per-selection state, not per-panel.
     pendingRelabel = null;
-    panel.style.display = 'flex';
+    panelHandle.setVisible(true);
     paint();
   }
   function close(): void {
     if (!target) return;
     target = null;
     pendingRelabel = null;
-    panel.style.display = 'none';
+    panelHandle.setVisible(false);
   }
   function refresh(): void {
     if (!target) return;

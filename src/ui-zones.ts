@@ -201,7 +201,14 @@ export function mountPanel(el: HTMLElement, opts: PanelMountOptions): PanelHandl
     setVisible(v: boolean) {
       if (rec.visible === v) return;
       rec.visible = v;
-      el.style.display = v ? '' : 'none';
+      if (v) {
+        const saved = el.dataset.riDisplay;
+        el.style.display = saved === 'none' ? '' : (saved || '');
+        delete el.dataset.riDisplay;
+      } else {
+        el.dataset.riDisplay = el.style.display;
+        el.style.display = 'none';
+      }
       scheduleLayout();
     },
     destroy() {
