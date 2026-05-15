@@ -257,7 +257,11 @@ export type ResourceId =
   // Phase 10b — T3 power components (Task 10.6)
   | 'electric_motor'
   // Phase 10b — T3 power components (Task 10.7)
-  | 'generator';
+  | 'generator'
+  // Phase 10c — T3 mechanical assemblies (Task 10.8)
+  | 'pump'
+  | 'hydraulic_actuator'
+  | 'pneumatic_actuator';
 
 /** All known resources, useful for iterating to initialise inventories. */
 export const ALL_RESOURCES: ReadonlyArray<ResourceId> = [
@@ -442,6 +446,10 @@ export const ALL_RESOURCES: ReadonlyArray<ResourceId> = [
   'electric_motor',
   // Phase 10b — T3 power components (Task 10.7)
   'generator',
+  // Phase 10c — T3 mechanical assemblies (Task 10.8)
+  'pump',
+  'hydraulic_actuator',
+  'pneumatic_actuator',
 ];
 
 /**
@@ -650,6 +658,10 @@ export const XP_WEIGHT: Readonly<Record<ResourceId, number>> = {
   electric_motor: 30,
   // Phase 10b — T3 power components (Task 10.7)
   generator: 30,
+  // Phase 10c — T3 mechanical assemblies (Task 10.8)
+  pump: 30,
+  hydraulic_actuator: 30,
+  pneumatic_actuator: 30,
 };
 
 /**
@@ -1877,6 +1889,25 @@ export const RECIPES: Partial<Record<RecipeId, Recipe>> = {
     cycleSec: 350,
     inputs: { magnet: 1, wire: 5, steel: 1, bearing: 2 },
     outputs: { generator: 1 },
+    category: 'manufacturing',
+  },
+  // Phase 10c — T3 mechanical assemblies (Task 10.8)
+  pump_assembly: {
+    cycleSec: 300,
+    inputs: { electric_motor: 1, pipe: 2, bearing: 1 },
+    outputs: { pump: 1 },
+    category: 'manufacturing',
+  },
+  hydraulic_assembly: {
+    cycleSec: 300,
+    inputs: { pipe: 2, lubricant: 2, bearing: 1, spring: 1 },
+    outputs: { hydraulic_actuator: 1 },
+    category: 'manufacturing',
+  },
+  pneumatic_assembly: {
+    cycleSec: 300,
+    inputs: { pipe: 2, bearing: 1, spring: 1 },
+    outputs: { pneumatic_actuator: 1 },
     category: 'manufacturing',
   },
 };

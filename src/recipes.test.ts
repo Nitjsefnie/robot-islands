@@ -992,6 +992,39 @@ describe('§6.4/§7.9 generator via generator_lab (Task 10.7)', () => {
   });
 });
 
+describe('§7.10 pump + hydraulic_actuator + pneumatic_actuator (Task 10.8)', () => {
+  it('pump is in ALL_RESOURCES with xp_weight 30 (T3 component)', () => {
+    expect(ALL_RESOURCES).toContain('pump' as ResourceId);
+    expect(XP_WEIGHT.pump).toBe(30);
+  });
+  it('hydraulic_actuator is in ALL_RESOURCES with xp_weight 30 (T3 component)', () => {
+    expect(ALL_RESOURCES).toContain('hydraulic_actuator' as ResourceId);
+    expect(XP_WEIGHT.hydraulic_actuator).toBe(30);
+  });
+  it('pneumatic_actuator is in ALL_RESOURCES with xp_weight 30 (T3 component)', () => {
+    expect(ALL_RESOURCES).toContain('pneumatic_actuator' as ResourceId);
+    expect(XP_WEIGHT.pneumatic_actuator).toBe(30);
+  });
+  it('pump_assembly recipe: electric_motor + pipe + bearing → pump', () => {
+    expect(RECIPES.pump_assembly).toBeDefined();
+    expect(RECIPES.pump_assembly!.inputs).toEqual({ electric_motor: 1, pipe: 2, bearing: 1 });
+    expect(RECIPES.pump_assembly!.outputs).toEqual({ pump: 1 });
+    expect(RECIPES.pump_assembly!.cycleSec).toBe(300);
+  });
+  it('hydraulic_assembly recipe: pipe + lubricant + bearing + spring → hydraulic_actuator', () => {
+    expect(RECIPES.hydraulic_assembly).toBeDefined();
+    expect(RECIPES.hydraulic_assembly!.inputs).toEqual({ pipe: 2, lubricant: 2, bearing: 1, spring: 1 });
+    expect(RECIPES.hydraulic_assembly!.outputs).toEqual({ hydraulic_actuator: 1 });
+    expect(RECIPES.hydraulic_assembly!.cycleSec).toBe(300);
+  });
+  it('pneumatic_assembly recipe: pipe + bearing + spring → pneumatic_actuator', () => {
+    expect(RECIPES.pneumatic_assembly).toBeDefined();
+    expect(RECIPES.pneumatic_assembly!.inputs).toEqual({ pipe: 2, bearing: 1, spring: 1 });
+    expect(RECIPES.pneumatic_assembly!.outputs).toEqual({ pneumatic_actuator: 1 });
+    expect(RECIPES.pneumatic_assembly!.cycleSec).toBe(300);
+  });
+});
+
 describe('§6.3 glass_panel via glass_panel_press (Task 6.5)', () => {
   it('glass_panel is in ALL_RESOURCES with xp_weight 10', () => {
     expect(ALL_RESOURCES).toContain('glass_panel');

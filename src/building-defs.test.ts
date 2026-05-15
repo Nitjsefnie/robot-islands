@@ -224,6 +224,10 @@ const KNOWN_DEF_IDS: ReadonlyArray<BuildingDefId> = [
   'motor_assembly',
   // Phase 10b — T3 power components (Task 10.7)
   'generator_lab',
+  // Phase 10c — T3 mechanical assemblies (Task 10.8)
+  'pump_assembly',
+  'hydraulic_assembly',
+  'pneumatic_assembly',
 ];
 
 // Helper: build a minimal IslandSpec for the canPlaceOnIsland tests. The
@@ -420,6 +424,51 @@ describe('BUILDING_DEFS catalog', () => {
       expect(RECIPES.generator_lab).toBeDefined();
       expect(RECIPES.generator_lab!.inputs).toEqual({ magnet: 1, wire: 5, steel: 1, bearing: 2 });
       expect(RECIPES.generator_lab!.outputs).toEqual({ generator: 1 });
+    });
+  });
+
+  describe('§7.10 pump_assembly (T3 pump producer)', () => {
+    it('is T3, 2x2, manufacturing category', () => {
+      const def = BUILDING_DEFS.pump_assembly;
+      expect(def).toBeDefined();
+      expect(def.tier).toBe(3);
+      expect(def.footprint).toEqual(SHAPES.square2);
+      expect(def.category).toBe('manufacturing');
+    });
+    it('produces pump from electric_motor + pipe + bearing', () => {
+      expect(RECIPES.pump_assembly).toBeDefined();
+      expect(RECIPES.pump_assembly!.inputs).toEqual({ electric_motor: 1, pipe: 2, bearing: 1 });
+      expect(RECIPES.pump_assembly!.outputs).toEqual({ pump: 1 });
+    });
+  });
+
+  describe('§7.10 hydraulic_assembly (T3 hydraulic_actuator producer)', () => {
+    it('is T3, 2x2, manufacturing category', () => {
+      const def = BUILDING_DEFS.hydraulic_assembly;
+      expect(def).toBeDefined();
+      expect(def.tier).toBe(3);
+      expect(def.footprint).toEqual(SHAPES.square2);
+      expect(def.category).toBe('manufacturing');
+    });
+    it('produces hydraulic_actuator from pipe + lubricant + bearing + spring', () => {
+      expect(RECIPES.hydraulic_assembly).toBeDefined();
+      expect(RECIPES.hydraulic_assembly!.inputs).toEqual({ pipe: 2, lubricant: 2, bearing: 1, spring: 1 });
+      expect(RECIPES.hydraulic_assembly!.outputs).toEqual({ hydraulic_actuator: 1 });
+    });
+  });
+
+  describe('§7.10 pneumatic_assembly (T3 pneumatic_actuator producer)', () => {
+    it('is T3, 2x2, manufacturing category', () => {
+      const def = BUILDING_DEFS.pneumatic_assembly;
+      expect(def).toBeDefined();
+      expect(def.tier).toBe(3);
+      expect(def.footprint).toEqual(SHAPES.square2);
+      expect(def.category).toBe('manufacturing');
+    });
+    it('produces pneumatic_actuator from pipe + bearing + spring', () => {
+      expect(RECIPES.pneumatic_assembly).toBeDefined();
+      expect(RECIPES.pneumatic_assembly!.inputs).toEqual({ pipe: 2, bearing: 1, spring: 1 });
+      expect(RECIPES.pneumatic_assembly!.outputs).toEqual({ pneumatic_actuator: 1 });
     });
   });
 });

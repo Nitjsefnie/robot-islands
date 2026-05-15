@@ -255,4 +255,8 @@ export const RESOURCE_STORAGE_CATEGORY: Readonly<Record<ResourceId, StorageCateg
   electric_motor: 'components',
   // Phase 10b — T3 power components (Task 10.7)
   generator: 'components',
+  // Phase 10c — T3 mechanical assemblies (Task 10.8)
+  pump: 'components',
+  hydraulic_actuator: 'components',
+  pneumatic_actuator: 'components',
 };

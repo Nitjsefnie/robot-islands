@@ -278,6 +278,10 @@ export type BuildingDefId =
   | 'motor_assembly'
   // Phase 10b — T3 power components (Task 10.7)
   | 'generator_lab'
+  // Phase 10c — T3 mechanical assemblies (Task 10.8)
+  | 'pump_assembly'
+  | 'hydraulic_assembly'
+  | 'pneumatic_assembly'
   // §5.2 / §8.6 Heat Sources. The economy reads `def.heatSource` to identify
   // sources during heat-adjacency resolution. Each free source costs no fuel
   // when serving consumers; coal_furnace burns `coalPerCycle × consumers` per
@@ -3049,6 +3053,43 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     power: { consumes: 180 },
     placementCost: { steel: 80, microchip: 5 },
     glyph: '⚡',
+  },
+  // Phase 10c — T3 mechanical assemblies (Task 10.8)
+  pump_assembly: {
+    id: 'pump_assembly',
+    displayName: 'Pump Assembly',
+    category: 'manufacturing',
+    tier: 3,
+    footprint: SHAPES.square2,
+    fill: 0x405880,
+    stroke: 0x182838,
+    power: { consumes: 150 },
+    placementCost: { steel: 60, microchip: 4 },
+    glyph: '⚙',
+  },
+  hydraulic_assembly: {
+    id: 'hydraulic_assembly',
+    displayName: 'Hydraulic Assembly',
+    category: 'manufacturing',
+    tier: 3,
+    footprint: SHAPES.square2,
+    fill: 0x586870,
+    stroke: 0x202830,
+    power: { consumes: 100 },
+    placementCost: { steel: 50, microchip: 3 },
+    glyph: '⚙',
+  },
+  pneumatic_assembly: {
+    id: 'pneumatic_assembly',
+    displayName: 'Pneumatic Assembly',
+    category: 'manufacturing',
+    tier: 3,
+    footprint: SHAPES.square2,
+    fill: 0x506880,
+    stroke: 0x182838,
+    power: { consumes: 100 },
+    placementCost: { steel: 50, microchip: 3 },
+    glyph: '⚙',
   },
 
   // T5 raw extractors (§8.10). Power draws are placeholder "60-100 kW"
