@@ -139,6 +139,7 @@ export type ResourceId =
   // Phase 5 — T2 chemistry chain (§7.5)
   | 'sulfuric_acid'
   | 'hydrochloric_acid'
+  | 'sodium_hydroxide'
   // Step-18 T3 chemistry/electronics (§7.4 / §7.5).
   | 'silicon'
   | 'nitrogen'
@@ -299,6 +300,7 @@ export const ALL_RESOURCES: ReadonlyArray<ResourceId> = [
   // Phase 5 — T2 chemistry chain (§7.5)
   'sulfuric_acid',
   'hydrochloric_acid',
+  'sodium_hydroxide',
   // Step-18 T3 chemistry / electronics.
   'silicon',
   'nitrogen',
@@ -454,6 +456,7 @@ export const XP_WEIGHT: Readonly<Record<ResourceId, number>> = {
   // Phase 5 — T2 chemistry chain (§7.5)
   sulfuric_acid: 10,
   hydrochloric_acid: 10,
+  sodium_hydroxide: 10,
   // Step-18 T3 chemistry / electronics (§9.1 tier-3 weight = 30).
   silicon: 30,
   nitrogen: 30,
@@ -1285,11 +1288,9 @@ export const RECIPES: Partial<Record<RecipeId, Recipe>> = {
   chlor_alkali_plant: {
     cycleSec: 800, // rebalanced for idle-game scale, step #19 (×40: was 20s)
     inputs: { saltwater: 2 },
-    outputs: { chlorine: 1 },
+    outputs: { chlorine: 1, sodium_hydroxide: 1 },
     category: 'chemistry',
-    // §7.3 chlor-alkali co-output: `sodium_hydroxide`. NaOH consumer
-    // recipes (soap, paper, etc.) DEFERRED → omitted from outputs to
-    // keep the resource list lean.
+    // Real co-output per §7.5; consumer in §7.3 alumina chain.
   },
   chemical_reactor: {
     cycleSec: 800,           // matches chlor_alkali_plant — electrolysis pace

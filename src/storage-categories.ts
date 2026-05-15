@@ -148,6 +148,7 @@ export const RESOURCE_STORAGE_CATEGORY: Readonly<Record<ResourceId, StorageCateg
   // Phase 5 — T2 chemistry chain (§7.5)
   sulfuric_acid: 'liquid_gas',
   hydrochloric_acid: 'liquid_gas',
+  sodium_hydroxide: 'liquid_gas',
 
   // T2 components.
   wire: 'components',

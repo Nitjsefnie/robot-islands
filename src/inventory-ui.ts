@@ -142,6 +142,7 @@ export const RESOURCE_CATEGORY: Readonly<Record<ResourceId, ResourceCategory>> =
   // Phase 5 — T2 chemistry chain (§7.5)
   sulfuric_acid: 'liquid',
   hydrochloric_acid: 'liquid',
+  sodium_hydroxide: 'liquid',
   // T3 refined intermediate
   silicon: 'refined',
   // T4/T5 raws + components — Rare bucket

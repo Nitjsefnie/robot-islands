@@ -789,6 +789,20 @@ describe('§7.4 rigid + flexible plastic + synthetic_rubber presses (Task 4.3)',
   });
 });
 
+describe('§7.5 sodium_hydroxide as real chlor-alkali co-output (Task 5.2)', () => {
+  it('sodium_hydroxide is in ALL_RESOURCES with xp_weight 10 (T2 liquid)', () => {
+    expect(ALL_RESOURCES).toContain('sodium_hydroxide' as ResourceId);
+    expect(XP_WEIGHT.sodium_hydroxide).toBe(10);
+  });
+  it('chlor_alkali_plant outputs both chlorine and sodium_hydroxide', () => {
+    expect(RECIPES.chlor_alkali_plant).toBeDefined();
+    expect(RECIPES.chlor_alkali_plant!.outputs.chlorine).toBe(1);
+    expect(RECIPES.chlor_alkali_plant!.outputs.sodium_hydroxide).toBe(1);
+    expect(RECIPES.chlor_alkali_plant!.inputs).toEqual({ saltwater: 2 });
+    expect(RECIPES.chlor_alkali_plant!.cycleSec).toBe(800);
+  });
+});
+
 describe('§7.5 sulfuric_acid + hydrochloric_acid plants (Task 5.1)', () => {
   it('sulfuric_acid is in ALL_RESOURCES with xp_weight 10 (T2 liquid)', () => {
     expect(ALL_RESOURCES).toContain('sulfuric_acid' as ResourceId);
