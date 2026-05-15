@@ -208,6 +208,8 @@ export const RESOURCE_CATEGORY: Readonly<Record<ResourceId, ResourceCategory>> =
   mercury: 'liquid',
   // Phase 10 — T3 minerals + alloy (Task 10.2)
   diamond_ore: 'rare',
+  // Phase 10 — T3 minerals + alloy (Task 10.3)
+  cryogenic_compound: 'liquid',
 };
 
 /** Filter chips shown above the resource list. `'all'` is the default. */

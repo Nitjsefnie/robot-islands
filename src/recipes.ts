@@ -245,7 +245,9 @@ export type ResourceId =
   // Phase 10 — T3 minerals + alloy (Task 10.1)
   | 'mercury'
   // Phase 10 — T3 minerals + alloy (Task 10.2)
-  | 'diamond_ore';
+  | 'diamond_ore'
+  // Phase 10 — T3 minerals + alloy (Task 10.3)
+  | 'cryogenic_compound';
 
 /** All known resources, useful for iterating to initialise inventories. */
 export const ALL_RESOURCES: ReadonlyArray<ResourceId> = [
@@ -418,6 +420,8 @@ export const ALL_RESOURCES: ReadonlyArray<ResourceId> = [
   'mercury',
   // Phase 10 — T3 minerals + alloy (Task 10.2)
   'diamond_ore',
+  // Phase 10 — T3 minerals + alloy (Task 10.3)
+  'cryogenic_compound',
 ];
 
 /**
@@ -614,6 +618,8 @@ export const XP_WEIGHT: Readonly<Record<ResourceId, number>> = {
   mercury: 30,
   // Phase 10 — T3 minerals + alloy (Task 10.2)
   diamond_ore: 30,
+  // Phase 10 — T3 minerals + alloy (Task 10.3)
+  cryogenic_compound: 30,
 };
 
 /**
@@ -1802,6 +1808,13 @@ export const RECIPES: Partial<Record<RecipeId, Recipe>> = {
     inputs: {},
     outputs: { diamond_ore: 1 },
     category: 'extraction',
+  },
+  // Phase 10 — T3 minerals + alloy (Task 10.3)
+  cryo_compound_lab: {
+    cycleSec: 400,
+    inputs: { liquid_nitrogen: 1, cryo_coolant: 1 },
+    outputs: { cryogenic_compound: 1 },
+    category: 'chemistry',
   },
 };
 

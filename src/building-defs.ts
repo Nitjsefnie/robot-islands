@@ -266,6 +266,8 @@ export type BuildingDefId =
   | 'mercury_well'
   // Phase 10 — T3 minerals + alloy (Task 10.2)
   | 'diamond_quarry'
+  // Phase 10 — T3 minerals + alloy (Task 10.3)
+  | 'cryo_compound_lab'
   // §5.2 / §8.6 Heat Sources. The economy reads `def.heatSource` to identify
   // sources during heat-adjacency resolution. Each free source costs no fuel
   // when serving consumers; coal_furnace burns `coalPerCycle × consumers` per
@@ -2958,6 +2960,19 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     requiredTile: ['diamond_vein'],
     placementCost: { stone: 80, iron_ingot: 25, wood: 10 },
     glyph: '◆',
+  },
+  // Phase 10 — T3 minerals + alloy (Task 10.3)
+  cryo_compound_lab: {
+    id: 'cryo_compound_lab',
+    displayName: 'Cryo Compound Lab',
+    category: 'chemistry',
+    tier: 3,
+    footprint: SHAPES.square3,
+    fill: 0x80c0d0, // cryo teal
+    stroke: 0x203840,
+    power: { consumes: 300 },
+    placementCost: { steel: 100, microchip: 5, glass: 10 },
+    glyph: '❄',
   },
 
   // T5 raw extractors (§8.10). Power draws are placeholder "60-100 kW"

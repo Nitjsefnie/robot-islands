@@ -1164,3 +1164,16 @@ describe('§6.4 diamond_ore + diamond_quarry (Task 10.2)', () => {
     expect(RECIPES.diamond_quarry!.cycleSec).toBe(300);
   });
 });
+
+describe('§6.4 cryogenic_compound + cryo_compound_lab (Task 10.3)', () => {
+  it('cryogenic_compound is in ALL_RESOURCES with xp_weight 30 (T3 temp_sensitive)', () => {
+    expect(ALL_RESOURCES).toContain('cryogenic_compound' as ResourceId);
+    expect(XP_WEIGHT.cryogenic_compound).toBe(30);
+  });
+  it('cryo_compound_lab recipe: liquid_nitrogen + cryo_coolant → cryogenic_compound', () => {
+    expect(RECIPES.cryo_compound_lab).toBeDefined();
+    expect(RECIPES.cryo_compound_lab!.inputs).toEqual({ liquid_nitrogen: 1, cryo_coolant: 1 });
+    expect(RECIPES.cryo_compound_lab!.outputs).toEqual({ cryogenic_compound: 1 });
+    expect(RECIPES.cryo_compound_lab!.cycleSec).toBe(400);
+  });
+});

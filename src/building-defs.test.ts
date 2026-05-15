@@ -212,6 +212,8 @@ const KNOWN_DEF_IDS: ReadonlyArray<BuildingDefId> = [
   'mercury_well',
   // Phase 10 — T3 minerals + alloy (Task 10.2)
   'diamond_quarry',
+  // Phase 10 — T3 minerals + alloy (Task 10.3)
+  'cryo_compound_lab',
 ];
 
 // Helper: build a minimal IslandSpec for the canPlaceOnIsland tests. The
@@ -319,6 +321,21 @@ describe('BUILDING_DEFS catalog', () => {
     it('produces 1 diamond_ore per cycle', () => {
       expect(RECIPES.diamond_quarry).toBeDefined();
       expect(RECIPES.diamond_quarry!.outputs).toEqual({ diamond_ore: 1 });
+    });
+  });
+
+  describe('§6.4 cryo_compound_lab (T3 cryogenic_compound producer)', () => {
+    it('is T3, 3x3, chemistry category', () => {
+      const def = BUILDING_DEFS.cryo_compound_lab;
+      expect(def).toBeDefined();
+      expect(def.tier).toBe(3);
+      expect(def.footprint.tiles.length).toBe(9);
+      expect(def.category).toBe('chemistry');
+    });
+    it('produces cryogenic_compound from liquid_nitrogen + cryo_coolant', () => {
+      expect(RECIPES.cryo_compound_lab).toBeDefined();
+      expect(RECIPES.cryo_compound_lab!.inputs).toEqual({ liquid_nitrogen: 1, cryo_coolant: 1 });
+      expect(RECIPES.cryo_compound_lab!.outputs).toEqual({ cryogenic_compound: 1 });
     });
   });
 });
