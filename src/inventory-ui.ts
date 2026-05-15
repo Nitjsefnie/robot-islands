@@ -152,6 +152,9 @@ export const RESOURCE_CATEGORY: Readonly<Record<ResourceId, ResourceCategory>> =
   battery: 'components',
   // Phase 6 — T2 glass_panel (§6.3)
   glass_panel: 'components',
+  // Phase 6 — T2 coolant + ceramic_insulator (§6.3)
+  coolant: 'liquid',
+  ceramic_insulator: 'components',
   // Phase 5 — T2 chemistry chain (§7.5)
   sulfuric_acid: 'liquid',
   hydrochloric_acid: 'liquid',

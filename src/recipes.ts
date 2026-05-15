@@ -149,6 +149,9 @@ export type ResourceId =
   | 'battery'
   // Phase 6 — T2 glass_panel (§6.3)
   | 'glass_panel'
+  // Phase 6 — T2 coolant + ceramic_insulator (§6.3)
+  | 'coolant'
+  | 'ceramic_insulator'
   // Phase 5 — T2 chemistry chain (§7.5)
   | 'sulfuric_acid'
   | 'hydrochloric_acid'
@@ -326,6 +329,9 @@ export const ALL_RESOURCES: ReadonlyArray<ResourceId> = [
   'battery',
   // Phase 6 — T2 glass_panel (§6.3)
   'glass_panel',
+  // Phase 6 — T2 coolant + ceramic_insulator (§6.3)
+  'coolant',
+  'ceramic_insulator',
   // Phase 5 — T2 chemistry chain (§7.5)
   'sulfuric_acid',
   'hydrochloric_acid',
@@ -498,6 +504,9 @@ export const XP_WEIGHT: Readonly<Record<ResourceId, number>> = {
   battery: 30,
   // Phase 6 — T2 glass_panel (§6.3)
   glass_panel: 10,
+  // Phase 6 — T2 coolant + ceramic_insulator (§6.3)
+  coolant: 10,
+  ceramic_insulator: 10,
   // Phase 5 — T2 chemistry chain (§7.5)
   sulfuric_acid: 10,
   hydrochloric_acid: 10,
@@ -1660,6 +1669,19 @@ export const RECIPES: Partial<Record<RecipeId, Recipe>> = {
     cycleSec: 200,
     inputs: { glass: 2 },
     outputs: { glass_panel: 1 },
+    category: 'manufacturing',
+  },
+  // Phase 6 — T2 coolant + ceramic_insulator (§6.3)
+  coolant_synthesizer: {
+    cycleSec: 300,
+    inputs: { fresh_water: 2, salt: 1, naphtha: 1 },
+    outputs: { coolant: 2 },
+    category: 'chemistry',
+  },
+  ceramic_kiln: {
+    cycleSec: 250,
+    inputs: { clay: 2, sand: 1 },
+    outputs: { ceramic_insulator: 1 },
     category: 'manufacturing',
   },
 };

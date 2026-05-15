@@ -201,6 +201,8 @@ const KNOWN_DEF_IDS: ReadonlyArray<BuildingDefId> = [
   'cable_drawer',
   'battery_factory',
   'glass_panel_press',
+  'coolant_synthesizer',
+  'ceramic_kiln',
 ];
 
 // Helper: build a minimal IslandSpec for the canPlaceOnIsland tests. The
@@ -1643,6 +1645,26 @@ describe('§8.1 T2 extraction buildings', () => {
       expect(def.footprint.tiles.length).toBe(4);
       expect(def.category).toBe('manufacturing');
       expect(def.power?.consumes).toBe(60);
+    });
+  });
+
+  describe('§6.3 coolant_synthesizer + ceramic_kiln (Task 6.6)', () => {
+    it('coolant_synthesizer is T2, 2x2, manufacturing, consumes 100W', () => {
+      const def = BUILDING_DEFS.coolant_synthesizer;
+      expect(def).toBeDefined();
+      expect(def.tier).toBe(2);
+      expect(def.footprint.tiles.length).toBe(4);
+      expect(def.category).toBe('manufacturing');
+      expect(def.power?.consumes).toBe(100);
+    });
+    it('ceramic_kiln is T2, 2x2, manufacturing, requires heat source', () => {
+      const def = BUILDING_DEFS.ceramic_kiln;
+      expect(def).toBeDefined();
+      expect(def.tier).toBe(2);
+      expect(def.footprint.tiles.length).toBe(4);
+      expect(def.category).toBe('manufacturing');
+      expect(def.power?.consumes).toBe(80);
+      expect(def.requiresHeat).toBe(true);
     });
   });
 

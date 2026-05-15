@@ -953,6 +953,31 @@ describe('§6.3 glass_panel via glass_panel_press (Task 6.5)', () => {
   });
 });
 
+describe('§6.3 coolant + ceramic_insulator (Task 6.6)', () => {
+  it('coolant and ceramic_insulator are in ALL_RESOURCES with xp_weight 10', () => {
+    expect(ALL_RESOURCES).toContain('coolant');
+    expect(ALL_RESOURCES).toContain('ceramic_insulator');
+    expect(XP_WEIGHT.coolant).toBe(10);
+    expect(XP_WEIGHT.ceramic_insulator).toBe(10);
+  });
+  it('coolant_synthesizer recipe: fresh_water + salt + naphtha → coolant', () => {
+    expect(RECIPES.coolant_synthesizer).toBeDefined();
+    expect(RECIPES.coolant_synthesizer!.inputs).toEqual({
+      fresh_water: 2,
+      salt: 1,
+      naphtha: 1,
+    });
+    expect(RECIPES.coolant_synthesizer!.outputs).toEqual({ coolant: 2 });
+    expect(RECIPES.coolant_synthesizer!.cycleSec).toBe(300);
+  });
+  it('ceramic_kiln recipe: clay + sand → ceramic_insulator', () => {
+    expect(RECIPES.ceramic_kiln).toBeDefined();
+    expect(RECIPES.ceramic_kiln!.inputs).toEqual({ clay: 2, sand: 1 });
+    expect(RECIPES.ceramic_kiln!.outputs).toEqual({ ceramic_insulator: 1 });
+    expect(RECIPES.ceramic_kiln!.cycleSec).toBe(250);
+  });
+});
+
 describe('nextRotateOutputBoundaryMs', () => {
   const rotatingRecipe = {
     cycleSec: 10,

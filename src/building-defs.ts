@@ -235,6 +235,8 @@ export type BuildingDefId =
   | 'cable_drawer'
   | 'battery_factory'
   | 'glass_panel_press'
+  | 'coolant_synthesizer'
+  | 'ceramic_kiln'
   | 'silicon_crusher'
   | 'air_separator'
   | 'cryo_air_separator'
@@ -1062,6 +1064,33 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     power: { consumes: 60 },
     placementCost: { stone: 80, iron_ingot: 25, wood: 10 },
     glyph: '▭',
+  },
+  // Phase 6 — T2 coolant + ceramic_insulator (§6.3)
+  coolant_synthesizer: {
+    id: 'coolant_synthesizer',
+    displayName: 'Coolant Synthesizer',
+    category: 'manufacturing',
+    tier: 2,
+    footprint: SHAPES.square2,
+    fill: 0x40a0c0,
+    stroke: 0x103040,
+    power: { consumes: 100 },
+    placementCost: { stone: 80, iron_ingot: 25, wood: 10 },
+    glyph: '❄',
+  },
+  ceramic_kiln: {
+    id: 'ceramic_kiln',
+    displayName: 'Ceramic Kiln',
+    category: 'manufacturing',
+    tier: 2,
+    footprint: SHAPES.square2,
+    fill: 0xa06840,
+    stroke: 0x402010,
+    power: { consumes: 80 },
+    requiresHeat: true,
+    gates: [{ matchType: 'heat_source', hard: true }],
+    placementCost: { stone: 80, iron_ingot: 25, wood: 10 },
+    glyph: '♨',
   },
   // §8.3 T3 manufacturing: Fabricator (3x3). Advanced components — motors,
   // actuators, hydraulic / pneumatic systems. Recipe assignment lands in
