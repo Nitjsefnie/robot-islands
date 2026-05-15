@@ -276,7 +276,8 @@ export type BuildingDefId =
   | 'mag_forge'
   // Phase 10b — T3 power components (Task 10.6)
   | 'motor_assembly'
-
+  // Phase 10b — T3 power components (Task 10.7)
+  | 'generator_lab'
   // §5.2 / §8.6 Heat Sources. The economy reads `def.heatSource` to identify
   // sources during heat-adjacency resolution. Each free source costs no fuel
   // when serving consumers; coal_furnace burns `coalPerCycle × consumers` per
@@ -3035,6 +3036,19 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     power: { consumes: 150 },
     placementCost: { steel: 60, microchip: 4 },
     glyph: '⚙',
+  },
+  // Phase 10b — T3 power components (Task 10.7)
+  generator_lab: {
+    id: 'generator_lab',
+    displayName: 'Generator Lab',
+    category: 'manufacturing',
+    tier: 3,
+    footprint: SHAPES.square2,
+    fill: 0x508070,
+    stroke: 0x182820,
+    power: { consumes: 180 },
+    placementCost: { steel: 80, microchip: 5 },
+    glyph: '⚡',
   },
 
   // T5 raw extractors (§8.10). Power draws are placeholder "60-100 kW"

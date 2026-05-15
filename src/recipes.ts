@@ -256,7 +256,8 @@ export type ResourceId =
   | 'magnet'
   // Phase 10b — T3 power components (Task 10.6)
   | 'electric_motor'
-;
+  // Phase 10b — T3 power components (Task 10.7)
+  | 'generator';
 
 /** All known resources, useful for iterating to initialise inventories. */
 export const ALL_RESOURCES: ReadonlyArray<ResourceId> = [
@@ -439,7 +440,8 @@ export const ALL_RESOURCES: ReadonlyArray<ResourceId> = [
   'magnet',
   // Phase 10b — T3 power components (Task 10.6)
   'electric_motor',
-
+  // Phase 10b — T3 power components (Task 10.7)
+  'generator',
 ];
 
 /**
@@ -646,6 +648,8 @@ export const XP_WEIGHT: Readonly<Record<ResourceId, number>> = {
   magnet: 30,
   // Phase 10b — T3 power components (Task 10.6)
   electric_motor: 30,
+  // Phase 10b — T3 power components (Task 10.7)
+  generator: 30,
 };
 
 /**
@@ -1866,6 +1870,13 @@ export const RECIPES: Partial<Record<RecipeId, Recipe>> = {
     cycleSec: 300,
     inputs: { magnet: 1, wire: 4, steel: 1 },
     outputs: { electric_motor: 1 },
+    category: 'manufacturing',
+  },
+  // Phase 10b — T3 power components (Task 10.7)
+  generator_lab: {
+    cycleSec: 350,
+    inputs: { magnet: 1, wire: 5, steel: 1, bearing: 2 },
+    outputs: { generator: 1 },
     category: 'manufacturing',
   },
 };

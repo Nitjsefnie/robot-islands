@@ -222,7 +222,8 @@ const KNOWN_DEF_IDS: ReadonlyArray<BuildingDefId> = [
   'mag_forge',
   // Phase 10b — T3 power components (Task 10.6)
   'motor_assembly',
-
+  // Phase 10b — T3 power components (Task 10.7)
+  'generator_lab',
 ];
 
 // Helper: build a minimal IslandSpec for the canPlaceOnIsland tests. The
@@ -404,6 +405,21 @@ describe('BUILDING_DEFS catalog', () => {
       expect(RECIPES.motor_assembly).toBeDefined();
       expect(RECIPES.motor_assembly!.inputs).toEqual({ magnet: 1, wire: 4, steel: 1 });
       expect(RECIPES.motor_assembly!.outputs).toEqual({ electric_motor: 1 });
+    });
+  });
+
+  describe('§6.4/§7.9 generator_lab (T3 generator producer)', () => {
+    it('is T3, 2x2, manufacturing category', () => {
+      const def = BUILDING_DEFS.generator_lab;
+      expect(def).toBeDefined();
+      expect(def.tier).toBe(3);
+      expect(def.footprint).toEqual(SHAPES.square2);
+      expect(def.category).toBe('manufacturing');
+    });
+    it('produces generator from magnet + wire + steel + bearing', () => {
+      expect(RECIPES.generator_lab).toBeDefined();
+      expect(RECIPES.generator_lab!.inputs).toEqual({ magnet: 1, wire: 5, steel: 1, bearing: 2 });
+      expect(RECIPES.generator_lab!.outputs).toEqual({ generator: 1 });
     });
   });
 });

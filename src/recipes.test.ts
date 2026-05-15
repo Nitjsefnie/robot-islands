@@ -979,6 +979,18 @@ describe('§6.4/§7.9 electric_motor via motor_assembly (Task 10.6)', () => {
   });
 });
 
+describe('§6.4/§7.9 generator via generator_lab (Task 10.7)', () => {
+  it('generator is in ALL_RESOURCES with xp_weight 30 (T3 component)', () => {
+    expect(ALL_RESOURCES).toContain('generator' as ResourceId);
+    expect(XP_WEIGHT.generator).toBe(30);
+  });
+  it('generator_lab recipe: magnet + wire + steel + bearing → generator', () => {
+    expect(RECIPES.generator_lab).toBeDefined();
+    expect(RECIPES.generator_lab!.inputs).toEqual({ magnet: 1, wire: 5, steel: 1, bearing: 2 });
+    expect(RECIPES.generator_lab!.outputs).toEqual({ generator: 1 });
+    expect(RECIPES.generator_lab!.cycleSec).toBe(350);
+  });
+});
 
 describe('§6.3 glass_panel via glass_panel_press (Task 6.5)', () => {
   it('glass_panel is in ALL_RESOURCES with xp_weight 10', () => {

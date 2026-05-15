@@ -253,5 +253,6 @@ export const RESOURCE_STORAGE_CATEGORY: Readonly<Record<ResourceId, StorageCateg
   magnet: 'components',
   // Phase 10b — T3 power components (Task 10.6)
   electric_motor: 'components',
-
+  // Phase 10b — T3 power components (Task 10.7)
+  generator: 'components',
 };
