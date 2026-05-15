@@ -147,6 +147,8 @@ export type ResourceId =
   | 'heavy_cable'
   // Phase 6 — T3 battery (§6.3 / §7.9)
   | 'battery'
+  // Phase 6 — T2 glass_panel (§6.3)
+  | 'glass_panel'
   // Phase 5 — T2 chemistry chain (§7.5)
   | 'sulfuric_acid'
   | 'hydrochloric_acid'
@@ -322,6 +324,8 @@ export const ALL_RESOURCES: ReadonlyArray<ResourceId> = [
   'heavy_cable',
   // Phase 6 — T3 battery (§6.3 / §7.9)
   'battery',
+  // Phase 6 — T2 glass_panel (§6.3)
+  'glass_panel',
   // Phase 5 — T2 chemistry chain (§7.5)
   'sulfuric_acid',
   'hydrochloric_acid',
@@ -492,6 +496,8 @@ export const XP_WEIGHT: Readonly<Record<ResourceId, number>> = {
   heavy_cable: 10,
   // Phase 6 — T3 battery (§6.3 / §7.9)
   battery: 30,
+  // Phase 6 — T2 glass_panel (§6.3)
+  glass_panel: 10,
   // Phase 5 — T2 chemistry chain (§7.5)
   sulfuric_acid: 10,
   hydrochloric_acid: 10,
@@ -1647,6 +1653,13 @@ export const RECIPES: Partial<Record<RecipeId, Recipe>> = {
     cycleSec: 300,
     inputs: { copper_ingot: 1, rigid_plastic: 1, wire: 2 },
     outputs: { battery: 1 },
+    category: 'manufacturing',
+  },
+  // Phase 6 — T2 glass_panel (§6.3)
+  glass_panel_press: {
+    cycleSec: 200,
+    inputs: { glass: 2 },
+    outputs: { glass_panel: 1 },
     category: 'manufacturing',
   },
 };

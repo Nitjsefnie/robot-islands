@@ -234,6 +234,7 @@ export type BuildingDefId =
   | 'spring_winder'
   | 'cable_drawer'
   | 'battery_factory'
+  | 'glass_panel_press'
   | 'silicon_crusher'
   | 'air_separator'
   | 'cryo_air_separator'
@@ -1048,6 +1049,19 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     power: { consumes: 200 },
     placementCost: { steel: 80, microchip: 5, glass: 10 },
     glyph: '🔋',
+  },
+  // Phase 6 — T2 glass_panel (§6.3)
+  glass_panel_press: {
+    id: 'glass_panel_press',
+    displayName: 'Glass Panel Press',
+    category: 'manufacturing',
+    tier: 2,
+    footprint: SHAPES.square2,
+    fill: 0xc0d0e0,
+    stroke: 0x607080,
+    power: { consumes: 60 },
+    placementCost: { stone: 80, iron_ingot: 25, wood: 10 },
+    glyph: '▭',
   },
   // §8.3 T3 manufacturing: Fabricator (3x3). Advanced components — motors,
   // actuators, hydraulic / pneumatic systems. Recipe assignment lands in

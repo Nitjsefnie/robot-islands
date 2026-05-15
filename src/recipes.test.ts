@@ -940,6 +940,19 @@ describe('§6.3/§7.9 battery via battery_factory (Task 6.4)', () => {
   });
 });
 
+describe('§6.3 glass_panel via glass_panel_press (Task 6.5)', () => {
+  it('glass_panel is in ALL_RESOURCES with xp_weight 10', () => {
+    expect(ALL_RESOURCES).toContain('glass_panel');
+    expect(XP_WEIGHT.glass_panel).toBe(10);
+  });
+  it('glass_panel_press recipe: glass → glass_panel', () => {
+    expect(RECIPES.glass_panel_press).toBeDefined();
+    expect(RECIPES.glass_panel_press!.inputs).toEqual({ glass: 2 });
+    expect(RECIPES.glass_panel_press!.outputs).toEqual({ glass_panel: 1 });
+    expect(RECIPES.glass_panel_press!.cycleSec).toBe(200);
+  });
+});
+
 describe('nextRotateOutputBoundaryMs', () => {
   const rotatingRecipe = {
     cycleSec: 10,
