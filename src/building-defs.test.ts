@@ -102,6 +102,7 @@ const KNOWN_DEF_IDS: ReadonlyArray<BuildingDefId> = [
   'rubber_synthesizer',
   'sulfuric_acid_plant',
   'hcl_plant',
+  'phosphor_plant',
   'chlor_alkali_plant',
   'chemical_reactor',
   'lubricant_refinery',
@@ -1298,6 +1299,19 @@ describe('§7.5 sulfuric_acid_plant (Task 5.1)', () => {
   });
   it('has power consumption 120W', () => {
     expect(BUILDING_DEFS.sulfuric_acid_plant.power?.consumes).toBe(120);
+  });
+});
+
+describe('§7.5 phosphor_plant (Task 5.3)', () => {
+  it('is T3, 2x2, chemistry category', () => {
+    const def = BUILDING_DEFS.phosphor_plant;
+    expect(def).toBeDefined();
+    expect(def.tier).toBe(3);
+    expect(def.footprint).toEqual(SHAPES.square2);
+    expect(def.category).toBe('chemistry');
+  });
+  it('has power consumption 200W', () => {
+    expect(BUILDING_DEFS.phosphor_plant.power?.consumes).toBe(200);
   });
 });
 

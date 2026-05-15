@@ -803,6 +803,20 @@ describe('§7.5 sodium_hydroxide as real chlor-alkali co-output (Task 5.2)', () 
   });
 });
 
+describe('§7.5 phosphor via phosphor_plant (Task 5.3)', () => {
+  it('phosphor is in ALL_RESOURCES with xp_weight 30 (T3 rare)', () => {
+    expect(ALL_RESOURCES).toContain('phosphor' as ResourceId);
+    expect(XP_WEIGHT.phosphor).toBe(30);
+  });
+  it('phosphor_plant recipe: phosphate + sulfuric_acid → phosphor', () => {
+    expect(RECIPES.phosphor_plant).toBeDefined();
+    expect(RECIPES.phosphor_plant!.inputs).toEqual({ phosphate: 1, sulfuric_acid: 1 });
+    expect(RECIPES.phosphor_plant!.outputs).toEqual({ phosphor: 1 });
+    expect(RECIPES.phosphor_plant!.cycleSec).toBe(600);
+    expect(RECIPES.phosphor_plant!.category).toBe('chemistry');
+  });
+});
+
 describe('§7.5 sulfuric_acid + hydrochloric_acid plants (Task 5.1)', () => {
   it('sulfuric_acid is in ALL_RESOURCES with xp_weight 10 (T2 liquid)', () => {
     expect(ALL_RESOURCES).toContain('sulfuric_acid' as ResourceId);

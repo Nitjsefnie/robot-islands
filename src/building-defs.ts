@@ -221,6 +221,7 @@ export type BuildingDefId =
   | 'rubber_synthesizer'
   | 'sulfuric_acid_plant'
   | 'hcl_plant'
+  | 'phosphor_plant'
   | 'chlor_alkali_plant'
   | 'chemical_reactor'
   | 'lubricant_refinery'
@@ -2468,6 +2469,19 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     stroke: 0x404010,
     power: { consumes: 80 },
     placementCost: { stone: 80, iron_ingot: 20, wood: 10 },
+    glyph: '◇',
+  },
+  // Phase 5 — T3 chemistry chain (§7.5)
+  phosphor_plant: {
+    id: 'phosphor_plant',
+    displayName: 'Phosphor Plant',
+    category: 'chemistry',
+    tier: 3,
+    footprint: SHAPES.square2,
+    fill: 0xc06080, // phosphor rose
+    stroke: 0x502030,
+    power: { consumes: 200 },
+    placementCost: { stone: 120, iron_ingot: 40, wood: 15 },
     glyph: '◇',
   },
   chlor_alkali_plant: {
