@@ -152,6 +152,8 @@ export const RESOURCE_STORAGE_CATEGORY: Readonly<Record<ResourceId, StorageCateg
   // Phase 6 — T2 mechanical fasteners (§6.3)
   bearing: 'components',
   spring: 'components',
+  // Phase 6 — T2 mechanical components (§6.3)
+  heavy_cable: 'components',
   // Phase 5 — T2 chemistry chain (§7.5)
   sulfuric_acid: 'liquid_gas',
   hydrochloric_acid: 'liquid_gas',

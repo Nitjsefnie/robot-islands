@@ -198,6 +198,7 @@ const KNOWN_DEF_IDS: ReadonlyArray<BuildingDefId> = [
   'beam_mill',
   'bearing_press',
   'spring_winder',
+  'cable_drawer',
 ];
 
 // Helper: build a minimal IslandSpec for the canPlaceOnIsland tests. The
@@ -1607,6 +1608,17 @@ describe('§8.1 T2 extraction buildings', () => {
       expect(def.footprint.tiles.length).toBe(4);
       expect(def.category).toBe('manufacturing');
       expect(def.power?.consumes).toBe(60);
+    });
+  });
+
+  describe('§6.3 cable_drawer (Task 6.3)', () => {
+    it('cable_drawer is T2, 2x2, manufacturing, consumes 80W', () => {
+      const def = BUILDING_DEFS.cable_drawer;
+      expect(def).toBeDefined();
+      expect(def.tier).toBe(2);
+      expect(def.footprint.tiles.length).toBe(4);
+      expect(def.category).toBe('manufacturing');
+      expect(def.power?.consumes).toBe(80);
     });
   });
 

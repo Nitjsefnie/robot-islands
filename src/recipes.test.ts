@@ -910,6 +910,19 @@ describe('§6.3 T2 mechanical fasteners — bearing + spring (Task 6.2)', () => 
   });
 });
 
+describe('§6.3 heavy_cable via cable_drawer (Task 6.3)', () => {
+  it('heavy_cable is in ALL_RESOURCES with xp_weight 10', () => {
+    expect(ALL_RESOURCES).toContain('heavy_cable');
+    expect(XP_WEIGHT.heavy_cable).toBe(10);
+  });
+  it('cable_drawer recipe: wire → heavy_cable', () => {
+    expect(RECIPES.cable_drawer).toBeDefined();
+    expect(RECIPES.cable_drawer!.inputs).toEqual({ wire: 3 });
+    expect(RECIPES.cable_drawer!.outputs).toEqual({ heavy_cable: 1 });
+    expect(RECIPES.cable_drawer!.cycleSec).toBe(200);
+  });
+});
+
 describe('nextRotateOutputBoundaryMs', () => {
   const rotatingRecipe = {
     cycleSec: 10,

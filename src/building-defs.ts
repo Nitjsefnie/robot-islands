@@ -232,6 +232,7 @@ export type BuildingDefId =
   | 'beam_mill'
   | 'bearing_press'
   | 'spring_winder'
+  | 'cable_drawer'
   | 'silicon_crusher'
   | 'air_separator'
   | 'cryo_air_separator'
@@ -1018,6 +1019,19 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     fill: 0xa0a6a0,
     stroke: 0x404640,
     power: { consumes: 60 },
+    placementCost: { stone: 80, iron_ingot: 25, wood: 10 },
+    glyph: '⌇',
+  },
+  // Phase 6 — T2 mechanical components (§6.3)
+  cable_drawer: {
+    id: 'cable_drawer',
+    displayName: 'Cable Drawer',
+    category: 'manufacturing',
+    tier: 2,
+    footprint: SHAPES.square2,
+    fill: 0x8a8060,
+    stroke: 0x3a3020,
+    power: { consumes: 80 },
     placementCost: { stone: 80, iron_ingot: 25, wood: 10 },
     glyph: '⌇',
   },
