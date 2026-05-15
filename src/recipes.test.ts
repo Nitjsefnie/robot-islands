@@ -684,6 +684,39 @@ describe('§6.4/§7.1 stainless_steel chain (Task 3.3)', () => {
   });
 });
 
+describe('§6.4/§7.1 tool_steel chain (Task 3.4)', () => {
+  it('tungsten_ore is in ALL_RESOURCES with xp_weight 1 (T0 raw)', () => {
+    expect(ALL_RESOURCES).toContain('tungsten_ore' as ResourceId);
+    expect(XP_WEIGHT.tungsten_ore).toBe(1);
+  });
+  it('tungsten_ingot is in ALL_RESOURCES with xp_weight 30 (T3 refined)', () => {
+    expect(ALL_RESOURCES).toContain('tungsten_ingot' as ResourceId);
+    expect(XP_WEIGHT.tungsten_ingot).toBe(30);
+  });
+  it('tool_steel is in ALL_RESOURCES with xp_weight 30 (T3 component)', () => {
+    expect(ALL_RESOURCES).toContain('tool_steel' as ResourceId);
+    expect(XP_WEIGHT.tool_steel).toBe(30);
+  });
+  it('tungsten_mine recipe: empty inputs → tungsten_ore', () => {
+    expect(RECIPES.tungsten_mine).toBeDefined();
+    expect(RECIPES.tungsten_mine!.inputs).toEqual({});
+    expect(RECIPES.tungsten_mine!.outputs).toEqual({ tungsten_ore: 1 });
+    expect(RECIPES.tungsten_mine!.cycleSec).toBe(60);
+  });
+  it('tungsten_smelter recipe: tungsten_ore + coal → tungsten_ingot', () => {
+    expect(RECIPES.tungsten_smelter).toBeDefined();
+    expect(RECIPES.tungsten_smelter!.inputs).toEqual({ tungsten_ore: 1, coal: 1 });
+    expect(RECIPES.tungsten_smelter!.outputs).toEqual({ tungsten_ingot: 1 });
+    expect(RECIPES.tungsten_smelter!.cycleSec).toBe(80);
+  });
+  it('tool_steel_mill recipe: steel + tungsten_ingot → tool_steel', () => {
+    expect(RECIPES.tool_steel_mill).toBeDefined();
+    expect(RECIPES.tool_steel_mill!.inputs).toEqual({ steel: 1, tungsten_ingot: 1 });
+    expect(RECIPES.tool_steel_mill!.outputs).toEqual({ tool_steel: 1 });
+    expect(RECIPES.tool_steel_mill!.cycleSec).toBe(400);
+  });
+});
+
 describe('nextRotateOutputBoundaryMs', () => {
   const rotatingRecipe = {
     cycleSec: 10,

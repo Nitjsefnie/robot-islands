@@ -203,6 +203,9 @@ export type BuildingDefId =
   | 'nickel_mine'
   | 'nickel_smelter'
   | 'stainless_steel_mill'
+  | 'tungsten_mine'
+  | 'tungsten_smelter'
+  | 'tool_steel_mill'
   | 'lumber_mill'
   | 'glassworks'
   | 'evaporator'
@@ -2212,6 +2215,47 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     footprint: SHAPES.square3,
     fill: 0xa0a098,
     stroke: 0x484840,
+    power: { consumes: 250 },
+    requiresHeat: true,
+    gates: [{ matchType: 'heat_source', hard: true }],
+    placementCost: { stone: 200, iron_ingot: 80, wood: 30 },
+    glyph: '◈',
+  },
+
+  // Task 3.4: Tool steel — tungsten_ore + tungsten_ingot + tool_steel
+  tungsten_mine: {
+    id: 'tungsten_mine',
+    displayName: 'Tungsten Mine',
+    category: 'extraction',
+    tier: 1,
+    footprint: SHAPES.square2,
+    fill: 0x4a5060,
+    stroke: 0x1a2028,
+    power: { consumes: 40 },
+    requiredTile: ['tungsten_vein'],
+    placementCost: { stone: 30, wood: 15 },
+    glyph: '⛏',
+  },
+  tungsten_smelter: {
+    id: 'tungsten_smelter',
+    displayName: 'Tungsten Smelter',
+    category: 'smelting',
+    tier: 1,
+    footprint: SHAPES.square2,
+    fill: 0x4a5060,
+    stroke: 0x1a2028,
+    power: { consumes: 50 },
+    placementCost: { stone: 30, iron_ingot: 10, wood: 10 },
+    glyph: '△',
+  },
+  tool_steel_mill: {
+    id: 'tool_steel_mill',
+    displayName: 'Tool Steel Mill',
+    category: 'manufacturing',
+    tier: 3,
+    footprint: SHAPES.square3,
+    fill: 0x4a5060,
+    stroke: 0x1a2028,
     power: { consumes: 250 },
     requiresHeat: true,
     gates: [{ matchType: 'heat_source', hard: true }],

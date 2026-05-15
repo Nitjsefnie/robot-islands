@@ -132,6 +132,9 @@ const KNOWN_DEF_IDS: ReadonlyArray<BuildingDefId> = [
   'nickel_mine',
   'nickel_smelter',
   'stainless_steel_mill',
+  'tungsten_mine',
+  'tungsten_smelter',
+  'tool_steel_mill',
   // Phase 2 — T1 refined chains (§6.2 / §7.5)
   'limekiln',
   'lime_slaker',
@@ -1148,6 +1151,53 @@ describe('§7.1 stainless_steel_mill (T3 stainless steel producer)', () => {
     expect(RECIPES.stainless_steel_mill).toBeDefined();
     expect(RECIPES.stainless_steel_mill!.inputs).toEqual({ steel: 1, chromium_ingot: 1, nickel_ingot: 1 });
     expect(RECIPES.stainless_steel_mill!.outputs).toEqual({ stainless_steel: 1 });
+  });
+});
+
+describe('§7.1 tungsten_mine (T1 tungsten extractor)', () => {
+  it('is T1 extraction gated to tungsten_vein tile', () => {
+    const def = BUILDING_DEFS.tungsten_mine;
+    expect(def).toBeDefined();
+    expect(def.tier).toBe(1);
+    expect(def.category).toBe('extraction');
+    expect(def.requiredTile).toEqual(['tungsten_vein']);
+  });
+  it('produces 1 tungsten_ore per cycle', () => {
+    expect(RECIPES.tungsten_mine).toBeDefined();
+    expect(RECIPES.tungsten_mine!.outputs).toEqual({ tungsten_ore: 1 });
+  });
+});
+
+describe('§7.1 tungsten_smelter (T1 tungsten ingot smelter)', () => {
+  it('is T1, 2x2, smelting, no heat requirement', () => {
+    const def = BUILDING_DEFS.tungsten_smelter;
+    expect(def).toBeDefined();
+    expect(def.tier).toBe(1);
+    expect(def.footprint).toEqual(SHAPES.square2);
+    expect(def.category).toBe('smelting');
+    expect(def.requiresHeat).toBeUndefined();
+  });
+  it('produces tungsten_ingot from tungsten_ore + coal', () => {
+    expect(RECIPES.tungsten_smelter).toBeDefined();
+    expect(RECIPES.tungsten_smelter!.inputs).toEqual({ tungsten_ore: 1, coal: 1 });
+    expect(RECIPES.tungsten_smelter!.outputs).toEqual({ tungsten_ingot: 1 });
+  });
+});
+
+describe('§7.1 tool_steel_mill (T3 tool steel producer)', () => {
+  it('is T3, 3x3, manufacturing, requires heat', () => {
+    const def = BUILDING_DEFS.tool_steel_mill;
+    expect(def).toBeDefined();
+    expect(def.tier).toBe(3);
+    expect(def.footprint.tiles.length).toBe(9); // 3x3
+    expect(def.category).toBe('manufacturing');
+    expect(def.requiresHeat).toBe(true);
+    expect(def.gates).toEqual([{ matchType: 'heat_source', hard: true }]);
+  });
+  it('produces tool_steel from steel + tungsten_ingot', () => {
+    expect(RECIPES.tool_steel_mill).toBeDefined();
+    expect(RECIPES.tool_steel_mill!.inputs).toEqual({ steel: 1, tungsten_ingot: 1 });
+    expect(RECIPES.tool_steel_mill!.outputs).toEqual({ tool_steel: 1 });
   });
 });
 
