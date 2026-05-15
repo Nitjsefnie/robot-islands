@@ -18,7 +18,11 @@
 // world's vision state at that point, island dimming shows that island's
 // known state.
 
+import './ui.css';
+
 import { Application, Container, Graphics } from 'pixi.js';
+
+import { COLOR } from './ui-tokens.js';
 
 import {
   centerOn,
@@ -72,6 +76,7 @@ import {
   makeInitialWorld,
   renderIsland,
   tileToWorldPx,
+  VISION_BLUE,
   type IslandSpec,
   type WorldState,
 } from './world.js';
@@ -110,7 +115,7 @@ async function main(): Promise<void> {
 
   const app = new Application();
   await app.init({
-    background: '#0a0e14',
+    background: COLOR.void,
     resizeTo: window,
     // Visual polish: AA on for softer tile/building edges. Antialiased
     // PixiJS Graphics also smooths the small triangle markers used for
@@ -830,14 +835,14 @@ async function main(): Promise<void> {
       hoverLayer.visible = false;
       return;
     }
-    // ACCENT cyan = VISION_BLUE = 0x7dd3e8 — same hue used by the placement
+    // ACCENT cyan = VISION_BLUE — same hue used by the placement
     // preview's `ok` state, so two cyan readouts at once read as "things
     // you can act on" rather than two different signals.
     paintBuildingOutline(
       hoverGfx,
       hoveredBuilding.spec,
       hoveredBuilding.building,
-      0x7dd3e8,
+      VISION_BLUE,
       2,
       0.05,
     );
@@ -861,7 +866,7 @@ async function main(): Promise<void> {
     }
     // ACCENT solid 3px outline + slightly stronger fill alpha than the
     // hover variant so selection reads as "committed" vs hover's "pending."
-    paintBuildingOutline(selectionGfx, selectedSpec, building, 0x7dd3e8, 3, 0.12);
+    paintBuildingOutline(selectionGfx, selectedSpec, building, VISION_BLUE, 3, 0.12);
     selectionLayer.visible = true;
   }
 

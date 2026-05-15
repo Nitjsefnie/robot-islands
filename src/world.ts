@@ -83,12 +83,21 @@ export const DISCOVERY_RADIUS_TILES = 24;
 //                     visually with the page void; "unknown" reads as
 //                     absence rather than as a competing dark colour.
 
-/** Tier A — vision (full info) ocean. Luminous cyan-tinged shallow. */
-export const VISION_BLUE = 0x7dd3e8;
-/** Tier B — discovered (no current info) ocean. Desaturated steel blue. */
+// Derive from the shared design token so DOM panels and the in-canvas
+// vision colours stay in lockstep. Adjusting a hue means editing
+// `ui-tokens.ts` once; both worlds pick it up.
+import { COLOR } from './ui-tokens.js';
+const hexToNumber = (s: string): number => parseInt(s.replace('#', ''), 16);
+
+/** Tier A — vision (full info) ocean. Luminous cyan-tinged shallow.
+ *  Identical to `COLOR.accent` so the DOM accent + the in-canvas vision
+ *  halo stay in sync. */
+export const VISION_BLUE = hexToNumber(COLOR.accent);
+/** Tier B — discovered (no current info) ocean. Desaturated steel blue.
+ *  Not in the token set; kept as a literal here. */
 export const DISCOVERED_BLUE = 0x2d5878;
-/** Tier C — unknown ocean. Equals the page background `#0a0e14`. */
-export const UNKNOWN_BLUE = 0x0a0e14;
+/** Tier C — unknown ocean. Equals the page void background. */
+export const UNKNOWN_BLUE = hexToNumber(COLOR.void);
 
 export type Biome = 'plains' | 'forest' | 'coast' | 'volcanic' | 'desert' | 'arctic';
 
