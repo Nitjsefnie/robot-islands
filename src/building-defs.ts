@@ -121,6 +121,7 @@ export type BuildingDefId =
   | 'particle_accelerator'
   | 'launch_tower'
   | 'quantum_manipulator'
+  | 'quantum_chip_fab'
   // §9.5 biome-locked uniques (Mass Driver + Carbon Forge + Tidal Array + Sunspire)
   | 'mass_driver'
   | 'carbon_forge'
@@ -1637,6 +1638,20 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     power: { consumes: 1000 },
     placementCost: { steel: 300, microchip: 50, glass: 30 },
     glyph: '✺',
+  },
+  // Phase 11 — T4 endgame (Task 11.2): Quantum Chip Fabricator replaces
+  // particle_accelerator as the quantum_chip producer.
+  quantum_chip_fab: {
+    id: 'quantum_chip_fab',
+    displayName: 'Quantum Chip Fabricator',
+    category: 'electronics',
+    tier: 4,
+    footprint: SHAPES.square3,
+    fill: 0x8060c0,
+    stroke: 0x301050,
+    power: { consumes: 1500 },
+    placementCost: { steel: 400, microchip: 150, glass: 50 },
+    glyph: '◈',
   },
   // -------------------------------------------------------------------------
   // T5 (levels 50+, AI Core required) — Transcendent per §13 / step 13

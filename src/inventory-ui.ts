@@ -235,6 +235,8 @@ export const RESOURCE_CATEGORY: Readonly<Record<ResourceId, ResourceCategory>> =
   optical_fiber: 'components',
   // Phase 11 — T4 endgame (Task 11.1)
   time_crystal: 'rare',
+  // Phase 11 — T4 endgame (Task 11.2)
+  antimatter_capsule: 'rare',
 };
 
 /** Filter chips shown above the resource list. `'all'` is the default. */

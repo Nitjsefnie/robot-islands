@@ -244,6 +244,8 @@ export type ResourceId =
   | 'genesis_cell'
   // Phase 11 — T4 endgame (Task 11.1)
   | 'time_crystal'
+  // Phase 11 — T4 endgame (Task 11.2)
+  | 'antimatter_capsule'
   // Phase 10 — T3 minerals + alloy (Task 10.1)
   | 'mercury'
   // Phase 10 — T3 minerals + alloy (Task 10.2)
@@ -443,6 +445,8 @@ export const ALL_RESOURCES: ReadonlyArray<ResourceId> = [
   'genesis_cell',
   // Phase 11 — T4 endgame (Task 11.1)
   'time_crystal',
+  // Phase 11 — T4 endgame (Task 11.2)
+  'antimatter_capsule',
   // Phase 10 — T3 minerals + alloy (Task 10.1)
   'mercury',
   // Phase 10 — T3 minerals + alloy (Task 10.2)
@@ -666,6 +670,8 @@ export const XP_WEIGHT: Readonly<Record<ResourceId, number>> = {
   genesis_cell: 300,
   // Phase 11 — T4 endgame (Task 11.1)
   time_crystal: 100,
+  // Phase 11 — T4 endgame (Task 11.2)
+  antimatter_capsule: 100,
   // Phase 10 — T3 minerals + alloy (Task 10.1)
   mercury: 30,
   // Phase 10 — T3 minerals + alloy (Task 10.2)
@@ -1042,14 +1048,20 @@ export const RECIPES: Partial<Record<RecipeId, Recipe>> = {
     category: 'electronics',
   },
 
-  // T4 electronics — Particle Accelerator produces Quantum Chips from
-  // Steel + Pig Iron. Not biome-locked (only Carbon Forge / Pyroforge /
-  // Cryogenic Compute Center / Mass Driver / Tidal Array / Sunspire are).
-  // Tagged `electronics` because Quantum Chip is the T4 electronics
-  // intermediate; the building's name is metallurgy-coded but its output
-  // is an electronics component.
+  // Phase 11 — T4 endgame (Task 11.2): Particle Accelerator produces
+  // Antimatter Capsules from Hydrogen + Exotic Alloy + Microchip.
+  // Not biome-locked. Tagged `electronics` per §7.11.
   particle_accelerator: {
-    cycleSec: 2700, // rebalanced for idle-game scale, step #19 (×60: was 45s)
+    cycleSec: 1800,
+    inputs: { hydrogen: 10, exotic_alloy: 1, microchip: 5 },
+    outputs: { antimatter_capsule: 1 },
+    category: 'electronics',
+  },
+
+  // Phase 11 — T4 endgame (Task 11.2): Quantum Chip Fabricator replaces
+  // particle_accelerator as the quantum_chip producer.
+  quantum_chip_fab: {
+    cycleSec: 2700,
     inputs: { steel: 4, pig_iron: 4 },
     outputs: { quantum_chip: 1 },
     category: 'electronics',

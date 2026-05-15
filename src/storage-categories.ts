@@ -270,4 +270,6 @@ export const RESOURCE_STORAGE_CATEGORY: Readonly<Record<ResourceId, StorageCateg
   optical_fiber: 'components',
   // Phase 11 — T4 endgame (Task 11.1)
   time_crystal: 'rare',
+  // Phase 11 — T4 endgame (Task 11.2)
+  antimatter_capsule: 'rare',
 };

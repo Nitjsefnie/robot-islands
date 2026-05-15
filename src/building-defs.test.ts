@@ -58,6 +58,7 @@ const KNOWN_DEF_IDS: ReadonlyArray<BuildingDefId> = [
   'particle_accelerator',
   'launch_tower',
   'quantum_manipulator',
+  'quantum_chip_fab',
   // §9.5 biome-locked uniques (Mass Driver + Carbon Forge + Tidal Array + Sunspire)
   'mass_driver',
   'carbon_forge',
@@ -2085,6 +2086,22 @@ describe('§8.1 T2 extraction buildings', () => {
       expect(def.tier).toBe(2);
       expect(def.footprint.tiles.length).toBe(4);
     });
+  });
+});
+
+describe('§6.5 quantum_chip_fab (T4 quantum_chip producer, Task 11.2)', () => {
+  it('is T4, 3x3, electronics category', () => {
+    const def = BUILDING_DEFS.quantum_chip_fab;
+    expect(def).toBeDefined();
+    expect(def.tier).toBe(4);
+    expect(def.footprint.tiles.length).toBe(9);
+    expect(def.category).toBe('electronics');
+  });
+  it('produces quantum_chip from steel + pig_iron', () => {
+    expect(RECIPES.quantum_chip_fab).toBeDefined();
+    expect(RECIPES.quantum_chip_fab!.inputs).toEqual({ steel: 4, pig_iron: 4 });
+    expect(RECIPES.quantum_chip_fab!.outputs).toEqual({ quantum_chip: 1 });
+    expect(RECIPES.quantum_chip_fab!.cycleSec).toBe(2700);
   });
 });
 

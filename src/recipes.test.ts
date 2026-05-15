@@ -1351,3 +1351,17 @@ describe('§6.5 time_crystal via quantum_manipulator (Task 11.1)', () => {
     expect(RECIPES.quantum_manipulator!.category).toBe('manufacturing');
   });
 });
+
+describe('§6.5 antimatter_capsule via particle_accelerator (Task 11.2)', () => {
+  it('antimatter_capsule is in ALL_RESOURCES with xp_weight 100 (T4 rare)', () => {
+    expect(ALL_RESOURCES).toContain('antimatter_capsule' as ResourceId);
+    expect(XP_WEIGHT.antimatter_capsule).toBe(100);
+  });
+  it('particle_accelerator recipe: hydrogen + exotic_alloy + microchip → antimatter_capsule', () => {
+    expect(RECIPES.particle_accelerator).toBeDefined();
+    expect(RECIPES.particle_accelerator!.inputs).toEqual({ hydrogen: 10, exotic_alloy: 1, microchip: 5 });
+    expect(RECIPES.particle_accelerator!.outputs).toEqual({ antimatter_capsule: 1 });
+    expect(RECIPES.particle_accelerator!.cycleSec).toBe(1800);
+    expect(RECIPES.particle_accelerator!.category).toBe('electronics');
+  });
+});
