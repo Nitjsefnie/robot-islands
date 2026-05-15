@@ -242,6 +242,8 @@ export type ResourceId =
   | 'computing_module'
   // §13.4 endgame artifact — victory condition resource. No producer yet.
   | 'genesis_cell'
+  // Phase 11 — T4 endgame (Task 11.1)
+  | 'time_crystal'
   // Phase 10 — T3 minerals + alloy (Task 10.1)
   | 'mercury'
   // Phase 10 — T3 minerals + alloy (Task 10.2)
@@ -439,6 +441,8 @@ export const ALL_RESOURCES: ReadonlyArray<ResourceId> = [
   'computing_module',
   // §13.4 endgame artifact
   'genesis_cell',
+  // Phase 11 — T4 endgame (Task 11.1)
+  'time_crystal',
   // Phase 10 — T3 minerals + alloy (Task 10.1)
   'mercury',
   // Phase 10 — T3 minerals + alloy (Task 10.2)
@@ -660,6 +664,8 @@ export const XP_WEIGHT: Readonly<Record<ResourceId, number>> = {
   computing_module: 30,
   // §13.4 T5 endgame artifact
   genesis_cell: 300,
+  // Phase 11 — T4 endgame (Task 11.1)
+  time_crystal: 100,
   // Phase 10 — T3 minerals + alloy (Task 10.1)
   mercury: 30,
   // Phase 10 — T3 minerals + alloy (Task 10.2)
@@ -1047,6 +1053,14 @@ export const RECIPES: Partial<Record<RecipeId, Recipe>> = {
     inputs: { steel: 4, pig_iron: 4 },
     outputs: { quantum_chip: 1 },
     category: 'electronics',
+  },
+
+  // Phase 11 — T4 endgame (Task 11.1): Quantum Manipulator → time_crystal.
+  quantum_manipulator: {
+    cycleSec: 1800,
+    inputs: { helium_3: 1, exotic_alloy: 1 },
+    outputs: { time_crystal: 1 },
+    category: 'manufacturing',
   },
 
   // §9.5 Carbon Forge: produces Carbon Fiber. Optical/Glass fiber variants

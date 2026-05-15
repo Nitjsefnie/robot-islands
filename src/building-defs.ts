@@ -120,6 +120,7 @@ export type BuildingDefId =
   | 'cryogenic_compute_center'
   | 'particle_accelerator'
   | 'launch_tower'
+  | 'quantum_manipulator'
   // §9.5 biome-locked uniques (Mass Driver + Carbon Forge + Tidal Array + Sunspire)
   | 'mass_driver'
   | 'carbon_forge'
@@ -1623,6 +1624,19 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     // §14 placeholder — tune in Appendix A.
     placementCost: { steel: 300, microchip: 100, glass: 30 },
     glyph: '▲',
+  },
+  // Phase 11 — T4 endgame (Task 11.1): Quantum Manipulator → time_crystal.
+  quantum_manipulator: {
+    id: 'quantum_manipulator',
+    displayName: 'Quantum Manipulator',
+    category: 'manufacturing',
+    tier: 4,
+    footprint: SHAPES.square3,
+    fill: 0xb060e0,
+    stroke: 0x401060,
+    power: { consumes: 1000 },
+    placementCost: { steel: 300, microchip: 50, glass: 30 },
+    glyph: '✺',
   },
   // -------------------------------------------------------------------------
   // T5 (levels 50+, AI Core required) — Transcendent per §13 / step 13

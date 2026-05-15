@@ -268,4 +268,6 @@ export const RESOURCE_STORAGE_CATEGORY: Readonly<Record<ResourceId, StorageCateg
   // Phase 10c — T3 fiber spinners (Task 10.12)
   glass_fiber: 'components',
   optical_fiber: 'components',
+  // Phase 11 — T4 endgame (Task 11.1)
+  time_crystal: 'rare',
 };

@@ -1337,3 +1337,17 @@ describe('§6.4 magnetic_alloy + mag_alloyer (Task 10.4)', () => {
     expect(RECIPES.mag_alloyer!.cycleSec).toBe(300);
   });
 });
+
+describe('§6.5 time_crystal via quantum_manipulator (Task 11.1)', () => {
+  it('time_crystal is in ALL_RESOURCES with xp_weight 100 (T4 rare)', () => {
+    expect(ALL_RESOURCES).toContain('time_crystal' as ResourceId);
+    expect(XP_WEIGHT.time_crystal).toBe(100);
+  });
+  it('quantum_manipulator recipe: helium_3 + exotic_alloy → time_crystal', () => {
+    expect(RECIPES.quantum_manipulator).toBeDefined();
+    expect(RECIPES.quantum_manipulator!.inputs).toEqual({ helium_3: 1, exotic_alloy: 1 });
+    expect(RECIPES.quantum_manipulator!.outputs).toEqual({ time_crystal: 1 });
+    expect(RECIPES.quantum_manipulator!.cycleSec).toBe(1800);
+    expect(RECIPES.quantum_manipulator!.category).toBe('manufacturing');
+  });
+});

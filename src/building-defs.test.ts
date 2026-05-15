@@ -57,6 +57,7 @@ const KNOWN_DEF_IDS: ReadonlyArray<BuildingDefId> = [
   'cryogenic_compute_center',
   'particle_accelerator',
   'launch_tower',
+  'quantum_manipulator',
   // §9.5 biome-locked uniques (Mass Driver + Carbon Forge + Tidal Array + Sunspire)
   'mass_driver',
   'carbon_forge',
@@ -2084,5 +2085,24 @@ describe('§8.1 T2 extraction buildings', () => {
       expect(def.tier).toBe(2);
       expect(def.footprint.tiles.length).toBe(4);
     });
+  });
+});
+
+describe('§6.5 quantum_manipulator (T4 time_crystal producer, Task 11.1)', () => {
+  it('is T4, 3x3, manufacturing category', () => {
+    const def = BUILDING_DEFS.quantum_manipulator;
+    expect(def).toBeDefined();
+    expect(def.tier).toBe(4);
+    expect(def.footprint.tiles.length).toBe(9);
+    expect(def.category).toBe('manufacturing');
+  });
+  it('has power consumption 1000W', () => {
+    expect(BUILDING_DEFS.quantum_manipulator.power?.consumes).toBe(1000);
+  });
+  it('produces time_crystal from helium_3 + exotic_alloy', () => {
+    expect(RECIPES.quantum_manipulator).toBeDefined();
+    expect(RECIPES.quantum_manipulator!.inputs).toEqual({ helium_3: 1, exotic_alloy: 1 });
+    expect(RECIPES.quantum_manipulator!.outputs).toEqual({ time_crystal: 1 });
+    expect(RECIPES.quantum_manipulator!.cycleSec).toBe(1800);
   });
 });

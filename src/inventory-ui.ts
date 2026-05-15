@@ -233,6 +233,8 @@ export const RESOURCE_CATEGORY: Readonly<Record<ResourceId, ResourceCategory>> =
   // Phase 10c — T3 fiber spinners (Task 10.12)
   glass_fiber: 'components',
   optical_fiber: 'components',
+  // Phase 11 — T4 endgame (Task 11.1)
+  time_crystal: 'rare',
 };
 
 /** Filter chips shown above the resource list. `'all'` is the default. */
