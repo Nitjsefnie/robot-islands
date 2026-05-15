@@ -137,6 +137,10 @@ export const RESOURCE_STORAGE_CATEGORY: Readonly<Record<ResourceId, StorageCateg
   chlorine: 'liquid_gas',
   lubricant: 'liquid_gas',
   diesel: 'liquid_gas',
+  // Phase 4 — T2 petrochemical byproducts (§7.4)
+  heavy_oil: 'liquid_gas',
+  tar: 'liquid_gas',
+  asphalt: 'liquid_gas',
 
   // T2 components.
   wire: 'components',

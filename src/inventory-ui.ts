@@ -131,6 +131,10 @@ export const RESOURCE_CATEGORY: Readonly<Record<ResourceId, ResourceCategory>> =
   lubricant: 'liquid',
   nitrogen: 'liquid',
   cryo_coolant: 'liquid',
+  // Phase 4 — T2 petrochemical byproducts (§7.4)
+  heavy_oil: 'liquid',
+  tar: 'liquid',
+  asphalt: 'liquid',
   // T3 refined intermediate
   silicon: 'refined',
   // T4/T5 raws + components — Rare bucket

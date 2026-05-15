@@ -128,6 +128,10 @@ export type ResourceId =
   | 'lubricant'
   | 'diesel'
   | 'wire'
+  // Phase 4 — T2 petrochemical byproducts (§7.4)
+  | 'heavy_oil'
+  | 'tar'
+  | 'asphalt'
   // Step-18 T3 chemistry/electronics (§7.4 / §7.5).
   | 'silicon'
   | 'nitrogen'
@@ -277,6 +281,10 @@ export const ALL_RESOURCES: ReadonlyArray<ResourceId> = [
   'lubricant',
   'diesel',
   'wire',
+  // Phase 4 — T2 petrochemical byproducts (§7.4)
+  'heavy_oil',
+  'tar',
+  'asphalt',
   // Step-18 T3 chemistry / electronics.
   'silicon',
   'nitrogen',
@@ -421,6 +429,10 @@ export const XP_WEIGHT: Readonly<Record<ResourceId, number>> = {
   lubricant: 10,
   diesel: 10,
   wire: 10,
+  // Phase 4 — T2 petrochemical byproducts (§7.4)
+  heavy_oil: 10,
+  tar: 10,
+  asphalt: 10,
   // Step-18 T3 chemistry / electronics (§9.1 tier-3 weight = 30).
   silicon: 30,
   nitrogen: 30,
@@ -1201,6 +1213,13 @@ export const RECIPES: Partial<Record<RecipeId, Recipe>> = {
     cycleSec: 600, // rebalanced for idle-game scale, step #19 (×40: was 15s)
     inputs: { crude_oil: 1 },
     outputs: { naphtha: 1 },
+    category: 'chemistry',
+  },
+  // Phase 4 — T2 deep-fraction crude oil cracker (§7.4)
+  crude_oil_cracker: {
+    cycleSec: 600,
+    inputs: { crude_oil: 3 },
+    outputs: { heavy_oil: 1, tar: 1, asphalt: 1 },
     category: 'chemistry',
   },
   chlor_alkali_plant: {

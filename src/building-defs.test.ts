@@ -95,6 +95,7 @@ const KNOWN_DEF_IDS: ReadonlyArray<BuildingDefId> = [
   'pump_jack',
   'gas_extractor',
   'naphtha_cracker',
+  'crude_oil_cracker',
   'chlor_alkali_plant',
   'chemical_reactor',
   'lubricant_refinery',
@@ -1198,6 +1199,19 @@ describe('§7.1 tool_steel_mill (T3 tool steel producer)', () => {
     expect(RECIPES.tool_steel_mill).toBeDefined();
     expect(RECIPES.tool_steel_mill!.inputs).toEqual({ steel: 1, tungsten_ingot: 1 });
     expect(RECIPES.tool_steel_mill!.outputs).toEqual({ tool_steel: 1 });
+  });
+});
+
+describe('§7.4 crude_oil_cracker (T2 heavy-fraction cracker)', () => {
+  it('is T2, 3x3, chemistry category', () => {
+    const def = BUILDING_DEFS.crude_oil_cracker;
+    expect(def).toBeDefined();
+    expect(def.tier).toBe(2);
+    expect(def.footprint.tiles.length).toBe(9); // 3x3
+    expect(def.category).toBe('chemistry');
+  });
+  it('has power consumption 250W', () => {
+    expect(BUILDING_DEFS.crude_oil_cracker.power?.consumes).toBe(250);
   });
 });
 

@@ -717,6 +717,28 @@ describe('§6.4/§7.1 tool_steel chain (Task 3.4)', () => {
   });
 });
 
+describe('§7.4 crude_oil_cracker — heavy_oil + tar + asphalt (Task 4.1)', () => {
+  it('heavy_oil is in ALL_RESOURCES with xp_weight 10 (T2 liquid)', () => {
+    expect(ALL_RESOURCES).toContain('heavy_oil' as ResourceId);
+    expect(XP_WEIGHT.heavy_oil).toBe(10);
+  });
+  it('tar is in ALL_RESOURCES with xp_weight 10 (T2 liquid)', () => {
+    expect(ALL_RESOURCES).toContain('tar' as ResourceId);
+    expect(XP_WEIGHT.tar).toBe(10);
+  });
+  it('asphalt is in ALL_RESOURCES with xp_weight 10 (T2 liquid)', () => {
+    expect(ALL_RESOURCES).toContain('asphalt' as ResourceId);
+    expect(XP_WEIGHT.asphalt).toBe(10);
+  });
+  it('crude_oil_cracker recipe: 3 crude_oil → heavy_oil + tar + asphalt', () => {
+    expect(RECIPES.crude_oil_cracker).toBeDefined();
+    expect(RECIPES.crude_oil_cracker!.inputs).toEqual({ crude_oil: 3 });
+    expect(RECIPES.crude_oil_cracker!.outputs).toEqual({ heavy_oil: 1, tar: 1, asphalt: 1 });
+    expect(RECIPES.crude_oil_cracker!.cycleSec).toBe(600);
+    expect(RECIPES.crude_oil_cracker!.category).toBe('chemistry');
+  });
+});
+
 describe('nextRotateOutputBoundaryMs', () => {
   const rotatingRecipe = {
     cycleSec: 10,

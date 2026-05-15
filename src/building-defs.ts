@@ -214,6 +214,7 @@ export type BuildingDefId =
   | 'pump_jack'
   | 'gas_extractor'
   | 'naphtha_cracker'
+  | 'crude_oil_cracker'
   | 'chlor_alkali_plant'
   | 'chemical_reactor'
   | 'lubricant_refinery'
@@ -2373,6 +2374,19 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     power: { consumes: 200 },
     // §14 placeholder — tune in Appendix A.
     placementCost: { stone: 150, iron_ingot: 50, wood: 20 },
+    glyph: '◇',
+  },
+  // Phase 4 — T2 deep-fraction crude oil cracker (§7.4)
+  crude_oil_cracker: {
+    id: 'crude_oil_cracker',
+    displayName: 'Crude Oil Cracker',
+    category: 'chemistry',
+    tier: 2,
+    footprint: SHAPES.square3,
+    fill: 0x2a1a14, // heavy crude black-brown
+    stroke: 0x1a0a08,
+    power: { consumes: 250 },
+    placementCost: { stone: 200, iron_ingot: 60, wood: 20 },
     glyph: '◇',
   },
   chlor_alkali_plant: {
