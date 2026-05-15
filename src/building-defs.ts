@@ -272,6 +272,8 @@ export type BuildingDefId =
   | 'mag_alloyer'
   // Phase 10b — T3 minerals + alloy (Task 10.4.5)
   | 'lithium_extractor'
+  // Phase 10b — T3 power components (Task 10.5)
+  | 'mag_forge'
 
   // §5.2 / §8.6 Heat Sources. The economy reads `def.heatSource` to identify
   // sources during heat-adjacency resolution. Each free source costs no fuel
@@ -3005,6 +3007,19 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     requiredTile: ['lithium_vein'],
     placementCost: { stone: 80, iron_ingot: 25, wood: 10 },
     glyph: '⛏',
+  },
+  // Phase 10b — T3 power components (Task 10.5)
+  mag_forge: {
+    id: 'mag_forge',
+    displayName: 'Mag Forge',
+    category: 'manufacturing',
+    tier: 3,
+    footprint: SHAPES.square2,
+    fill: 0x6080a0,
+    stroke: 0x203040,
+    power: { consumes: 200 },
+    placementCost: { steel: 50, microchip: 3 },
+    glyph: '◈',
   },
 
   // T5 raw extractors (§8.10). Power draws are placeholder "60-100 kW"

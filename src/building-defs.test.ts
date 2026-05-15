@@ -218,6 +218,8 @@ const KNOWN_DEF_IDS: ReadonlyArray<BuildingDefId> = [
   'mag_alloyer',
   // Phase 10b — T3 minerals + alloy (Task 10.4.5)
   'lithium_extractor',
+  // Phase 10b — T3 power components (Task 10.5)
+  'mag_forge',
 
 ];
 
@@ -370,6 +372,21 @@ describe('BUILDING_DEFS catalog', () => {
     it('produces 1 lithium per cycle', () => {
       expect(RECIPES.lithium_extractor).toBeDefined();
       expect(RECIPES.lithium_extractor!.outputs).toEqual({ lithium: 1 });
+    });
+  });
+
+  describe('§6.4/§7.9 mag_forge (T3 magnet producer)', () => {
+    it('is T3, 2x2, manufacturing category', () => {
+      const def = BUILDING_DEFS.mag_forge;
+      expect(def).toBeDefined();
+      expect(def.tier).toBe(3);
+      expect(def.footprint).toEqual(SHAPES.square2);
+      expect(def.category).toBe('manufacturing');
+    });
+    it('produces magnet from magnetic_alloy + wire', () => {
+      expect(RECIPES.mag_forge).toBeDefined();
+      expect(RECIPES.mag_forge!.inputs).toEqual({ magnetic_alloy: 1, wire: 2 });
+      expect(RECIPES.mag_forge!.outputs).toEqual({ magnet: 1 });
     });
   });
 });

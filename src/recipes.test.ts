@@ -953,6 +953,19 @@ describe('§6.4 lithium + lithium_extractor (Task 10.4.5)', () => {
   });
 });
 
+describe('§6.4/§7.9 magnet via mag_forge (Task 10.5)', () => {
+  it('magnet is in ALL_RESOURCES with xp_weight 30 (T3 component)', () => {
+    expect(ALL_RESOURCES).toContain('magnet' as ResourceId);
+    expect(XP_WEIGHT.magnet).toBe(30);
+  });
+  it('mag_forge recipe: magnetic_alloy + wire → magnet', () => {
+    expect(RECIPES.mag_forge).toBeDefined();
+    expect(RECIPES.mag_forge!.inputs).toEqual({ magnetic_alloy: 1, wire: 2 });
+    expect(RECIPES.mag_forge!.outputs).toEqual({ magnet: 1 });
+    expect(RECIPES.mag_forge!.cycleSec).toBe(250);
+  });
+});
+
 
 describe('§6.3 glass_panel via glass_panel_press (Task 6.5)', () => {
   it('glass_panel is in ALL_RESOURCES with xp_weight 10', () => {

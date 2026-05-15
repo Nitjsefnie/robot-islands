@@ -214,6 +214,8 @@ export const RESOURCE_CATEGORY: Readonly<Record<ResourceId, ResourceCategory>> =
   magnetic_alloy: 'refined',
   // Phase 10b — T3 minerals + alloy (Task 10.4.5)
   lithium: 'rare',
+  // Phase 10b — T3 power components (Task 10.5)
+  magnet: 'components',
 
 };
 
