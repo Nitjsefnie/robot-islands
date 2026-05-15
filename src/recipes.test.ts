@@ -552,6 +552,19 @@ describe('§6.2 T1 refined — copper/tin/lead ingots (Task 2.6)', () => {
   });
 });
 
+describe('§6.2/§7.2 solder + solder_alloyer (Task 2.7)', () => {
+  it('solder is in ALL_RESOURCES with xp_weight 10 (T2 component)', () => {
+    expect(ALL_RESOURCES).toContain('solder' as ResourceId);
+    expect(XP_WEIGHT.solder).toBe(10);
+  });
+  it('solder_alloyer recipe: tin_ingot + lead_ingot → 2 solder', () => {
+    expect(RECIPES.solder_alloyer).toBeDefined();
+    expect(RECIPES.solder_alloyer!.inputs).toEqual({ tin_ingot: 1, lead_ingot: 1 });
+    expect(RECIPES.solder_alloyer!.outputs).toEqual({ solder: 2 });
+    expect(RECIPES.solder_alloyer!.cycleSec).toBe(200);
+  });
+});
+
 describe('nextRotateOutputBoundaryMs', () => {
   const rotatingRecipe = {
     cycleSec: 10,

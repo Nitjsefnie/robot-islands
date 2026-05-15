@@ -190,6 +190,7 @@ export type BuildingDefId =
   | 'copper_smelter'
   | 'tin_smelter'
   | 'lead_smelter'
+  | 'solder_alloyer'
   | 'lumber_mill'
   | 'glassworks'
   | 'evaporator'
@@ -2045,6 +2046,18 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     power: { consumes: 50 },
     placementCost: { stone: 30, iron_ingot: 10, wood: 10 },
     glyph: '△',
+  },
+  solder_alloyer: {
+    id: 'solder_alloyer',
+    displayName: 'Solder Alloyer',
+    category: 'manufacturing',
+    tier: 2,
+    footprint: SHAPES.square2,
+    fill: 0x909498, // solder silver-grey
+    stroke: 0x404448,
+    power: { consumes: 80 },
+    placementCost: { stone: 50, iron_ingot: 15, wood: 10 },
+    glyph: '⚙',
   },
 
   // T1 manufacturing / chemistry.

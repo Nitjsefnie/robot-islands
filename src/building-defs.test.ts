@@ -972,6 +972,21 @@ describe('§7.2 copper/tin/lead smelters (Task 2.6)', () => {
   });
 });
 
+describe('§7.2 solder_alloyer (T2 solder producer)', () => {
+  it('is T2, 2x2, manufacturing category', () => {
+    const def = BUILDING_DEFS.solder_alloyer;
+    expect(def).toBeDefined();
+    expect(def.tier).toBe(2);
+    expect(def.footprint).toEqual(SHAPES.square2);
+    expect(def.category).toBe('manufacturing');
+  });
+  it('produces 2 solder from tin_ingot + lead_ingot', () => {
+    expect(RECIPES.solder_alloyer).toBeDefined();
+    expect(RECIPES.solder_alloyer!.inputs).toEqual({ tin_ingot: 1, lead_ingot: 1 });
+    expect(RECIPES.solder_alloyer!.outputs).toEqual({ solder: 2 });
+  });
+});
+
 describe('§8.8 shipyard coastal gating', () => {
   it('shipyard has coastal flag', () => {
     expect(BUILDING_DEFS.shipyard.coastal).toBe(true);

@@ -86,6 +86,7 @@ export type ResourceId =
   | 'copper_ingot'
   | 'tin_ingot'
   | 'lead_ingot'
+  | 'solder'
   // Byproducts (§6.7)
   | 'oxygen'
   | 'argon'
@@ -224,6 +225,7 @@ export const ALL_RESOURCES: ReadonlyArray<ResourceId> = [
   'copper_ingot',
   'tin_ingot',
   'lead_ingot',
+  'solder',
   // Byproducts (§6.7)
   'oxygen',
   'argon',
@@ -348,6 +350,7 @@ export const XP_WEIGHT: Readonly<Record<ResourceId, number>> = {
   copper_ingot: 3,
   tin_ingot: 3,
   lead_ingot: 3,
+  solder: 10,
   // Byproducts (§6.7) — T1 refined weight per spec §9.1.
   oxygen: 3,
   argon: 3,
@@ -992,6 +995,12 @@ export const RECIPES: Partial<Record<RecipeId, Recipe>> = {
     inputs: { lead_ore: 1, coal: 1 },
     outputs: { lead_ingot: 1 },
     category: 'smelting',
+  },
+  solder_alloyer: {
+    cycleSec: 200,
+    inputs: { tin_ingot: 1, lead_ingot: 1 },
+    outputs: { solder: 2 },
+    category: 'manufacturing',
   },
 
   // T1 manufacturing / chemistry — T0 raws → T1 refined. Rebalanced for idle-game scale, step #19 (×10).

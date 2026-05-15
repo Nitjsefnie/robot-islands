@@ -69,6 +69,7 @@ export const RESOURCE_CATEGORY: Readonly<Record<ResourceId, ResourceCategory>> =
   copper_ingot: 'refined',
   tin_ingot: 'refined',
   lead_ingot: 'refined',
+  solder: 'refined',
   // §6.4 T3 mineral raws (for slag reprocessing + nuclear fuel)
   gold_ore: 'raw',
   silver_ore: 'raw',
