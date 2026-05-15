@@ -480,3 +480,63 @@ canvas { display: block; }
   padding: 2px 7px;
   font-size: 10px;
 }
+
+/* building card grid (alt modal mode) */
+.bgrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 8px;
+}
+.bcard {
+  padding: 10px 12px;
+  background: var(--ri-elev);
+  border: 1px solid var(--ri-border);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 100ms;
+}
+.bcard:hover {
+  border-color: var(--ri-accent-dim);
+  background: #1c2230;
+}
+.bcard .top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.bcard .top .ico {
+  width: 24px;
+  height: 24px;
+  color: var(--ri-accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--ri-border);
+  border-radius: 4px;
+  background: rgba(7, 9, 13, 0.5);
+}
+.bcard h4 {
+  margin: 0;
+  font: 600 12.5px/1.2 var(--ri-font-sans);
+  flex: 1;
+}
+.bcard .cat {
+  color: var(--ri-fg-3);
+  font: 10px/1 var(--ri-font-mono);
+}
+.bcard .recipe {
+  margin-top: 4px;
+  color: var(--ri-fg-2);
+  font: 11px/1.4 var(--ri-font-mono);
+}
+.bcard .meta {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+.bcard .meta .ri-chip {
+  padding: 1px 7px;
+  font-size: 9.5px;
+}
