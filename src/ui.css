@@ -73,6 +73,8 @@ canvas { display: block; }
   font-variant-numeric: tabular-nums;
 }
 
+.ri-muted { color: var(--ri-fg-3); }
+
 .ri-caps {
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -418,3 +420,63 @@ canvas { display: block; }
 *::-webkit-scrollbar-thumb { background: var(--ri-border-strong); border-radius: 4px; }
 *::-webkit-scrollbar-thumb:hover { background: var(--ri-accent-dim); }
 *::-webkit-scrollbar-track { background: transparent; }
+
+/* ─── HUD helpers (Phase 3) ──────────────────────────────────────────── */
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  border-radius: 999px;
+}
+
+.phase {
+  margin-left: 6px;
+  padding-left: 10px;
+  border-left: 1px solid var(--ri-rule);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ri-fg-2);
+  font: 11px/1 var(--ri-font-sans);
+}
+
+.saved-indicator {
+  margin-left: 6px;
+  padding-left: 10px;
+  border-left: 1px solid var(--ri-rule);
+  color: var(--ri-fg-3);
+  font: 11px/1 var(--ri-font-sans);
+}
+
+.objective {
+  padding: 8px 10px;
+  margin-top: 8px;
+  background: var(--ri-elev);
+  border: 1px solid var(--ri-border);
+  border-radius: 4px;
+}
+.objective .lab {
+  color: var(--ri-fg-3);
+  font: 9.5px/1 var(--ri-font-sans);
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  margin-bottom: 3px;
+}
+.objective .txt {
+  color: var(--ri-accent);
+  font: 13px/1.4 var(--ri-font-sans);
+  font-weight: 550;
+}
+
+.modifiers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding-top: 6px;
+}
+.modifiers .ri-chip {
+  padding: 2px 7px;
+  font-size: 10px;
+}

@@ -170,7 +170,9 @@ function layoutZone(zone: ZoneId, panels: PanelRecord[]): void {
   }
 }
 
-window.addEventListener('resize', scheduleLayout);
+if (typeof window !== 'undefined') {
+  window.addEventListener('resize', scheduleLayout);
+}
 
 /** Mount a floating panel in a zone. Returns a handle for layout control. */
 export function mountPanel(el: HTMLElement, opts: PanelMountOptions): PanelHandle {

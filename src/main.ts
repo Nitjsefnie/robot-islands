@@ -43,7 +43,7 @@ import {
 } from './specialization.js';
 import { tierForLevel } from './skilltree.js';
 import { renderCellGrid } from './grid.js';
-import { mountHud } from './hud.js';
+import { mountHud, mountIslandBar } from './hud.js';
 import {
   bind,
   defineAction,
@@ -692,6 +692,16 @@ async function main(): Promise<void> {
   // HUD: bottom-right panel showing inventory, rates, and level. Updated
   // once per frame inside the ticker after the economy advance.
   const hud = mountHud(document.body, worldState, (id) => {
+    activeIslandId = id;
+    const spec = islandSpecsById.get(id);
+    if (spec) {
+      const wpx = tileToWorldPx(spec.cx, spec.cy);
+      centerOn(cam, { x: wpx.x, y: wpx.y }, viewportCentre());
+    }
+  }, reg);
+
+  // Multi-island bar: top-center strip with per-island chips + phase/saved.
+  const islandBar = mountIslandBar(worldState, (id) => {
     activeIslandId = id;
     const spec = islandSpecsById.get(id);
     if (spec) {
@@ -1404,6 +1414,7 @@ async function main(): Promise<void> {
       activeIslandId,
       islandPower,
     );
+    islandBar.update(activeIslandId, islandPower, saveAgeSec);
     // §13.3 Omniscient Lattice banner visibility.
     latticeBanner.style.display = worldState.latticeActive ? 'block' : 'none';
     // Skill tree only repaints while visible — DOM writes are wasted
