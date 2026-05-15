@@ -930,6 +930,21 @@ describe('§6.2 charcoal_kiln (T1 charcoal producer)', () => {
   });
 });
 
+describe('§6.2 plank_mill (T1 plank producer)', () => {
+  it('is T1, 2x2, manufacturing category', () => {
+    const def = BUILDING_DEFS.plank_mill;
+    expect(def).toBeDefined();
+    expect(def.tier).toBe(1);
+    expect(def.footprint).toEqual(SHAPES.square2);
+    expect(def.category).toBe('manufacturing');
+  });
+  it('produces 2 plank from 1 lumber', () => {
+    expect(RECIPES.plank_mill).toBeDefined();
+    expect(RECIPES.plank_mill!.inputs).toEqual({ lumber: 1 });
+    expect(RECIPES.plank_mill!.outputs).toEqual({ plank: 2 });
+  });
+});
+
 describe('§8.8 shipyard coastal gating', () => {
   it('shipyard has coastal flag', () => {
     expect(BUILDING_DEFS.shipyard.coastal).toBe(true);

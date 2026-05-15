@@ -506,6 +506,19 @@ describe('§6.2 T1 refined — charcoal (Task 2.4)', () => {
   });
 });
 
+describe('§6.2 T1 refined — plank (Task 2.5)', () => {
+  it('plank is in ALL_RESOURCES with xp_weight 3', () => {
+    expect(ALL_RESOURCES).toContain('plank' as ResourceId);
+    expect(XP_WEIGHT.plank).toBe(3);
+  });
+  it('plank_mill recipe: 1 lumber → 2 plank', () => {
+    expect(RECIPES.plank_mill).toBeDefined();
+    expect(RECIPES.plank_mill!.inputs).toEqual({ lumber: 1 });
+    expect(RECIPES.plank_mill!.outputs).toEqual({ plank: 2 });
+    expect(RECIPES.plank_mill!.cycleSec).toBe(80);
+  });
+});
+
 describe('nextRotateOutputBoundaryMs', () => {
   const rotatingRecipe = {
     cycleSec: 10,

@@ -186,6 +186,7 @@ export type BuildingDefId =
   | 'cement_mill'
   | 'concrete_plant'
   | 'charcoal_kiln'
+  | 'plank_mill'
   | 'lumber_mill'
   | 'glassworks'
   | 'evaporator'
@@ -1993,6 +1994,18 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     gates: [{ matchType: 'heat_source', hard: true }],
     placementCost: { stone: 30, wood: 10 },
     glyph: '△',
+  },
+  plank_mill: {
+    id: 'plank_mill',
+    displayName: 'Plank Mill',
+    category: 'manufacturing',
+    tier: 1,
+    footprint: SHAPES.square2,
+    fill: 0xc8a060, // sawn-wood tan
+    stroke: 0x503818,
+    power: { consumes: 30 },
+    placementCost: { stone: 20, wood: 10 },
+    glyph: '⌬',
   },
 
   // T1 manufacturing / chemistry.

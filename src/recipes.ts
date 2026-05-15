@@ -82,6 +82,7 @@ export type ResourceId =
   | 'cement'
   | 'concrete'
   | 'charcoal'
+  | 'plank'
   // Byproducts (§6.7)
   | 'oxygen'
   | 'argon'
@@ -216,6 +217,7 @@ export const ALL_RESOURCES: ReadonlyArray<ResourceId> = [
   'cement',
   'concrete',
   'charcoal',
+  'plank',
   // Byproducts (§6.7)
   'oxygen',
   'argon',
@@ -336,6 +338,7 @@ export const XP_WEIGHT: Readonly<Record<ResourceId, number>> = {
   cement: 3,
   concrete: 3,
   charcoal: 3,
+  plank: 3,
   // Byproducts (§6.7) — T1 refined weight per spec §9.1.
   oxygen: 3,
   argon: 3,
@@ -956,6 +959,12 @@ export const RECIPES: Partial<Record<RecipeId, Recipe>> = {
     inputs: { wood: 2 },
     outputs: { charcoal: 1 },
     category: 'chemistry',
+  },
+  plank_mill: {
+    cycleSec: 80,
+    inputs: { lumber: 1 },
+    outputs: { plank: 2 },
+    category: 'manufacturing',
   },
 
   // T1 manufacturing / chemistry — T0 raws → T1 refined. Rebalanced for idle-game scale, step #19 (×10).
