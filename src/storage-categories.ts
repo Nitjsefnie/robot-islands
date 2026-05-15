@@ -78,6 +78,9 @@ export const RESOURCE_STORAGE_CATEGORY: Readonly<Record<ResourceId, StorageCateg
   tin_ore: 'dry_goods',
   lead_ore: 'dry_goods',
   bauxite: 'dry_goods',
+  // Phase 2 — T1 refined chains (§6.2 / §7.5)
+  quicklime: 'dry_goods',
+  slaked_lime: 'dry_goods',
 
   // T0 liquids/gases.
   fresh_water: 'liquid_gas',

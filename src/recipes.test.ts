@@ -424,6 +424,29 @@ describe('§6.1 T0 raws — bauxite', () => {
   });
 });
 
+describe('§6.2 T1 refined — quicklime + slaked_lime (Task 2.1)', () => {
+  it('quicklime is in ALL_RESOURCES with xp_weight 3', () => {
+    expect(ALL_RESOURCES).toContain('quicklime' as ResourceId);
+    expect(XP_WEIGHT.quicklime).toBe(3);
+  });
+  it('slaked_lime is in ALL_RESOURCES with xp_weight 3', () => {
+    expect(ALL_RESOURCES).toContain('slaked_lime' as ResourceId);
+    expect(XP_WEIGHT.slaked_lime).toBe(3);
+  });
+  it('limekiln recipe exists with limestone input and quicklime output', () => {
+    expect(RECIPES.limekiln).toBeDefined();
+    expect(RECIPES.limekiln!.inputs).toEqual({ limestone: 1 });
+    expect(RECIPES.limekiln!.outputs).toEqual({ quicklime: 1 });
+    expect(RECIPES.limekiln!.cycleSec).toBe(120);
+  });
+  it('lime_slaker recipe exists with quicklime + fresh_water input and slaked_lime output', () => {
+    expect(RECIPES.lime_slaker).toBeDefined();
+    expect(RECIPES.lime_slaker!.inputs).toEqual({ quicklime: 1, fresh_water: 1 });
+    expect(RECIPES.lime_slaker!.outputs).toEqual({ slaked_lime: 1 });
+    expect(RECIPES.lime_slaker!.cycleSec).toBe(120);
+  });
+});
+
 describe('nextRotateOutputBoundaryMs', () => {
   const rotatingRecipe = {
     cycleSec: 10,

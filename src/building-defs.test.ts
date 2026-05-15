@@ -120,6 +120,9 @@ const KNOWN_DEF_IDS: ReadonlyArray<BuildingDefId> = [
   'tin_mine',
   'lead_mine',
   'bauxite_mine',
+  // Phase 2 — T1 refined chains (§6.2 / §7.5)
+  'limekiln',
+  'lime_slaker',
   'aetheric_conduit',
   'spacetime_resonator',
   'eldritch_sieve',
@@ -814,6 +817,37 @@ describe('§8.1 bauxite_mine (T1 bauxite extractor)', () => {
   it('produces 1 bauxite per cycle', () => {
     expect(RECIPES.bauxite_mine).toBeDefined();
     expect(RECIPES.bauxite_mine!.outputs).toEqual({ bauxite: 1 });
+  });
+});
+
+describe('§7.5 limekiln (T1 quicklime producer)', () => {
+  it('is T1, 2x2, requires heat, hard heat_source gate', () => {
+    const def = BUILDING_DEFS.limekiln;
+    expect(def).toBeDefined();
+    expect(def.tier).toBe(1);
+    expect(def.footprint).toEqual(SHAPES.square2);
+    expect(def.requiresHeat).toBe(true);
+    expect(def.gates).toEqual([{ matchType: 'heat_source', hard: true }]);
+  });
+  it('produces quicklime from limestone', () => {
+    expect(RECIPES.limekiln).toBeDefined();
+    expect(RECIPES.limekiln!.inputs).toEqual({ limestone: 1 });
+    expect(RECIPES.limekiln!.outputs).toEqual({ quicklime: 1 });
+  });
+});
+
+describe('§7.5 lime_slaker (T1 slaked_lime producer)', () => {
+  it('is T1, 2x2, no heat requirement', () => {
+    const def = BUILDING_DEFS.lime_slaker;
+    expect(def).toBeDefined();
+    expect(def.tier).toBe(1);
+    expect(def.footprint).toEqual(SHAPES.square2);
+    expect(def.requiresHeat).toBeUndefined();
+  });
+  it('produces slaked_lime from quicklime + fresh_water', () => {
+    expect(RECIPES.lime_slaker).toBeDefined();
+    expect(RECIPES.lime_slaker!.inputs).toEqual({ quicklime: 1, fresh_water: 1 });
+    expect(RECIPES.lime_slaker!.outputs).toEqual({ slaked_lime: 1 });
   });
 });
 

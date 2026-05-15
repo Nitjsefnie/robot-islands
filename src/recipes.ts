@@ -74,6 +74,9 @@ export type ResourceId =
   | 'tin_ore'
   | 'lead_ore'
   | 'bauxite'
+  // Phase 2 — T1 refined chains (§6.2 / §7.5)
+  | 'quicklime'
+  | 'slaked_lime'
   // Byproducts (§6.7)
   | 'oxygen'
   | 'argon'
@@ -200,6 +203,9 @@ export const ALL_RESOURCES: ReadonlyArray<ResourceId> = [
   'tin_ore',
   'lead_ore',
   'bauxite',
+  // Phase 2 — T1 refined chains (§6.2 / §7.5)
+  'quicklime',
+  'slaked_lime',
   // Byproducts (§6.7)
   'oxygen',
   'argon',
@@ -312,6 +318,9 @@ export const XP_WEIGHT: Readonly<Record<ResourceId, number>> = {
   tin_ore: 1,
   lead_ore: 1,
   bauxite: 1,
+  // Phase 2 — T1 refined chains (§6.2 / §7.5)
+  quicklime: 3,
+  slaked_lime: 3,
   // Byproducts (§6.7) — T1 refined weight per spec §9.1.
   oxygen: 3,
   argon: 3,
@@ -888,6 +897,20 @@ export const RECIPES: Partial<Record<RecipeId, Recipe>> = {
     inputs: {},
     outputs: { bauxite: 1 },
     category: 'extraction',
+  },
+
+  // Phase 2 — T1 refined chains (§6.2 / §7.5)
+  limekiln: {
+    cycleSec: 120,
+    inputs: { limestone: 1 },
+    outputs: { quicklime: 1 },
+    category: 'chemistry',
+  },
+  lime_slaker: {
+    cycleSec: 120,
+    inputs: { quicklime: 1, fresh_water: 1 },
+    outputs: { slaked_lime: 1 },
+    category: 'chemistry',
   },
 
   // T1 manufacturing / chemistry — T0 raws → T1 refined. Rebalanced for idle-game scale, step #19 (×10).

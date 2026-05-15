@@ -178,6 +178,9 @@ export type BuildingDefId =
   | 'tin_mine'
   | 'lead_mine'
   | 'bauxite_mine'
+  // Phase 2 — T1 refined chains (§6.2 / §7.5)
+  | 'limekiln'
+  | 'lime_slaker'
   | 'lumber_mill'
   | 'glassworks'
   | 'evaporator'
@@ -1892,6 +1895,33 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     requiredTile: ['bauxite_vein'],
     placementCost: { stone: 30, wood: 15 },
     glyph: '⛏',
+  },
+  // Phase 2 — T1 refined chains (§6.2 / §7.5)
+  limekiln: {
+    id: 'limekiln',
+    displayName: 'Limekiln',
+    category: 'chemistry',
+    tier: 1,
+    footprint: SHAPES.square2,
+    fill: 0xb0a890, // warm limestone grey
+    stroke: 0x504838,
+    power: { consumes: 60 },
+    requiresHeat: true,
+    gates: [{ matchType: 'heat_source', hard: true }],
+    placementCost: { stone: 40, iron_ingot: 10, wood: 10 },
+    glyph: '△',
+  },
+  lime_slaker: {
+    id: 'lime_slaker',
+    displayName: 'Lime Slaker',
+    category: 'chemistry',
+    tier: 1,
+    footprint: SHAPES.square2,
+    fill: 0xc4c0b0, // pale slaked-lime beige
+    stroke: 0x605850,
+    power: { consumes: 30 },
+    placementCost: { stone: 30, wood: 10 },
+    glyph: '◇',
   },
 
   // T1 manufacturing / chemistry.

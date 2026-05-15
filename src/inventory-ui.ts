@@ -57,6 +57,9 @@ export const RESOURCE_CATEGORY: Readonly<Record<ResourceId, ResourceCategory>> =
   tin_ore: 'raw',
   lead_ore: 'raw',
   bauxite: 'raw',
+  // Phase 2 — T1 refined chains (§6.2 / §7.5)
+  quicklime: 'refined',
+  slaked_lime: 'refined',
   // §6.4 T3 mineral raws (for slag reprocessing + nuclear fuel)
   gold_ore: 'raw',
   silver_ore: 'raw',
