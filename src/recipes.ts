@@ -107,6 +107,7 @@ export type ResourceId =
   | 'brass'
   // Phase 8 — Aluminum chain (§7.3)
   | 'alumina'
+  | 'aluminum'
   // Byproducts (§6.7)
   | 'oxygen'
   | 'argon'
@@ -297,6 +298,7 @@ export const ALL_RESOURCES: ReadonlyArray<ResourceId> = [
   'brass',
   // Phase 8 — Aluminum chain (§7.3)
   'alumina',
+  'aluminum',
   // Byproducts (§6.7)
   'oxygen',
   'argon',
@@ -473,6 +475,7 @@ export const XP_WEIGHT: Readonly<Record<ResourceId, number>> = {
   brass: 10,
   // Phase 8 — Aluminum chain (§7.3)
   alumina: 10,
+  aluminum: 10,
   // Byproducts (§6.7) — T1 refined weight per spec §9.1.
   oxygen: 3,
   argon: 3,
@@ -1174,6 +1177,12 @@ export const RECIPES: Partial<Record<RecipeId, Recipe>> = {
     inputs: { bauxite: 1, sodium_hydroxide: 1 },
     outputs: { alumina: 1 },
     category: 'chemistry',
+  },
+  aluminum_smelter: {
+    cycleSec: 300,
+    inputs: { alumina: 1 },
+    outputs: { aluminum: 1 },
+    category: 'smelting',
   },
 
   // Phase 3 — T2-T3 steel alloy chains (§6.1 / §6.4 / §7.1)

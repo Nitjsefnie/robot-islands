@@ -196,6 +196,7 @@ export type BuildingDefId =
   | 'brass_alloyer'
   // Phase 8 — Aluminum chain (§7.3)
   | 'alumina_refinery'
+  | 'aluminum_smelter'
   // Phase 3 — T2-T3 steel alloy chains (§6.1 / §6.4 / §7.1)
   | 'manganese_mine'
   | 'manganese_smelter'
@@ -1133,6 +1134,18 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     stroke: 0x605030,
     power: { consumes: 150 },
     placementCost: { stone: 100, iron_ingot: 30, wood: 15 },
+    glyph: '△',
+  },
+  aluminum_smelter: {
+    id: 'aluminum_smelter',
+    displayName: 'Aluminum Smelter',
+    category: 'smelting',
+    tier: 3,
+    footprint: SHAPES.rect2x3,
+    fill: 0xc0c4cb,
+    stroke: 0x50545a,
+    power: { consumes: 500 },
+    placementCost: { steel: 80, microchip: 5 },
     glyph: '△',
   },
   // §8.3 T3 manufacturing: Fabricator (3x3). Advanced components — motors,

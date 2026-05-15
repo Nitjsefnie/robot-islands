@@ -1017,6 +1017,19 @@ describe('§7.3 alumina + alumina_refinery (Task 8.1)', () => {
   });
 });
 
+describe('§7.3 aluminum + aluminum_smelter (Task 8.2)', () => {
+  it('aluminum is in ALL_RESOURCES with xp_weight 10 (T3 component)', () => {
+    expect(ALL_RESOURCES).toContain('aluminum' as ResourceId);
+    expect(XP_WEIGHT.aluminum).toBe(10);
+  });
+  it('aluminum_smelter recipe: alumina → aluminum', () => {
+    expect(RECIPES.aluminum_smelter).toBeDefined();
+    expect(RECIPES.aluminum_smelter!.inputs).toEqual({ alumina: 1 });
+    expect(RECIPES.aluminum_smelter!.outputs).toEqual({ aluminum: 1 });
+    expect(RECIPES.aluminum_smelter!.cycleSec).toBe(300);
+  });
+});
+
 describe('nextRotateOutputBoundaryMs', () => {
   const rotatingRecipe = {
     cycleSec: 10,

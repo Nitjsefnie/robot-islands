@@ -1349,6 +1349,22 @@ describe('§7.3 alumina_refinery (Task 8.1)', () => {
   });
 });
 
+describe('§7.3 aluminum_smelter (Task 8.2)', () => {
+  it('is T3, 2x3, smelting category', () => {
+    const def = BUILDING_DEFS.aluminum_smelter;
+    expect(def).toBeDefined();
+    expect(def.tier).toBe(3);
+    expect(def.footprint).toEqual(SHAPES.rect2x3);
+    expect(def.category).toBe('smelting');
+  });
+  it('produces aluminum from alumina', () => {
+    expect(RECIPES.aluminum_smelter).toBeDefined();
+    expect(RECIPES.aluminum_smelter!.inputs).toEqual({ alumina: 1 });
+    expect(RECIPES.aluminum_smelter!.outputs).toEqual({ aluminum: 1 });
+    expect(RECIPES.aluminum_smelter!.cycleSec).toBe(300);
+  });
+});
+
 describe('§7.5 sulfuric_acid_plant (Task 5.1)', () => {
   it('is T2, 2x2, chemistry category', () => {
     const def = BUILDING_DEFS.sulfuric_acid_plant;

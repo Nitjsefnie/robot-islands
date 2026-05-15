@@ -96,6 +96,7 @@ export const RESOURCE_STORAGE_CATEGORY: Readonly<Record<ResourceId, StorageCateg
   brass: 'components',
   // Phase 8 — Aluminum chain (§7.3)
   alumina: 'components',
+  aluminum: 'components',
   // Phase 3 — T2-T3 steel alloy chains
   manganese_ore: 'dry_goods',
   manganese_ingot: 'dry_goods',

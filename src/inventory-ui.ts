@@ -75,6 +75,7 @@ export const RESOURCE_CATEGORY: Readonly<Record<ResourceId, ResourceCategory>> =
   brass: 'refined',
   // Phase 8 — Aluminum chain (§7.3)
   alumina: 'refined',
+  aluminum: 'refined',
   // Phase 3 — T2-T3 steel alloy chains
   manganese_ore: 'raw',
   manganese_ingot: 'refined',
