@@ -1317,6 +1317,22 @@ describe('§7.2 bronze_alloyer (Task 7.1)', () => {
   });
 });
 
+describe('§7.2 brass_alloyer (Task 7.2)', () => {
+  it('is T2, 2x2, manufacturing category', () => {
+    const def = BUILDING_DEFS.brass_alloyer;
+    expect(def).toBeDefined();
+    expect(def.tier).toBe(2);
+    expect(def.footprint).toEqual(SHAPES.square2);
+    expect(def.category).toBe('manufacturing');
+  });
+  it('produces 2 brass from copper_ingot + zinc_ingot', () => {
+    expect(RECIPES.brass_alloyer).toBeDefined();
+    expect(RECIPES.brass_alloyer!.inputs).toEqual({ copper_ingot: 1, zinc_ingot: 1 });
+    expect(RECIPES.brass_alloyer!.outputs).toEqual({ brass: 2 });
+    expect(RECIPES.brass_alloyer!.cycleSec).toBe(250);
+  });
+});
+
 describe('§7.5 sulfuric_acid_plant (Task 5.1)', () => {
   it('is T2, 2x2, chemistry category', () => {
     const def = BUILDING_DEFS.sulfuric_acid_plant;

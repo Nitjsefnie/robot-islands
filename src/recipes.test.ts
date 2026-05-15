@@ -991,6 +991,19 @@ describe('§7.2 bronze + bronze_alloyer (Task 7.1)', () => {
   });
 });
 
+describe('§7.2 brass + brass_alloyer (Task 7.2)', () => {
+  it('brass is in ALL_RESOURCES with xp_weight 10 (T2 component)', () => {
+    expect(ALL_RESOURCES).toContain('brass' as ResourceId);
+    expect(XP_WEIGHT.brass).toBe(10);
+  });
+  it('brass_alloyer recipe: copper_ingot + zinc_ingot → 2 brass', () => {
+    expect(RECIPES.brass_alloyer).toBeDefined();
+    expect(RECIPES.brass_alloyer!.inputs).toEqual({ copper_ingot: 1, zinc_ingot: 1 });
+    expect(RECIPES.brass_alloyer!.outputs).toEqual({ brass: 2 });
+    expect(RECIPES.brass_alloyer!.cycleSec).toBe(250);
+  });
+});
+
 describe('nextRotateOutputBoundaryMs', () => {
   const rotatingRecipe = {
     cycleSec: 10,

@@ -104,6 +104,7 @@ export type ResourceId =
   | 'solder'
   // Phase 7 — Bronze + Brass (§7.2)
   | 'bronze'
+  | 'brass'
   // Byproducts (§6.7)
   | 'oxygen'
   | 'argon'
@@ -291,6 +292,7 @@ export const ALL_RESOURCES: ReadonlyArray<ResourceId> = [
   'solder',
   // Phase 7 — Bronze + Brass (§7.2)
   'bronze',
+  'brass',
   // Byproducts (§6.7)
   'oxygen',
   'argon',
@@ -464,6 +466,7 @@ export const XP_WEIGHT: Readonly<Record<ResourceId, number>> = {
   solder: 10,
   // Phase 7 — Bronze + Brass (§7.2)
   bronze: 10,
+  brass: 10,
   // Byproducts (§6.7) — T1 refined weight per spec §9.1.
   oxygen: 3,
   argon: 3,
@@ -1151,6 +1154,12 @@ export const RECIPES: Partial<Record<RecipeId, Recipe>> = {
     cycleSec: 250,
     inputs: { copper_ingot: 1, tin_ingot: 1 },
     outputs: { bronze: 2 },
+    category: 'manufacturing',
+  },
+  brass_alloyer: {
+    cycleSec: 250,
+    inputs: { copper_ingot: 1, zinc_ingot: 1 },
+    outputs: { brass: 2 },
     category: 'manufacturing',
   },
 

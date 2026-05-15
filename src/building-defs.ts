@@ -193,6 +193,7 @@ export type BuildingDefId =
   | 'solder_alloyer'
   // Phase 7 — Bronze + Brass (§7.2)
   | 'bronze_alloyer'
+  | 'brass_alloyer'
   // Phase 3 — T2-T3 steel alloy chains (§6.1 / §6.4 / §7.1)
   | 'manganese_mine'
   | 'manganese_smelter'
@@ -1103,6 +1104,18 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     footprint: SHAPES.square2,
     fill: 0xb87333,
     stroke: 0x5a3a1a,
+    power: { consumes: 80 },
+    placementCost: { stone: 60, iron_ingot: 15, wood: 10 },
+    glyph: '◈',
+  },
+  brass_alloyer: {
+    id: 'brass_alloyer',
+    displayName: 'Brass Alloyer',
+    category: 'manufacturing',
+    tier: 2,
+    footprint: SHAPES.square2,
+    fill: 0xd4a44a,
+    stroke: 0x6a5225,
     power: { consumes: 80 },
     placementCost: { stone: 60, iron_ingot: 15, wood: 10 },
     glyph: '◈',
