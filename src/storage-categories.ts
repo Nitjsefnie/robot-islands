@@ -70,6 +70,7 @@ export const RESOURCE_STORAGE_CATEGORY: Readonly<Record<ResourceId, StorageCateg
   quartz: 'dry_goods',
   // §6.1 T0 mineral raw: limestone (Task 1.2)
   limestone: 'dry_goods',
+  clay: 'dry_goods',
 
   // T0 liquids/gases.
   fresh_water: 'liquid_gas',

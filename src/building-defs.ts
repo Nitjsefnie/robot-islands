@@ -170,6 +170,7 @@ export type BuildingDefId =
   | 'coastal_pump'
   | 'quartz_mine'
   | 'limestone_quarry'
+  | 'clay_pit_extractor'
   | 'lumber_mill'
   | 'glassworks'
   | 'evaporator'
@@ -1778,6 +1779,19 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     stroke: 0x60584a,
     power: { consumes: 30 },
     requiredTile: ['limestone'],
+    placementCost: { stone: 30, wood: 15 },
+    glyph: '⛏',
+  },
+  clay_pit_extractor: {
+    id: 'clay_pit_extractor',
+    displayName: 'Clay Pit Extractor',
+    category: 'extraction',
+    tier: 1,
+    footprint: SHAPES.square2,
+    fill: 0xa67555, // earthen red
+    stroke: 0x5a3a2a,
+    power: { consumes: 30 },
+    requiredTile: ['clay_pit'],
     placementCost: { stone: 30, wood: 15 },
     glyph: '⛏',
   },

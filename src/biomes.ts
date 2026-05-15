@@ -83,7 +83,7 @@ export const BIOME_DEFS: Readonly<Record<Biome, BiomeDef>> = {
     // keeps grass as default for buildability (the Logger that clears tree
     // doesn't ship until a later step) and uses tree as a visual accent so
     // the biome reads distinct. Tree/water are weighted 2× in rareTerrain.
-    rareTerrain: ['tree', 'tree', 'stone', 'water'],
+    rareTerrain: ['tree', 'tree', 'stone', 'water', 'clay_pit'],
     displayName: 'Forest',
   },
   coast: {
@@ -92,7 +92,7 @@ export const BIOME_DEFS: Readonly<Record<Biome, BiomeDef>> = {
     initialMinorRadius: 7,
     powerSource: 'wind',
     defaultTerrain: 'sand',
-    rareTerrain: ['water', 'water', 'ore', 'oil_well', 'gas_seep'],
+    rareTerrain: ['water', 'water', 'ore', 'oil_well', 'gas_seep', 'clay_pit'],
     displayName: 'Coast',
   },
   volcanic: {

@@ -28,7 +28,9 @@ export type TerrainKind =
   | 'gas_seep'
   | 'helium_vent'
   // §6.1 T0 mineral raw: limestone (used by Limekiln in §7.5 chemistry chain).
-  | 'limestone';
+  | 'limestone'
+  // §6.1 T0 mineral raw: clay (Task 1.3)
+  | 'clay_pit';
 
 export interface Tile {
   /** Tile grid x. The tile occupies the unit square [x, x+1) × [y, y+1). */
@@ -56,6 +58,7 @@ const TERRAIN_COLOR: Readonly<Record<TerrainKind, number>> = {
   gas_seep: 0x8a9a4a,     // sulfur-green
   helium_vent: 0xc0c8e0,  // pale helium-grey
   limestone: 0xc8c0a8,    // pale calcareous beige
+  clay_pit: 0xa67555,      // earthen red
 };
 
 /**

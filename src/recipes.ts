@@ -66,6 +66,7 @@ export type ResourceId =
   | 'hydrogen'
   // §6.1 T0 mineral raw: limestone (Task 1.2)
   | 'limestone'
+  | 'clay'
   // Byproducts (§6.7)
   | 'oxygen'
   | 'argon'
@@ -184,6 +185,7 @@ export const ALL_RESOURCES: ReadonlyArray<ResourceId> = [
   'hydrogen',
   // §6.1 T0 mineral raw: limestone (Task 1.2)
   'limestone',
+  'clay',
   // Byproducts (§6.7)
   'oxygen',
   'argon',
@@ -288,6 +290,7 @@ export const XP_WEIGHT: Readonly<Record<ResourceId, number>> = {
   hydrogen: 1,
   // §6.1 T0 mineral raw: limestone (Task 1.2)
   limestone: 1,
+  clay: 1,
   // Byproducts (§6.7) — T1 refined weight per spec §9.1.
   oxygen: 3,
   argon: 3,
@@ -815,6 +818,12 @@ export const RECIPES: Partial<Record<RecipeId, Recipe>> = {
     cycleSec: 60, // slightly slower than iron Mine (50s) — limestone is bulk industrial
     inputs: {},
     outputs: { limestone: 1 },
+    category: 'extraction',
+  },
+  clay_pit_extractor: {
+    cycleSec: 60,
+    inputs: {},
+    outputs: { clay: 1 },
     category: 'extraction',
   },
 

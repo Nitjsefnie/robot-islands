@@ -374,6 +374,13 @@ describe('§6.1 T0 raws — limestone', () => {
   });
 });
 
+describe('§6.1 T0 raws — clay', () => {
+  it('clay is in ALL_RESOURCES with xp_weight 1', () => {
+    expect(ALL_RESOURCES).toContain('clay' as ResourceId);
+    expect(XP_WEIGHT.clay).toBe(1);
+  });
+});
+
 describe('nextRotateOutputBoundaryMs', () => {
   const rotatingRecipe = {
     cycleSec: 10,

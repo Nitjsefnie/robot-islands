@@ -112,6 +112,7 @@ const KNOWN_DEF_IDS: ReadonlyArray<BuildingDefId> = [
   'compute_module_fab',
   'drilling_rig',
   'limestone_quarry',
+  'clay_pit_extractor',
   'aetheric_conduit',
   'spacetime_resonator',
   'eldritch_sieve',
@@ -709,6 +710,20 @@ describe('§8.1 limestone_quarry (T1 limestone extractor)', () => {
   it('produces 1 limestone per cycle', () => {
     expect(RECIPES.limestone_quarry).toBeDefined();
     expect(RECIPES.limestone_quarry!.outputs).toEqual({ limestone: 1 });
+  });
+});
+
+describe('§8.1 clay_pit_extractor (T1 clay extractor)', () => {
+  it('ships as a T1 extraction def gated to clay_pit tile', () => {
+    const def = BUILDING_DEFS.clay_pit_extractor;
+    expect(def).toBeDefined();
+    expect(def.tier).toBe(1);
+    expect(def.category).toBe('extraction');
+    expect(def.requiredTile).toEqual(['clay_pit']);
+  });
+  it('produces 1 clay per cycle', () => {
+    expect(RECIPES.clay_pit_extractor).toBeDefined();
+    expect(RECIPES.clay_pit_extractor!.outputs).toEqual({ clay: 1 });
   });
 });
 
