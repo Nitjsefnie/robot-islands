@@ -978,6 +978,19 @@ describe('§6.3 coolant + ceramic_insulator (Task 6.6)', () => {
   });
 });
 
+describe('§7.2 bronze + bronze_alloyer (Task 7.1)', () => {
+  it('bronze is in ALL_RESOURCES with xp_weight 10 (T2 component)', () => {
+    expect(ALL_RESOURCES).toContain('bronze' as ResourceId);
+    expect(XP_WEIGHT.bronze).toBe(10);
+  });
+  it('bronze_alloyer recipe: copper_ingot + tin_ingot → 2 bronze', () => {
+    expect(RECIPES.bronze_alloyer).toBeDefined();
+    expect(RECIPES.bronze_alloyer!.inputs).toEqual({ copper_ingot: 1, tin_ingot: 1 });
+    expect(RECIPES.bronze_alloyer!.outputs).toEqual({ bronze: 2 });
+    expect(RECIPES.bronze_alloyer!.cycleSec).toBe(250);
+  });
+});
+
 describe('nextRotateOutputBoundaryMs', () => {
   const rotatingRecipe = {
     cycleSec: 10,

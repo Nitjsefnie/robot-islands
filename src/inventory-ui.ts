@@ -70,6 +70,8 @@ export const RESOURCE_CATEGORY: Readonly<Record<ResourceId, ResourceCategory>> =
   tin_ingot: 'refined',
   lead_ingot: 'refined',
   solder: 'refined',
+  // Phase 7 — Bronze + Brass (§7.2)
+  bronze: 'refined',
   // Phase 3 — T2-T3 steel alloy chains
   manganese_ore: 'raw',
   manganese_ingot: 'refined',

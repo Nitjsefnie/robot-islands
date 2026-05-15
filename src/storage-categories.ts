@@ -91,6 +91,8 @@ export const RESOURCE_STORAGE_CATEGORY: Readonly<Record<ResourceId, StorageCateg
   tin_ingot: 'dry_goods',
   lead_ingot: 'dry_goods',
   solder: 'components',
+  // Phase 7 — Bronze + Brass (§7.2)
+  bronze: 'components',
   // Phase 3 — T2-T3 steel alloy chains
   manganese_ore: 'dry_goods',
   manganese_ingot: 'dry_goods',

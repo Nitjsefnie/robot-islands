@@ -102,6 +102,8 @@ export type ResourceId =
   | 'tin_ingot'
   | 'lead_ingot'
   | 'solder'
+  // Phase 7 — Bronze + Brass (§7.2)
+  | 'bronze'
   // Byproducts (§6.7)
   | 'oxygen'
   | 'argon'
@@ -287,6 +289,8 @@ export const ALL_RESOURCES: ReadonlyArray<ResourceId> = [
   'tin_ingot',
   'lead_ingot',
   'solder',
+  // Phase 7 — Bronze + Brass (§7.2)
+  'bronze',
   // Byproducts (§6.7)
   'oxygen',
   'argon',
@@ -458,6 +462,8 @@ export const XP_WEIGHT: Readonly<Record<ResourceId, number>> = {
   tin_ingot: 3,
   lead_ingot: 3,
   solder: 10,
+  // Phase 7 — Bronze + Brass (§7.2)
+  bronze: 10,
   // Byproducts (§6.7) — T1 refined weight per spec §9.1.
   oxygen: 3,
   argon: 3,
@@ -1138,6 +1144,13 @@ export const RECIPES: Partial<Record<RecipeId, Recipe>> = {
     cycleSec: 200,
     inputs: { tin_ingot: 1, lead_ingot: 1 },
     outputs: { solder: 2 },
+    category: 'manufacturing',
+  },
+  // Phase 7 — Bronze + Brass (§7.2)
+  bronze_alloyer: {
+    cycleSec: 250,
+    inputs: { copper_ingot: 1, tin_ingot: 1 },
+    outputs: { bronze: 2 },
     category: 'manufacturing',
   },
 

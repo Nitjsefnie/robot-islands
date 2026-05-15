@@ -191,6 +191,8 @@ export type BuildingDefId =
   | 'tin_smelter'
   | 'lead_smelter'
   | 'solder_alloyer'
+  // Phase 7 — Bronze + Brass (§7.2)
+  | 'bronze_alloyer'
   // Phase 3 — T2-T3 steel alloy chains (§6.1 / §6.4 / §7.1)
   | 'manganese_mine'
   | 'manganese_smelter'
@@ -1091,6 +1093,19 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     gates: [{ matchType: 'heat_source', hard: true }],
     placementCost: { stone: 80, iron_ingot: 25, wood: 10 },
     glyph: '♨',
+  },
+  // Phase 7 — Bronze + Brass (§7.2)
+  bronze_alloyer: {
+    id: 'bronze_alloyer',
+    displayName: 'Bronze Alloyer',
+    category: 'manufacturing',
+    tier: 2,
+    footprint: SHAPES.square2,
+    fill: 0xb87333,
+    stroke: 0x5a3a1a,
+    power: { consumes: 80 },
+    placementCost: { stone: 60, iron_ingot: 15, wood: 10 },
+    glyph: '◈',
   },
   // §8.3 T3 manufacturing: Fabricator (3x3). Advanced components — motors,
   // actuators, hydraulic / pneumatic systems. Recipe assignment lands in
