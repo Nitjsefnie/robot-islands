@@ -966,6 +966,19 @@ describe('§6.4/§7.9 magnet via mag_forge (Task 10.5)', () => {
   });
 });
 
+describe('§6.4/§7.9 electric_motor via motor_assembly (Task 10.6)', () => {
+  it('electric_motor is in ALL_RESOURCES with xp_weight 30 (T3 component)', () => {
+    expect(ALL_RESOURCES).toContain('electric_motor' as ResourceId);
+    expect(XP_WEIGHT.electric_motor).toBe(30);
+  });
+  it('motor_assembly recipe: magnet + wire + steel → electric_motor', () => {
+    expect(RECIPES.motor_assembly).toBeDefined();
+    expect(RECIPES.motor_assembly!.inputs).toEqual({ magnet: 1, wire: 4, steel: 1 });
+    expect(RECIPES.motor_assembly!.outputs).toEqual({ electric_motor: 1 });
+    expect(RECIPES.motor_assembly!.cycleSec).toBe(300);
+  });
+});
+
 
 describe('§6.3 glass_panel via glass_panel_press (Task 6.5)', () => {
   it('glass_panel is in ALL_RESOURCES with xp_weight 10', () => {

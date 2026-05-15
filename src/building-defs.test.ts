@@ -220,6 +220,8 @@ const KNOWN_DEF_IDS: ReadonlyArray<BuildingDefId> = [
   'lithium_extractor',
   // Phase 10b — T3 power components (Task 10.5)
   'mag_forge',
+  // Phase 10b — T3 power components (Task 10.6)
+  'motor_assembly',
 
 ];
 
@@ -387,6 +389,21 @@ describe('BUILDING_DEFS catalog', () => {
       expect(RECIPES.mag_forge).toBeDefined();
       expect(RECIPES.mag_forge!.inputs).toEqual({ magnetic_alloy: 1, wire: 2 });
       expect(RECIPES.mag_forge!.outputs).toEqual({ magnet: 1 });
+    });
+  });
+
+  describe('§6.4/§7.9 motor_assembly (T3 electric_motor producer)', () => {
+    it('is T3, 2x2, manufacturing category', () => {
+      const def = BUILDING_DEFS.motor_assembly;
+      expect(def).toBeDefined();
+      expect(def.tier).toBe(3);
+      expect(def.footprint).toEqual(SHAPES.square2);
+      expect(def.category).toBe('manufacturing');
+    });
+    it('produces electric_motor from magnet + wire + steel', () => {
+      expect(RECIPES.motor_assembly).toBeDefined();
+      expect(RECIPES.motor_assembly!.inputs).toEqual({ magnet: 1, wire: 4, steel: 1 });
+      expect(RECIPES.motor_assembly!.outputs).toEqual({ electric_motor: 1 });
     });
   });
 });
