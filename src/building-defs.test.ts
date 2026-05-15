@@ -114,6 +114,7 @@ const KNOWN_DEF_IDS: ReadonlyArray<BuildingDefId> = [
   'limestone_quarry',
   'clay_pit_extractor',
   'sulfur_mine',
+  'phosphate_mine',
   'aetheric_conduit',
   'spacetime_resonator',
   'eldritch_sieve',
@@ -739,6 +740,20 @@ describe('§8.1 sulfur_mine (T1 sulfur extractor)', () => {
   it('produces 1 sulfur per cycle', () => {
     expect(RECIPES.sulfur_mine).toBeDefined();
     expect(RECIPES.sulfur_mine!.outputs).toEqual({ sulfur: 1 });
+  });
+});
+
+describe('§8.1 phosphate_mine (T1 phosphate extractor)', () => {
+  it('ships as a T1 extraction def gated to phosphate_deposit tile', () => {
+    const def = BUILDING_DEFS.phosphate_mine;
+    expect(def).toBeDefined();
+    expect(def.tier).toBe(1);
+    expect(def.category).toBe('extraction');
+    expect(def.requiredTile).toEqual(['phosphate_deposit']);
+  });
+  it('produces 1 phosphate per cycle', () => {
+    expect(RECIPES.phosphate_mine).toBeDefined();
+    expect(RECIPES.phosphate_mine!.outputs).toEqual({ phosphate: 1 });
   });
 });
 

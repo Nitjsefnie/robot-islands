@@ -32,7 +32,9 @@ export type TerrainKind =
   // §6.1 T0 mineral raw: clay (Task 1.3)
   | 'clay_pit'
   // §6.1 T0 mineral raw: sulfur (Task 1.4)
-  | 'sulfur_vein';
+  | 'sulfur_vein'
+  // §6.1 T0 mineral raw: phosphate (Task 1.5)
+  | 'phosphate_deposit';
 
 export interface Tile {
   /** Tile grid x. The tile occupies the unit square [x, x+1) × [y, y+1). */
@@ -62,6 +64,7 @@ const TERRAIN_COLOR: Readonly<Record<TerrainKind, number>> = {
   limestone: 0xc8c0a8,    // pale calcareous beige
   clay_pit: 0xa67555,      // earthen red
   sulfur_vein: 0xd0c020,   // pale sulfur-yellow
+  phosphate_deposit: 0xd5b04a, // mustard-tan
 };
 
 /**

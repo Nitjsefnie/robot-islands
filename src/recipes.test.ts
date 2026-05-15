@@ -388,6 +388,13 @@ describe('§6.1 T0 raws — sulfur', () => {
   });
 });
 
+describe('§6.1 T0 raws — phosphate', () => {
+  it('phosphate is in ALL_RESOURCES with xp_weight 1', () => {
+    expect(ALL_RESOURCES).toContain('phosphate' as ResourceId);
+    expect(XP_WEIGHT.phosphate).toBe(1);
+  });
+});
+
 describe('nextRotateOutputBoundaryMs', () => {
   const rotatingRecipe = {
     cycleSec: 10,
