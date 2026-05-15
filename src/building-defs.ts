@@ -171,6 +171,7 @@ export type BuildingDefId =
   | 'quartz_mine'
   | 'limestone_quarry'
   | 'clay_pit_extractor'
+  | 'sulfur_mine'
   | 'lumber_mill'
   | 'glassworks'
   | 'evaporator'
@@ -1792,6 +1793,19 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     stroke: 0x5a3a2a,
     power: { consumes: 30 },
     requiredTile: ['clay_pit'],
+    placementCost: { stone: 30, wood: 15 },
+    glyph: '⛏',
+  },
+  sulfur_mine: {
+    id: 'sulfur_mine',
+    displayName: 'Sulfur Mine',
+    category: 'extraction',
+    tier: 1,
+    footprint: SHAPES.square2,
+    fill: 0xd0c020, // pale sulfur-yellow
+    stroke: 0x605810,
+    power: { consumes: 30 },
+    requiredTile: ['sulfur_vein'],
     placementCost: { stone: 30, wood: 15 },
     glyph: '⛏',
   },

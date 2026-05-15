@@ -101,7 +101,7 @@ export const BIOME_DEFS: Readonly<Record<Biome, BiomeDef>> = {
     initialMinorRadius: 7,
     powerSource: 'geothermal',
     defaultTerrain: 'stone',
-    rareTerrain: ['magma_vent', 'coal', 'ore', 'gas_seep', 'helium_vent'],
+    rareTerrain: ['magma_vent', 'coal', 'ore', 'gas_seep', 'helium_vent', 'sulfur_vein'],
     displayName: 'Volcanic',
   },
   desert: {
@@ -110,7 +110,7 @@ export const BIOME_DEFS: Readonly<Record<Biome, BiomeDef>> = {
     initialMinorRadius: 12,
     powerSource: 'solar',
     defaultTerrain: 'sand',
-    rareTerrain: ['stone', 'ore', 'oil_well'],
+    rareTerrain: ['stone', 'ore', 'oil_well', 'sulfur_vein'],
     displayName: 'Desert',
   },
   arctic: {
