@@ -1064,6 +1064,29 @@ describe('§6.4/§7.6 optical_glass via optical_glass_kiln (Task 10.11)', () => 
   });
 });
 
+describe('§7.6 glass_fiber + optical_fiber spinners (Task 10.12)', () => {
+  it('glass_fiber is in ALL_RESOURCES with xp_weight 30 (T3 component)', () => {
+    expect(ALL_RESOURCES).toContain('glass_fiber' as ResourceId);
+    expect(XP_WEIGHT.glass_fiber).toBe(30);
+  });
+  it('optical_fiber is in ALL_RESOURCES with xp_weight 30 (T3 component)', () => {
+    expect(ALL_RESOURCES).toContain('optical_fiber' as ResourceId);
+    expect(XP_WEIGHT.optical_fiber).toBe(30);
+  });
+  it('glass_fiber_spinner recipe: glass → glass_fiber', () => {
+    expect(RECIPES.glass_fiber_spinner).toBeDefined();
+    expect(RECIPES.glass_fiber_spinner!.inputs).toEqual({ glass: 2 });
+    expect(RECIPES.glass_fiber_spinner!.outputs).toEqual({ glass_fiber: 3 });
+    expect(RECIPES.glass_fiber_spinner!.cycleSec).toBe(300);
+  });
+  it('optical_fiber_drawer recipe: optical_glass → optical_fiber', () => {
+    expect(RECIPES.optical_fiber_drawer).toBeDefined();
+    expect(RECIPES.optical_fiber_drawer!.inputs).toEqual({ optical_glass: 1 });
+    expect(RECIPES.optical_fiber_drawer!.outputs).toEqual({ optical_fiber: 2 });
+    expect(RECIPES.optical_fiber_drawer!.cycleSec).toBe(400);
+  });
+});
+
 describe('§6.3 glass_panel via glass_panel_press (Task 6.5)', () => {
   it('glass_panel is in ALL_RESOURCES with xp_weight 10', () => {
     expect(ALL_RESOURCES).toContain('glass_panel');

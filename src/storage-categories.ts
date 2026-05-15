@@ -265,4 +265,7 @@ export const RESOURCE_STORAGE_CATEGORY: Readonly<Record<ResourceId, StorageCateg
   fuel_cell: 'components',
   // Phase 10c — T3 glass/ceramics (Task 10.11)
   optical_glass: 'components',
+  // Phase 10c — T3 fiber spinners (Task 10.12)
+  glass_fiber: 'components',
+  optical_fiber: 'components',
 };

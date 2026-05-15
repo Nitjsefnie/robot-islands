@@ -267,7 +267,10 @@ export type ResourceId =
   // Phase 10c — T3 power components (Task 10.10)
   | 'fuel_cell'
   // Phase 10c — T3 glass/ceramics (Task 10.11)
-  | 'optical_glass';
+  | 'optical_glass'
+  // Phase 10c — T3 fiber spinners (Task 10.12)
+  | 'glass_fiber'
+  | 'optical_fiber';
 
 /** All known resources, useful for iterating to initialise inventories. */
 export const ALL_RESOURCES: ReadonlyArray<ResourceId> = [
@@ -462,6 +465,9 @@ export const ALL_RESOURCES: ReadonlyArray<ResourceId> = [
   'fuel_cell',
   // Phase 10c — T3 glass/ceramics (Task 10.11)
   'optical_glass',
+  // Phase 10c — T3 fiber spinners (Task 10.12)
+  'glass_fiber',
+  'optical_fiber',
 ];
 
 /**
@@ -680,6 +686,9 @@ export const XP_WEIGHT: Readonly<Record<ResourceId, number>> = {
   fuel_cell: 30,
   // Phase 10c — T3 glass/ceramics (Task 10.11)
   optical_glass: 30,
+  // Phase 10c — T3 fiber spinners (Task 10.12)
+  glass_fiber: 30,
+  optical_fiber: 30,
 };
 
 /**
@@ -1947,6 +1956,19 @@ export const RECIPES: Partial<Record<RecipeId, Recipe>> = {
     cycleSec: 300,
     inputs: { quartz: 2 },
     outputs: { optical_glass: 1 },
+    category: 'manufacturing',
+  },
+  // Phase 10c — T3 fiber spinners (Task 10.12)
+  glass_fiber_spinner: {
+    cycleSec: 300,
+    inputs: { glass: 2 },
+    outputs: { glass_fiber: 3 },
+    category: 'manufacturing',
+  },
+  optical_fiber_drawer: {
+    cycleSec: 400,
+    inputs: { optical_glass: 1 },
+    outputs: { optical_fiber: 2 },
     category: 'manufacturing',
   },
 };

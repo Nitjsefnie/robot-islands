@@ -234,6 +234,9 @@ const KNOWN_DEF_IDS: ReadonlyArray<BuildingDefId> = [
   'fuel_cell_lab',
   // Phase 10c — T3 glass/ceramics (Task 10.11)
   'optical_glass_kiln',
+  // Phase 10c — T3 fiber spinners (Task 10.12)
+  'glass_fiber_spinner',
+  'optical_fiber_drawer',
 ];
 
 // Helper: build a minimal IslandSpec for the canPlaceOnIsland tests. The
@@ -522,6 +525,40 @@ describe('BUILDING_DEFS catalog', () => {
       expect(RECIPES.optical_glass_kiln).toBeDefined();
       expect(RECIPES.optical_glass_kiln!.inputs).toEqual({ quartz: 2 });
       expect(RECIPES.optical_glass_kiln!.outputs).toEqual({ optical_glass: 1 });
+    });
+  });
+
+  describe('§7.6 glass_fiber_spinner (T3 glass_fiber producer)', () => {
+    it('is T3, 2x2, manufacturing, requires heat', () => {
+      const def = BUILDING_DEFS.glass_fiber_spinner;
+      expect(def).toBeDefined();
+      expect(def.tier).toBe(3);
+      expect(def.footprint).toEqual(SHAPES.square2);
+      expect(def.category).toBe('manufacturing');
+      expect(def.requiresHeat).toBe(true);
+      expect(def.gates).toEqual([{ matchType: 'heat_source', hard: true }]);
+    });
+    it('produces glass_fiber from glass', () => {
+      expect(RECIPES.glass_fiber_spinner).toBeDefined();
+      expect(RECIPES.glass_fiber_spinner!.inputs).toEqual({ glass: 2 });
+      expect(RECIPES.glass_fiber_spinner!.outputs).toEqual({ glass_fiber: 3 });
+    });
+  });
+
+  describe('§7.6 optical_fiber_drawer (T3 optical_fiber producer)', () => {
+    it('is T3, 2x2, manufacturing, requires heat', () => {
+      const def = BUILDING_DEFS.optical_fiber_drawer;
+      expect(def).toBeDefined();
+      expect(def.tier).toBe(3);
+      expect(def.footprint).toEqual(SHAPES.square2);
+      expect(def.category).toBe('manufacturing');
+      expect(def.requiresHeat).toBe(true);
+      expect(def.gates).toEqual([{ matchType: 'heat_source', hard: true }]);
+    });
+    it('produces optical_fiber from optical_glass', () => {
+      expect(RECIPES.optical_fiber_drawer).toBeDefined();
+      expect(RECIPES.optical_fiber_drawer!.inputs).toEqual({ optical_glass: 1 });
+      expect(RECIPES.optical_fiber_drawer!.outputs).toEqual({ optical_fiber: 2 });
     });
   });
 });
