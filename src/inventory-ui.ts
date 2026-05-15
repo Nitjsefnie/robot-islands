@@ -53,6 +53,9 @@ export const RESOURCE_CATEGORY: Readonly<Record<ResourceId, ResourceCategory>> =
   sulfur: 'raw',
   phosphate: 'raw',
   graphite: 'raw',
+  copper_ore: 'raw',
+  tin_ore: 'raw',
+  lead_ore: 'raw',
   // §6.4 T3 mineral raws (for slag reprocessing + nuclear fuel)
   gold_ore: 'raw',
   silver_ore: 'raw',

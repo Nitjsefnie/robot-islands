@@ -402,6 +402,21 @@ describe('§6.1 T0 raws — graphite', () => {
   });
 });
 
+describe('§6.1 T0 raws — copper/tin/lead ores', () => {
+  it('copper_ore is in ALL_RESOURCES with xp_weight 1', () => {
+    expect(ALL_RESOURCES).toContain('copper_ore' as ResourceId);
+    expect(XP_WEIGHT.copper_ore).toBe(1);
+  });
+  it('tin_ore is in ALL_RESOURCES with xp_weight 1', () => {
+    expect(ALL_RESOURCES).toContain('tin_ore' as ResourceId);
+    expect(XP_WEIGHT.tin_ore).toBe(1);
+  });
+  it('lead_ore is in ALL_RESOURCES with xp_weight 1', () => {
+    expect(ALL_RESOURCES).toContain('lead_ore' as ResourceId);
+    expect(XP_WEIGHT.lead_ore).toBe(1);
+  });
+});
+
 describe('nextRotateOutputBoundaryMs', () => {
   const rotatingRecipe = {
     cycleSec: 10,

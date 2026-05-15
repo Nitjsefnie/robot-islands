@@ -116,6 +116,9 @@ const KNOWN_DEF_IDS: ReadonlyArray<BuildingDefId> = [
   'sulfur_mine',
   'phosphate_mine',
   'graphite_mine',
+  'copper_mine',
+  'tin_mine',
+  'lead_mine',
   'aetheric_conduit',
   'spacetime_resonator',
   'eldritch_sieve',
@@ -769,6 +772,33 @@ describe('§8.1 graphite_mine (T1 graphite extractor)', () => {
   it('produces 1 graphite per cycle', () => {
     expect(RECIPES.graphite_mine).toBeDefined();
     expect(RECIPES.graphite_mine!.outputs).toEqual({ graphite: 1 });
+  });
+});
+
+describe('§8.1 copper/tin/lead mines (T1 ore extractors)', () => {
+  it('copper_mine is T1 extraction gated to copper_vein', () => {
+    const def = BUILDING_DEFS.copper_mine;
+    expect(def).toBeDefined();
+    expect(def.tier).toBe(1);
+    expect(def.category).toBe('extraction');
+    expect(def.requiredTile).toEqual(['copper_vein']);
+    expect(RECIPES.copper_mine!.outputs).toEqual({ copper_ore: 1 });
+  });
+  it('tin_mine is T1 extraction gated to tin_vein', () => {
+    const def = BUILDING_DEFS.tin_mine;
+    expect(def).toBeDefined();
+    expect(def.tier).toBe(1);
+    expect(def.category).toBe('extraction');
+    expect(def.requiredTile).toEqual(['tin_vein']);
+    expect(RECIPES.tin_mine!.outputs).toEqual({ tin_ore: 1 });
+  });
+  it('lead_mine is T1 extraction gated to lead_vein', () => {
+    const def = BUILDING_DEFS.lead_mine;
+    expect(def).toBeDefined();
+    expect(def.tier).toBe(1);
+    expect(def.category).toBe('extraction');
+    expect(def.requiredTile).toEqual(['lead_vein']);
+    expect(RECIPES.lead_mine!.outputs).toEqual({ lead_ore: 1 });
   });
 });
 

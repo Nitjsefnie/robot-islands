@@ -83,7 +83,7 @@ export const BIOME_DEFS: Readonly<Record<Biome, BiomeDef>> = {
     // keeps grass as default for buildability (the Logger that clears tree
     // doesn't ship until a later step) and uses tree as a visual accent so
     // the biome reads distinct. Tree/water are weighted 2× in rareTerrain.
-    rareTerrain: ['tree', 'tree', 'stone', 'water', 'clay_pit', 'graphite_vein'],
+    rareTerrain: ['tree', 'tree', 'stone', 'water', 'clay_pit', 'graphite_vein', 'tin_vein'],
     displayName: 'Forest',
   },
   coast: {
@@ -92,7 +92,7 @@ export const BIOME_DEFS: Readonly<Record<Biome, BiomeDef>> = {
     initialMinorRadius: 7,
     powerSource: 'wind',
     defaultTerrain: 'sand',
-    rareTerrain: ['water', 'water', 'ore', 'oil_well', 'gas_seep', 'clay_pit', 'phosphate_deposit', 'graphite_vein'],
+    rareTerrain: ['water', 'water', 'ore', 'oil_well', 'gas_seep', 'clay_pit', 'phosphate_deposit', 'graphite_vein', 'tin_vein'],
     displayName: 'Coast',
   },
   volcanic: {
@@ -101,7 +101,7 @@ export const BIOME_DEFS: Readonly<Record<Biome, BiomeDef>> = {
     initialMinorRadius: 7,
     powerSource: 'geothermal',
     defaultTerrain: 'stone',
-    rareTerrain: ['magma_vent', 'coal', 'ore', 'gas_seep', 'helium_vent', 'sulfur_vein'],
+    rareTerrain: ['magma_vent', 'coal', 'ore', 'gas_seep', 'helium_vent', 'sulfur_vein', 'copper_vein', 'lead_vein'],
     displayName: 'Volcanic',
   },
   desert: {
@@ -110,7 +110,7 @@ export const BIOME_DEFS: Readonly<Record<Biome, BiomeDef>> = {
     initialMinorRadius: 12,
     powerSource: 'solar',
     defaultTerrain: 'sand',
-    rareTerrain: ['stone', 'ore', 'oil_well', 'sulfur_vein', 'phosphate_deposit', 'graphite_vein'],
+    rareTerrain: ['stone', 'ore', 'oil_well', 'sulfur_vein', 'phosphate_deposit', 'graphite_vein', 'copper_vein'],
     displayName: 'Desert',
   },
   arctic: {

@@ -174,6 +174,9 @@ export type BuildingDefId =
   | 'sulfur_mine'
   | 'phosphate_mine'
   | 'graphite_mine'
+  | 'copper_mine'
+  | 'tin_mine'
+  | 'lead_mine'
   | 'lumber_mill'
   | 'glassworks'
   | 'evaporator'
@@ -1834,6 +1837,45 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     stroke: 0x101012,
     power: { consumes: 30 },
     requiredTile: ['graphite_vein'],
+    placementCost: { stone: 30, wood: 15 },
+    glyph: '⛏',
+  },
+  copper_mine: {
+    id: 'copper_mine',
+    displayName: 'Copper Mine',
+    category: 'extraction',
+    tier: 1,
+    footprint: SHAPES.square2,
+    fill: 0xb87333, // copper oxide orange
+    stroke: 0x5a3018,
+    power: { consumes: 30 },
+    requiredTile: ['copper_vein'],
+    placementCost: { stone: 30, wood: 15 },
+    glyph: '⛏',
+  },
+  tin_mine: {
+    id: 'tin_mine',
+    displayName: 'Tin Mine',
+    category: 'extraction',
+    tier: 1,
+    footprint: SHAPES.square2,
+    fill: 0xc0c4cb, // pale tin-grey
+    stroke: 0x505458,
+    power: { consumes: 30 },
+    requiredTile: ['tin_vein'],
+    placementCost: { stone: 30, wood: 15 },
+    glyph: '⛏',
+  },
+  lead_mine: {
+    id: 'lead_mine',
+    displayName: 'Lead Mine',
+    category: 'extraction',
+    tier: 1,
+    footprint: SHAPES.square2,
+    fill: 0x4a4a52, // dark lead-grey
+    stroke: 0x202024,
+    power: { consumes: 30 },
+    requiredTile: ['lead_vein'],
     placementCost: { stone: 30, wood: 15 },
     glyph: '⛏',
   },

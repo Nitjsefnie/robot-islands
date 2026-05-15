@@ -36,7 +36,11 @@ export type TerrainKind =
   // §6.1 T0 mineral raw: phosphate (Task 1.5)
   | 'phosphate_deposit'
   // §6.1 T0 mineral raw: graphite (Task 1.6)
-  | 'graphite_vein';
+  | 'graphite_vein'
+  // §6.1 T0 mineral raws: copper/tin/lead (Task 1.7)
+  | 'copper_vein'
+  | 'tin_vein'
+  | 'lead_vein';
 
 export interface Tile {
   /** Tile grid x. The tile occupies the unit square [x, x+1) × [y, y+1). */
@@ -68,6 +72,9 @@ const TERRAIN_COLOR: Readonly<Record<TerrainKind, number>> = {
   sulfur_vein: 0xd0c020,   // pale sulfur-yellow
   phosphate_deposit: 0xd5b04a, // mustard-tan
   graphite_vein: 0x2a2a2e,    // anthracite gray
+  copper_vein: 0xb87333,       // copper oxide orange
+  tin_vein: 0xc0c4cb,          // pale tin-grey
+  lead_vein: 0x4a4a52,         // dark lead-grey
 };
 
 /**
