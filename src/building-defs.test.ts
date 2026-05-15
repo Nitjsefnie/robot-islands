@@ -196,6 +196,8 @@ const KNOWN_DEF_IDS: ReadonlyArray<BuildingDefId> = [
   'sheet_metal_mill',
   'pipe_mill',
   'beam_mill',
+  'bearing_press',
+  'spring_winder',
 ];
 
 // Helper: build a minimal IslandSpec for the canPlaceOnIsland tests. The
@@ -1586,6 +1588,25 @@ describe('§8.1 T2 extraction buildings', () => {
       expect(def.footprint.tiles.length).toBe(4);
       expect(def.category).toBe('manufacturing');
       expect(def.power?.consumes).toBe(100);
+    });
+  });
+
+  describe('§6.3 T2 bearing_press + spring_winder (Task 6.2)', () => {
+    it('bearing_press is T2, 2x2, manufacturing, consumes 80W', () => {
+      const def = BUILDING_DEFS.bearing_press;
+      expect(def).toBeDefined();
+      expect(def.tier).toBe(2);
+      expect(def.footprint.tiles.length).toBe(4);
+      expect(def.category).toBe('manufacturing');
+      expect(def.power?.consumes).toBe(80);
+    });
+    it('spring_winder is T2, 2x2, manufacturing, consumes 60W', () => {
+      const def = BUILDING_DEFS.spring_winder;
+      expect(def).toBeDefined();
+      expect(def.tier).toBe(2);
+      expect(def.footprint.tiles.length).toBe(4);
+      expect(def.category).toBe('manufacturing');
+      expect(def.power?.consumes).toBe(60);
     });
   });
 

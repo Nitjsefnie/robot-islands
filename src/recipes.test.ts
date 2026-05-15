@@ -889,6 +889,27 @@ describe('§6.3 T2 rolling outputs — sheet_metal + pipe + steel_beam (Task 6.1
   });
 });
 
+describe('§6.3 T2 mechanical fasteners — bearing + spring (Task 6.2)', () => {
+  it('bearing and spring are in ALL_RESOURCES with xp_weight 10', () => {
+    expect(ALL_RESOURCES).toContain('bearing');
+    expect(ALL_RESOURCES).toContain('spring');
+    expect(XP_WEIGHT.bearing).toBe(10);
+    expect(XP_WEIGHT.spring).toBe(10);
+  });
+  it('bearing_press recipe: steel + lubricant → bearing', () => {
+    expect(RECIPES.bearing_press).toBeDefined();
+    expect(RECIPES.bearing_press!.inputs).toEqual({ steel: 1, lubricant: 1 });
+    expect(RECIPES.bearing_press!.outputs).toEqual({ bearing: 2 });
+    expect(RECIPES.bearing_press!.cycleSec).toBe(200);
+  });
+  it('spring_winder recipe: steel → spring', () => {
+    expect(RECIPES.spring_winder).toBeDefined();
+    expect(RECIPES.spring_winder!.inputs).toEqual({ steel: 1 });
+    expect(RECIPES.spring_winder!.outputs).toEqual({ spring: 3 });
+    expect(RECIPES.spring_winder!.cycleSec).toBe(200);
+  });
+});
+
 describe('nextRotateOutputBoundaryMs', () => {
   const rotatingRecipe = {
     cycleSec: 10,

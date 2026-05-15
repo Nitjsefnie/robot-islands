@@ -230,6 +230,8 @@ export type BuildingDefId =
   | 'sheet_metal_mill'
   | 'pipe_mill'
   | 'beam_mill'
+  | 'bearing_press'
+  | 'spring_winder'
   | 'silicon_crusher'
   | 'air_separator'
   | 'cryo_air_separator'
@@ -993,6 +995,31 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     power: { consumes: 100 },
     placementCost: { stone: 80, iron_ingot: 25, wood: 10 },
     glyph: '▬',
+  },
+  // Phase 6 — T2 mechanical fasteners (§6.3)
+  bearing_press: {
+    id: 'bearing_press',
+    displayName: 'Bearing Press',
+    category: 'manufacturing',
+    tier: 2,
+    footprint: SHAPES.square2,
+    fill: 0x8a9098,
+    stroke: 0x3a4048,
+    power: { consumes: 80 },
+    placementCost: { stone: 80, iron_ingot: 25, wood: 10 },
+    glyph: '◉',
+  },
+  spring_winder: {
+    id: 'spring_winder',
+    displayName: 'Spring Winder',
+    category: 'manufacturing',
+    tier: 2,
+    footprint: SHAPES.square2,
+    fill: 0xa0a6a0,
+    stroke: 0x404640,
+    power: { consumes: 60 },
+    placementCost: { stone: 80, iron_ingot: 25, wood: 10 },
+    glyph: '⌇',
   },
   // §8.3 T3 manufacturing: Fabricator (3x3). Advanced components — motors,
   // actuators, hydraulic / pneumatic systems. Recipe assignment lands in

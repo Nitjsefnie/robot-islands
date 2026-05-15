@@ -140,6 +140,9 @@ export type ResourceId =
   | 'sheet_metal'
   | 'pipe'
   | 'steel_beam'
+  // Phase 6 — T2 mechanical fasteners (§6.3)
+  | 'bearing'
+  | 'spring'
   // Phase 5 — T2 chemistry chain (§7.5)
   | 'sulfuric_acid'
   | 'hydrochloric_acid'
@@ -308,6 +311,9 @@ export const ALL_RESOURCES: ReadonlyArray<ResourceId> = [
   'sheet_metal',
   'pipe',
   'steel_beam',
+  // Phase 6 — T2 mechanical fasteners (§6.3)
+  'bearing',
+  'spring',
   // Phase 5 — T2 chemistry chain (§7.5)
   'sulfuric_acid',
   'hydrochloric_acid',
@@ -471,6 +477,9 @@ export const XP_WEIGHT: Readonly<Record<ResourceId, number>> = {
   sheet_metal: 10,
   pipe: 10,
   steel_beam: 10,
+  // Phase 6 — T2 mechanical fasteners (§6.3)
+  bearing: 10,
+  spring: 10,
   // Phase 5 — T2 chemistry chain (§7.5)
   sulfuric_acid: 10,
   hydrochloric_acid: 10,
@@ -1597,6 +1606,19 @@ export const RECIPES: Partial<Record<RecipeId, Recipe>> = {
     cycleSec: 200,
     inputs: { steel: 1 },
     outputs: { steel_beam: 2 },
+    category: 'manufacturing',
+  },
+  // Phase 6 — T2 mechanical fasteners (§6.3)
+  bearing_press: {
+    cycleSec: 200,
+    inputs: { steel: 1, lubricant: 1 },
+    outputs: { bearing: 2 },
+    category: 'manufacturing',
+  },
+  spring_winder: {
+    cycleSec: 200,
+    inputs: { steel: 1 },
+    outputs: { spring: 3 },
     category: 'manufacturing',
   },
 };

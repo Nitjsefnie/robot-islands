@@ -143,6 +143,9 @@ export const RESOURCE_CATEGORY: Readonly<Record<ResourceId, ResourceCategory>> =
   sheet_metal: 'components',
   pipe: 'components',
   steel_beam: 'components',
+  // Phase 6 — T2 mechanical fasteners (§6.3)
+  bearing: 'components',
+  spring: 'components',
   // Phase 5 — T2 chemistry chain (§7.5)
   sulfuric_acid: 'liquid',
   hydrochloric_acid: 'liquid',
