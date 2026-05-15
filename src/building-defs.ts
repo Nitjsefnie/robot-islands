@@ -194,6 +194,8 @@ export type BuildingDefId =
   // Phase 7 — Bronze + Brass (§7.2)
   | 'bronze_alloyer'
   | 'brass_alloyer'
+  // Phase 8 — Aluminum chain (§7.3)
+  | 'alumina_refinery'
   // Phase 3 — T2-T3 steel alloy chains (§6.1 / §6.4 / §7.1)
   | 'manganese_mine'
   | 'manganese_smelter'
@@ -1119,6 +1121,19 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     power: { consumes: 80 },
     placementCost: { stone: 60, iron_ingot: 15, wood: 10 },
     glyph: '◈',
+  },
+  // Phase 8 — Aluminum chain (§7.3)
+  alumina_refinery: {
+    id: 'alumina_refinery',
+    displayName: 'Alumina Refinery',
+    category: 'chemistry',
+    tier: 2,
+    footprint: SHAPES.square2,
+    fill: 0xd0a060,
+    stroke: 0x605030,
+    power: { consumes: 150 },
+    placementCost: { stone: 100, iron_ingot: 30, wood: 15 },
+    glyph: '△',
   },
   // §8.3 T3 manufacturing: Fabricator (3x3). Advanced components — motors,
   // actuators, hydraulic / pneumatic systems. Recipe assignment lands in

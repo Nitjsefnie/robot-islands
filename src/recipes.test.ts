@@ -1004,6 +1004,19 @@ describe('§7.2 brass + brass_alloyer (Task 7.2)', () => {
   });
 });
 
+describe('§7.3 alumina + alumina_refinery (Task 8.1)', () => {
+  it('alumina is in ALL_RESOURCES with xp_weight 10 (T2 component)', () => {
+    expect(ALL_RESOURCES).toContain('alumina' as ResourceId);
+    expect(XP_WEIGHT.alumina).toBe(10);
+  });
+  it('alumina_refinery recipe: bauxite + sodium_hydroxide → alumina', () => {
+    expect(RECIPES.alumina_refinery).toBeDefined();
+    expect(RECIPES.alumina_refinery!.inputs).toEqual({ bauxite: 1, sodium_hydroxide: 1 });
+    expect(RECIPES.alumina_refinery!.outputs).toEqual({ alumina: 1 });
+    expect(RECIPES.alumina_refinery!.cycleSec).toBe(300);
+  });
+});
+
 describe('nextRotateOutputBoundaryMs', () => {
   const rotatingRecipe = {
     cycleSec: 10,

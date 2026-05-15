@@ -1333,6 +1333,22 @@ describe('§7.2 brass_alloyer (Task 7.2)', () => {
   });
 });
 
+describe('§7.3 alumina_refinery (Task 8.1)', () => {
+  it('is T2, 2x2, chemistry category', () => {
+    const def = BUILDING_DEFS.alumina_refinery;
+    expect(def).toBeDefined();
+    expect(def.tier).toBe(2);
+    expect(def.footprint).toEqual(SHAPES.square2);
+    expect(def.category).toBe('chemistry');
+  });
+  it('produces alumina from bauxite + sodium_hydroxide', () => {
+    expect(RECIPES.alumina_refinery).toBeDefined();
+    expect(RECIPES.alumina_refinery!.inputs).toEqual({ bauxite: 1, sodium_hydroxide: 1 });
+    expect(RECIPES.alumina_refinery!.outputs).toEqual({ alumina: 1 });
+    expect(RECIPES.alumina_refinery!.cycleSec).toBe(300);
+  });
+});
+
 describe('§7.5 sulfuric_acid_plant (Task 5.1)', () => {
   it('is T2, 2x2, chemistry category', () => {
     const def = BUILDING_DEFS.sulfuric_acid_plant;
