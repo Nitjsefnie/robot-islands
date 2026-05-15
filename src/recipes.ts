@@ -263,7 +263,9 @@ export type ResourceId =
   | 'hydraulic_actuator'
   | 'pneumatic_actuator'
   // Phase 10c — T3 power components (Task 10.9)
-  | 'solar_cell';
+  | 'solar_cell'
+  // Phase 10c — T3 power components (Task 10.10)
+  | 'fuel_cell';
 
 /** All known resources, useful for iterating to initialise inventories. */
 export const ALL_RESOURCES: ReadonlyArray<ResourceId> = [
@@ -454,6 +456,8 @@ export const ALL_RESOURCES: ReadonlyArray<ResourceId> = [
   'pneumatic_actuator',
   // Phase 10c — T3 power components (Task 10.9)
   'solar_cell',
+  // Phase 10c — T3 power components (Task 10.10)
+  'fuel_cell',
 ];
 
 /**
@@ -668,6 +672,8 @@ export const XP_WEIGHT: Readonly<Record<ResourceId, number>> = {
   pneumatic_actuator: 30,
   // Phase 10c — T3 power components (Task 10.9)
   solar_cell: 30,
+  // Phase 10c — T3 power components (Task 10.10)
+  fuel_cell: 30,
 };
 
 /**
@@ -1922,6 +1928,13 @@ export const RECIPES: Partial<Record<RecipeId, Recipe>> = {
     inputs: { silicon_wafer: 1, glass: 2, aluminum: 1 },
     outputs: { solar_cell: 1 },
     category: 'electronics',
+  },
+  // Phase 10c — T3 power components (Task 10.10)
+  fuel_cell_lab: {
+    cycleSec: 400,
+    inputs: { hydrogen: 2, rare_earth: 1, flexible_plastic: 1 },
+    outputs: { fuel_cell: 1 },
+    category: 'manufacturing',
   },
 };
 

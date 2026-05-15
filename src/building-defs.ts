@@ -284,6 +284,8 @@ export type BuildingDefId =
   | 'pneumatic_assembly'
   // Phase 10c — T3 power components (Task 10.9)
   | 'solar_cell_lab'
+  // Phase 10c — T3 power components (Task 10.10)
+  | 'fuel_cell_lab'
   // §5.2 / §8.6 Heat Sources. The economy reads `def.heatSource` to identify
   // sources during heat-adjacency resolution. Each free source costs no fuel
   // when serving consumers; coal_furnace burns `coalPerCycle × consumers` per
@@ -3105,6 +3107,19 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     power: { consumes: 200 },
     placementCost: { steel: 70, microchip: 4 },
     glyph: '◈',
+  },
+  // Phase 10c — T3 power components (Task 10.10)
+  fuel_cell_lab: {
+    id: 'fuel_cell_lab',
+    displayName: 'Fuel Cell Lab',
+    category: 'manufacturing',
+    tier: 3,
+    footprint: SHAPES.square2,
+    fill: 0x60a080,
+    stroke: 0x203828,
+    power: { consumes: 200 },
+    placementCost: { steel: 70, microchip: 4 },
+    glyph: '⚡',
   },
 
   // T5 raw extractors (§8.10). Power draws are placeholder "60-100 kW"

@@ -230,6 +230,8 @@ const KNOWN_DEF_IDS: ReadonlyArray<BuildingDefId> = [
   'pneumatic_assembly',
   // Phase 10c — T3 power components (Task 10.9)
   'solar_cell_lab',
+  // Phase 10c — T3 power components (Task 10.10)
+  'fuel_cell_lab',
 ];
 
 // Helper: build a minimal IslandSpec for the canPlaceOnIsland tests. The
@@ -486,6 +488,21 @@ describe('BUILDING_DEFS catalog', () => {
       expect(RECIPES.solar_cell_lab).toBeDefined();
       expect(RECIPES.solar_cell_lab!.inputs).toEqual({ silicon_wafer: 1, glass: 2, aluminum: 1 });
       expect(RECIPES.solar_cell_lab!.outputs).toEqual({ solar_cell: 1 });
+    });
+  });
+
+  describe('§7.9 fuel_cell_lab (T3 fuel_cell producer)', () => {
+    it('is T3, 2x2, manufacturing category', () => {
+      const def = BUILDING_DEFS.fuel_cell_lab;
+      expect(def).toBeDefined();
+      expect(def.tier).toBe(3);
+      expect(def.footprint).toEqual(SHAPES.square2);
+      expect(def.category).toBe('manufacturing');
+    });
+    it('produces fuel_cell from hydrogen + rare_earth + flexible_plastic', () => {
+      expect(RECIPES.fuel_cell_lab).toBeDefined();
+      expect(RECIPES.fuel_cell_lab!.inputs).toEqual({ hydrogen: 2, rare_earth: 1, flexible_plastic: 1 });
+      expect(RECIPES.fuel_cell_lab!.outputs).toEqual({ fuel_cell: 1 });
     });
   });
 });
