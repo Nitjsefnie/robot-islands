@@ -142,6 +142,7 @@ export type ResourceId =
   | 'sodium_hydroxide'
   // Phase 5 — T3 chemistry chain (§7.5)
   | 'phosphor'
+  | 'liquid_nitrogen'
   // Step-18 T3 chemistry/electronics (§7.4 / §7.5).
   | 'silicon'
   | 'nitrogen'
@@ -305,6 +306,7 @@ export const ALL_RESOURCES: ReadonlyArray<ResourceId> = [
   'sodium_hydroxide',
   // Phase 5 — T3 chemistry chain (§7.5)
   'phosphor',
+  'liquid_nitrogen',
   // Step-18 T3 chemistry / electronics.
   'silicon',
   'nitrogen',
@@ -463,6 +465,7 @@ export const XP_WEIGHT: Readonly<Record<ResourceId, number>> = {
   sodium_hydroxide: 10,
   // Phase 5 — T3 chemistry chain (§7.5)
   phosphor: 30,
+  liquid_nitrogen: 30,
   // Step-18 T3 chemistry / electronics (§9.1 tier-3 weight = 30).
   silicon: 30,
   nitrogen: 30,
@@ -1296,6 +1299,12 @@ export const RECIPES: Partial<Record<RecipeId, Recipe>> = {
     cycleSec: 600,
     inputs: { phosphate: 1, sulfuric_acid: 1 },
     outputs: { phosphor: 1 },
+    category: 'chemistry',
+  },
+  cryo_air_separator: {
+    cycleSec: 400,
+    inputs: { nitrogen: 1 },
+    outputs: { liquid_nitrogen: 1 },
     category: 'chemistry',
   },
   chlor_alkali_plant: {

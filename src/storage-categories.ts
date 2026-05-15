@@ -151,6 +151,7 @@ export const RESOURCE_STORAGE_CATEGORY: Readonly<Record<ResourceId, StorageCateg
   sodium_hydroxide: 'liquid_gas',
   // Phase 5 — T3 chemistry chain (§7.5)
   phosphor: 'rare',
+  liquid_nitrogen: 'temp_sensitive',
 
   // T2 components.
   wire: 'components',

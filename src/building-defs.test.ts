@@ -110,6 +110,7 @@ const KNOWN_DEF_IDS: ReadonlyArray<BuildingDefId> = [
   'metal_rolling_mill',
   'silicon_crusher',
   'air_separator',
+  'cryo_air_separator',
   'cryo_lab',
   'cryo_compressor',
   'kerosene_refinery',
@@ -1299,6 +1300,19 @@ describe('§7.5 sulfuric_acid_plant (Task 5.1)', () => {
   });
   it('has power consumption 120W', () => {
     expect(BUILDING_DEFS.sulfuric_acid_plant.power?.consumes).toBe(120);
+  });
+});
+
+describe('§7.5 cryo_air_separator (Task 5.4)', () => {
+  it('is T3, 3x3, chemistry category', () => {
+    const def = BUILDING_DEFS.cryo_air_separator;
+    expect(def).toBeDefined();
+    expect(def.tier).toBe(3);
+    expect(def.footprint.tiles.length).toBe(9); // 3x3
+    expect(def.category).toBe('chemistry');
+  });
+  it('has power consumption 400W', () => {
+    expect(BUILDING_DEFS.cryo_air_separator.power?.consumes).toBe(400);
   });
 });
 

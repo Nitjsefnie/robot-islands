@@ -145,6 +145,7 @@ export const RESOURCE_CATEGORY: Readonly<Record<ResourceId, ResourceCategory>> =
   sodium_hydroxide: 'liquid',
   // Phase 5 — T3 chemistry chain (§7.5)
   phosphor: 'rare',
+  liquid_nitrogen: 'liquid',
   // T3 refined intermediate
   silicon: 'refined',
   // T4/T5 raws + components — Rare bucket

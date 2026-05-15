@@ -803,6 +803,24 @@ describe('§7.5 sodium_hydroxide as real chlor-alkali co-output (Task 5.2)', () 
   });
 });
 
+describe('§7.5 liquid_nitrogen via cryo_air_separator (Task 5.4)', () => {
+  it('liquid_nitrogen is in ALL_RESOURCES with xp_weight 30 (T3 temp_sensitive)', () => {
+    expect(ALL_RESOURCES).toContain('liquid_nitrogen' as ResourceId);
+    expect(XP_WEIGHT.liquid_nitrogen).toBe(30);
+  });
+  it('cryo_air_separator recipe: nitrogen → liquid_nitrogen', () => {
+    expect(RECIPES.cryo_air_separator).toBeDefined();
+    expect(RECIPES.cryo_air_separator!.inputs).toEqual({ nitrogen: 1 });
+    expect(RECIPES.cryo_air_separator!.outputs).toEqual({ liquid_nitrogen: 1 });
+    expect(RECIPES.cryo_air_separator!.cycleSec).toBe(400);
+    expect(RECIPES.cryo_air_separator!.category).toBe('chemistry');
+  });
+  it('air_separator recipe is unchanged (still outputs nitrogen + oxygen + argon)', () => {
+    expect(RECIPES.air_separator).toBeDefined();
+    expect(RECIPES.air_separator!.outputs).toEqual({ nitrogen: 1, oxygen: 1, argon: 1 });
+  });
+});
+
 describe('§7.5 phosphor via phosphor_plant (Task 5.3)', () => {
   it('phosphor is in ALL_RESOURCES with xp_weight 30 (T3 rare)', () => {
     expect(ALL_RESOURCES).toContain('phosphor' as ResourceId);

@@ -229,6 +229,7 @@ export type BuildingDefId =
   | 'metal_rolling_mill'
   | 'silicon_crusher'
   | 'air_separator'
+  | 'cryo_air_separator'
   | 'cryo_lab'
   | 'cryo_compressor'
   | 'kerosene_refinery'
@@ -2581,6 +2582,21 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     power: { consumes: 300 },
     // §14 placeholder — tune in Appendix A.
     placementCost: { steel: 150, microchip: 60, stone: 30 },
+    glyph: '❄',
+  },
+  // Phase 5 — T3 cryo air separator (§7.5). Distinct from the existing
+  // air_separator which produces gaseous nitrogen; this building liquefies
+  // nitrogen for downstream cryogenic recipes.
+  cryo_air_separator: {
+    id: 'cryo_air_separator',
+    displayName: 'Cryo Air Separator',
+    category: 'chemistry',
+    tier: 3,
+    footprint: SHAPES.square3,
+    fill: 0x80c0d0, // cryo liquid cyan
+    stroke: 0x204050,
+    power: { consumes: 400 },
+    placementCost: { stone: 150, iron_ingot: 60, microchip: 5 },
     glyph: '❄',
   },
   cryo_lab: {
