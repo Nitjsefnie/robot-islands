@@ -124,6 +124,9 @@ const KNOWN_DEF_IDS: ReadonlyArray<BuildingDefId> = [
   'manganese_mine',
   'manganese_smelter',
   'carbon_steel_mill',
+  'zinc_mine',
+  'zinc_smelter',
+  'galvanizing_bath',
   // Phase 2 — T1 refined chains (§6.2 / §7.5)
   'limekiln',
   'lime_slaker',
@@ -1018,6 +1021,51 @@ describe('§7.1 carbon_steel_mill (T2 carbon steel producer)', () => {
     expect(RECIPES.carbon_steel_mill).toBeDefined();
     expect(RECIPES.carbon_steel_mill!.inputs).toEqual({ steel: 1, manganese_ingot: 1 });
     expect(RECIPES.carbon_steel_mill!.outputs).toEqual({ carbon_steel: 1 });
+  });
+});
+
+describe('§7.1 zinc_mine (T1 zinc extractor)', () => {
+  it('is T1 extraction gated to zinc_vein tile', () => {
+    const def = BUILDING_DEFS.zinc_mine;
+    expect(def).toBeDefined();
+    expect(def.tier).toBe(1);
+    expect(def.category).toBe('extraction');
+    expect(def.requiredTile).toEqual(['zinc_vein']);
+  });
+  it('produces 1 zinc_ore per cycle', () => {
+    expect(RECIPES.zinc_mine).toBeDefined();
+    expect(RECIPES.zinc_mine!.outputs).toEqual({ zinc_ore: 1 });
+  });
+});
+
+describe('§7.1 zinc_smelter (T1 zinc ingot smelter)', () => {
+  it('is T1, 2x2, smelting, no heat requirement', () => {
+    const def = BUILDING_DEFS.zinc_smelter;
+    expect(def).toBeDefined();
+    expect(def.tier).toBe(1);
+    expect(def.footprint).toEqual(SHAPES.square2);
+    expect(def.category).toBe('smelting');
+    expect(def.requiresHeat).toBeUndefined();
+  });
+  it('produces zinc_ingot from zinc_ore + coal', () => {
+    expect(RECIPES.zinc_smelter).toBeDefined();
+    expect(RECIPES.zinc_smelter!.inputs).toEqual({ zinc_ore: 1, coal: 1 });
+    expect(RECIPES.zinc_smelter!.outputs).toEqual({ zinc_ingot: 1 });
+  });
+});
+
+describe('§7.1 galvanizing_bath (T2 galvanized steel producer)', () => {
+  it('is T2, 3x3, manufacturing category', () => {
+    const def = BUILDING_DEFS.galvanizing_bath;
+    expect(def).toBeDefined();
+    expect(def.tier).toBe(2);
+    expect(def.footprint.tiles.length).toBe(9); // 3x3
+    expect(def.category).toBe('manufacturing');
+  });
+  it('produces galvanized_steel from steel + zinc_ingot', () => {
+    expect(RECIPES.galvanizing_bath).toBeDefined();
+    expect(RECIPES.galvanizing_bath!.inputs).toEqual({ steel: 1, zinc_ingot: 1 });
+    expect(RECIPES.galvanizing_bath!.outputs).toEqual({ galvanized_steel: 1 });
   });
 });
 

@@ -195,6 +195,9 @@ export type BuildingDefId =
   | 'manganese_mine'
   | 'manganese_smelter'
   | 'carbon_steel_mill'
+  | 'zinc_mine'
+  | 'zinc_smelter'
+  | 'galvanizing_bath'
   | 'lumber_mill'
   | 'glassworks'
   | 'evaporator'
@@ -2101,6 +2104,45 @@ export const BUILDING_DEFS: Readonly<Record<BuildingDefId, BuildingDef>> = {
     footprint: SHAPES.square3,
     fill: 0x9a3030,
     stroke: 0x3a1010,
+    power: { consumes: 150 },
+    placementCost: { stone: 150, iron_ingot: 50, wood: 20 },
+    glyph: '◈',
+  },
+
+  // Task 3.2: Galvanized steel — zinc_ore + zinc_ingot + galvanizing_bath
+  zinc_mine: {
+    id: 'zinc_mine',
+    displayName: 'Zinc Mine',
+    category: 'extraction',
+    tier: 1,
+    footprint: SHAPES.square2,
+    fill: 0x8c93a0,
+    stroke: 0x3a4048,
+    power: { consumes: 40 },
+    requiredTile: ['zinc_vein'],
+    placementCost: { stone: 30, wood: 15 },
+    glyph: '⛏',
+  },
+  zinc_smelter: {
+    id: 'zinc_smelter',
+    displayName: 'Zinc Smelter',
+    category: 'smelting',
+    tier: 1,
+    footprint: SHAPES.square2,
+    fill: 0x8c93a0,
+    stroke: 0x3a4048,
+    power: { consumes: 50 },
+    placementCost: { stone: 30, iron_ingot: 10, wood: 10 },
+    glyph: '△',
+  },
+  galvanizing_bath: {
+    id: 'galvanizing_bath',
+    displayName: 'Galvanizing Bath',
+    category: 'manufacturing',
+    tier: 2,
+    footprint: SHAPES.square3,
+    fill: 0x8c93a0,
+    stroke: 0x3a4048,
     power: { consumes: 150 },
     placementCost: { stone: 150, iron_ingot: 50, wood: 20 },
     glyph: '◈',

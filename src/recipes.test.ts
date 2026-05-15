@@ -598,6 +598,39 @@ describe('§6.1/§7.1 carbon_steel chain (Task 3.1)', () => {
   });
 });
 
+describe('§6.1/§7.1 galvanized_steel chain (Task 3.2)', () => {
+  it('zinc_ore is in ALL_RESOURCES with xp_weight 1 (T0 raw)', () => {
+    expect(ALL_RESOURCES).toContain('zinc_ore' as ResourceId);
+    expect(XP_WEIGHT.zinc_ore).toBe(1);
+  });
+  it('zinc_ingot is in ALL_RESOURCES with xp_weight 3 (T1 refined)', () => {
+    expect(ALL_RESOURCES).toContain('zinc_ingot' as ResourceId);
+    expect(XP_WEIGHT.zinc_ingot).toBe(3);
+  });
+  it('galvanized_steel is in ALL_RESOURCES with xp_weight 10 (T2 component)', () => {
+    expect(ALL_RESOURCES).toContain('galvanized_steel' as ResourceId);
+    expect(XP_WEIGHT.galvanized_steel).toBe(10);
+  });
+  it('zinc_mine recipe: empty inputs → zinc_ore', () => {
+    expect(RECIPES.zinc_mine).toBeDefined();
+    expect(RECIPES.zinc_mine!.inputs).toEqual({});
+    expect(RECIPES.zinc_mine!.outputs).toEqual({ zinc_ore: 1 });
+    expect(RECIPES.zinc_mine!.cycleSec).toBe(60);
+  });
+  it('zinc_smelter recipe: zinc_ore + coal → zinc_ingot', () => {
+    expect(RECIPES.zinc_smelter).toBeDefined();
+    expect(RECIPES.zinc_smelter!.inputs).toEqual({ zinc_ore: 1, coal: 1 });
+    expect(RECIPES.zinc_smelter!.outputs).toEqual({ zinc_ingot: 1 });
+    expect(RECIPES.zinc_smelter!.cycleSec).toBe(80);
+  });
+  it('galvanizing_bath recipe: steel + zinc_ingot → galvanized_steel', () => {
+    expect(RECIPES.galvanizing_bath).toBeDefined();
+    expect(RECIPES.galvanizing_bath!.inputs).toEqual({ steel: 1, zinc_ingot: 1 });
+    expect(RECIPES.galvanizing_bath!.outputs).toEqual({ galvanized_steel: 1 });
+    expect(RECIPES.galvanizing_bath!.cycleSec).toBe(250);
+  });
+});
+
 describe('nextRotateOutputBoundaryMs', () => {
   const rotatingRecipe = {
     cycleSec: 10,
