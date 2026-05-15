@@ -1,10 +1,10 @@
 // Artificial-island Construction modal — DOM overlay per SPEC §2.5.
 //
-// Sister panel to buildings-ui.ts and skilltree-ui.ts: same centered modal
-// shell, same letter-spaced ACCENT caps in the header, same FG_DIM
-// secondary text, same engineering-readout vocabulary. The body is a
-// small form: founder picker → biome picker → size sliders → position
-// inputs → live cost readout → "Construct" CTA.
+// Phase 4b.5: migrated to the shared ri-modal shell (mountModal from
+// ui-modal.ts). The body is a small form: founder picker → biome picker →
+// size sliders → position inputs → live cost readout. The "Construct" CTA
+// lives in the modal footer; inline style.cssText replaced with .ri-* classes
+// and CSS custom properties.
 //
 // Aesthetic guards:
 //   - Founder rows / biome chips: lock state if eligibility fails. Locked
@@ -33,6 +33,7 @@ import {
 import { BIOME_DEFS } from './biomes.js';
 import type { IslandState } from './economy.js';
 import { tierForLevel } from './skilltree.js';
+import { mountModal } from './ui-modal.js';
 import {
   distSqTiles,
   ISLAND_NAME_MAX_LEN,
@@ -78,20 +79,6 @@ export interface ConstructionUiOptions {
   ) => void;
 }
 
-// ---------------------------------------------------------------------------
-// Palette — shared with skilltree-ui / buildings-ui for cross-modal continuity.
-// ---------------------------------------------------------------------------
-const PANEL_BG = 'rgba(14, 18, 26, 0.92)';
-const PANEL_BORDER = '#3a4452';
-const PANEL_HEADER_BORDER = '#4a5a72';
-const FG = '#cdd6f4';
-const FG_DIM = '#6c7791';
-const FG_MUTED = '#4a5365';
-const ACCENT = '#7dd3e8';
-const ACCENT_DIM = '#3d6f7c';
-const WARN = '#f5a742';
-const STRIP_BG = 'rgba(20, 24, 32, 0.6)';
-
 const BIOME_ORDER: ReadonlyArray<Biome> = [
   'plains',
   'forest',
@@ -112,59 +99,6 @@ const REASON_LABEL: Readonly<Record<ValidationReason, string>> = {
 
 /** Distance buffer (tiles) added to (major_a + major_b) for overlap check. */
 const POSITION_BUFFER_TILES = 4;
-
-function styled(el: HTMLElement, css: string): void {
-  el.style.cssText = css;
-}
-
-function makeButton(label: string, onClick: () => void): HTMLButtonElement {
-  const b = document.createElement('button');
-  b.textContent = label;
-  styled(
-    b,
-    [
-      'background: #1a1f2a',
-      `color: ${FG}`,
-      `border: 1px solid ${PANEL_BORDER}`,
-      'padding: 3px 9px',
-      'cursor: pointer',
-      'font-family: ui-monospace, monospace',
-      'font-size: 11px',
-      'letter-spacing: 0.04em',
-      'text-transform: uppercase',
-      'transition: background 80ms ease, border-color 80ms ease',
-    ].join(';'),
-  );
-  b.addEventListener('mouseenter', () => {
-    b.style.background = '#252b38';
-    b.style.borderColor = ACCENT_DIM;
-  });
-  b.addEventListener('mouseleave', () => {
-    b.style.background = '#1a1f2a';
-    b.style.borderColor = PANEL_BORDER;
-  });
-  b.addEventListener('click', () => {
-    onClick();
-    b.blur();
-  });
-  return b;
-}
-
-/** Check whether a candidate position would overlap any existing island.
- *  Returns true if safe to place, false otherwise. Pure helper kept local
- *  to the UI since the rule is a UX guardrail, not a pure-layer invariant. */
-function positionIsFree(
-  world: WorldState,
-  cx: number,
-  cy: number,
-  majorRadius: number,
-): boolean {
-  for (const s of world.islands) {
-    const minDist = s.majorRadius + majorRadius + POSITION_BUFFER_TILES;
-    if (distSqTiles(s.cx, s.cy, cx, cy) < minDist * minDist) return false;
-  }
-  return true;
-}
 
 /** Tiny stable id generator so multiple constructs in one session get
  *  unique ids without colliding with the demo set. */
@@ -195,6 +129,22 @@ export function _resetConstructionCounter(): void {
   constructionCounter = 0;
 }
 
+/** Check whether a candidate position would overlap any existing island.
+ *  Returns true if safe to place, false otherwise. Pure helper kept local
+ *  to the UI since the rule is a UX guardrail, not a pure-layer invariant. */
+function positionIsFree(
+  world: WorldState,
+  cx: number,
+  cy: number,
+  majorRadius: number,
+): boolean {
+  for (const s of world.islands) {
+    const minDist = s.majorRadius + majorRadius + POSITION_BUFFER_TILES;
+    if (distSqTiles(s.cx, s.cy, cx, cy) < minDist * minDist) return false;
+  }
+  return true;
+}
+
 export function mountConstructionUi(
   parentEl: HTMLElement,
   options: ConstructionUiOptions,
@@ -212,406 +162,314 @@ export function mountConstructionUi(
    *  let the allocated `art-N` id stand in. Trimmed at submit time. */
   let customName = '';
 
-  // -------------------------------------------------------------------------
-  // Scrim + panel shell
-  // -------------------------------------------------------------------------
-  const scrim = document.createElement('div');
-  scrim.id = 'construction-scrim';
-  styled(
-    scrim,
-    [
-      'position: fixed',
-      'inset: 0',
-      'background: rgba(10, 14, 20, 0.55)',
-      'z-index: 200',
-      'display: none',
-      'pointer-events: none',
-      'backdrop-filter: blur(1.5px)',
-    ].join(';'),
-  );
-
-  const panel = document.createElement('div');
-  panel.id = 'construction-panel';
-  styled(
-    panel,
-    [
-      'position: fixed',
-      'top: 50%',
-      'left: 50%',
-      'transform: translate(-50%, -50%)',
-      'width: min(720px, calc(100vw - 32px))',
-      'max-height: calc(100vh - 32px)',
-      `background: ${PANEL_BG}`,
-      `border: 1px solid ${PANEL_BORDER}`,
-      'border-radius: 2px',
-      'box-shadow: 0 24px 48px -12px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(125, 211, 232, 0.05)',
-      'z-index: 201',
-      'pointer-events: auto',
-      `color: ${FG}`,
-      'font-family: ui-monospace, monospace',
-      'font-size: 12px',
-      'line-height: 1.45',
-      'font-variant-numeric: tabular-nums',
-      'display: flex',
-      'flex-direction: column',
-      'overflow: hidden',
-    ].join(';'),
-  );
-
-  // -------------------------------------------------------------------------
-  // Header strip
-  // -------------------------------------------------------------------------
-  const header = document.createElement('div');
-  styled(
-    header,
-    [
-      'display: flex',
-      'align-items: center',
-      'justify-content: space-between',
-      'padding: 10px 16px 9px',
-      `border-bottom: 1px solid ${PANEL_HEADER_BORDER}`,
-      `background: ${STRIP_BG}`,
-      'gap: 14px',
-    ].join(';'),
-  );
-  const headerTitle = document.createElement('div');
-  styled(headerTitle, 'display: flex; align-items: baseline; gap: 10px; flex: 0 0 auto');
-  const title = document.createElement('span');
-  title.textContent = 'CONSTRUCT ARTIFICIAL ISLAND';
-  styled(
-    title,
-    [
-      `color: ${ACCENT}`,
-      'font-size: 12px',
-      'font-weight: 600',
-      'letter-spacing: 0.22em',
-    ].join(';'),
-  );
-  const subtitle = document.createElement('span');
-  subtitle.textContent = '§2.5 / platform constructor';
-  styled(
-    subtitle,
-    [
-      `color: ${FG_DIM}`,
-      'font-size: 10px',
-      'letter-spacing: 0.12em',
-      'text-transform: uppercase',
-    ].join(';'),
-  );
-  headerTitle.appendChild(title);
-  headerTitle.appendChild(subtitle);
-  const closeBtn = makeButton('Close (C)', () => hide());
-  header.appendChild(headerTitle);
-  header.appendChild(closeBtn);
-
-  // -------------------------------------------------------------------------
-  // Body — form sections
-  // -------------------------------------------------------------------------
-  const body = document.createElement('div');
-  styled(
-    body,
-    [
-      'display: flex',
-      'flex-direction: column',
-      'gap: 10px',
-      'padding: 14px 16px 8px',
-      'overflow-y: auto',
-      'flex: 1 1 auto',
-    ].join(';'),
-  );
-
-  function sectionLabel(text: string): HTMLDivElement {
-    const d = document.createElement('div');
-    d.textContent = text;
-    styled(
-      d,
-      [
-        `color: ${FG_DIM}`,
-        'font-size: 10px',
-        'letter-spacing: 0.16em',
-        'text-transform: uppercase',
-        `border-bottom: 1px solid ${FG_MUTED}`,
-        'padding-bottom: 2px',
-        'margin-bottom: 4px',
-      ].join(';'),
-    );
-    return d;
-  }
-
-  // --- Founder picker ------------------------------------------------------
-  const founderSection = document.createElement('div');
-  founderSection.appendChild(sectionLabel('Founder Island'));
+  // Mutable element refs updated by refresh().
   const founderSelect = document.createElement('select');
-  styled(
-    founderSelect,
-    [
-      `background: #1a1f2a`,
-      `color: ${FG}`,
-      `border: 1px solid ${PANEL_BORDER}`,
-      'padding: 4px 6px',
-      'font-family: ui-monospace, monospace',
-      'font-size: 12px',
-      'width: 100%',
-    ].join(';'),
-  );
+  founderSelect.style.background = '#1a1f2a';
+  founderSelect.style.color = 'var(--ri-fg-1)';
+  founderSelect.style.border = '1px solid var(--ri-border-strong)';
+  founderSelect.style.padding = '4px 6px';
+  founderSelect.style.fontFamily = 'var(--ri-font-mono)';
+  founderSelect.style.fontSize = '12px';
+  founderSelect.style.width = '100%';
   founderSelect.addEventListener('change', () => {
     selectedFounder = founderSelect.value === '' ? null : founderSelect.value;
     refresh();
   });
-  founderSection.appendChild(founderSelect);
 
-  // --- Biome picker (chip strip) -------------------------------------------
-  const biomeSection = document.createElement('div');
-  biomeSection.appendChild(sectionLabel('Biome'));
-  const biomeStrip = document.createElement('div');
-  styled(biomeStrip, 'display: flex; gap: 6px; flex-wrap: wrap');
   const biomeChips = new Map<Biome, HTMLButtonElement>();
-  for (const b of BIOME_ORDER) {
-    const chip = document.createElement('button');
-    chip.textContent = BIOME_DEFS[b].displayName;
-    styled(
-      chip,
-      [
-        'background: transparent',
-        `color: ${FG_DIM}`,
-        `border: 1px solid ${FG_MUTED}`,
-        'padding: 4px 10px',
-        'cursor: pointer',
-        'font-family: ui-monospace, monospace',
-        'font-size: 11px',
-        'letter-spacing: 0.08em',
-        'text-transform: uppercase',
-        'border-radius: 2px',
-      ].join(';'),
-    );
-    chip.addEventListener('click', () => {
-      selectedBiome = b;
-      refresh();
-      chip.blur();
-    });
-    biomeChips.set(b, chip);
-    biomeStrip.appendChild(chip);
-  }
-  biomeSection.appendChild(biomeStrip);
 
-  // --- Size sliders --------------------------------------------------------
-  const sizeSection = document.createElement('div');
-  sizeSection.appendChild(sectionLabel('Size (ellipse radii in tiles)'));
-  const sizeGrid = document.createElement('div');
-  styled(sizeGrid, 'display: grid; grid-template-columns: 90px 1fr 40px; gap: 8px; align-items: center');
+  const majorSlider = document.createElement('input');
+  majorSlider.type = 'range';
+  majorSlider.min = '4';
+  majorSlider.max = '8';
+  majorSlider.step = '1';
+  majorSlider.value = String(majorRadius);
+  majorSlider.style.width = '100%';
+  majorSlider.style.accentColor = 'var(--ri-accent)';
 
-  function sliderRow(
-    labelText: string,
-    initial: number,
-    onChange: (v: number) => void,
-  ): { rowEls: HTMLElement[]; valueEl: HTMLSpanElement; sliderEl: HTMLInputElement } {
-    const label = document.createElement('span');
-    label.textContent = labelText;
-    styled(label, `color: ${FG_DIM}; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase`);
-    const slider = document.createElement('input');
-    slider.type = 'range';
-    slider.min = '4';
-    slider.max = '8';
-    slider.step = '1';
-    slider.value = String(initial);
-    styled(slider, 'width: 100%; accent-color: ' + ACCENT);
-    const valueEl = document.createElement('span');
-    valueEl.textContent = String(initial);
-    styled(valueEl, `color: ${FG}; font-size: 11px; font-weight: 600; text-align: right`);
-    slider.addEventListener('input', () => {
-      const v = parseInt(slider.value, 10);
-      valueEl.textContent = String(v);
-      onChange(v);
-      refresh();
-    });
-    return { rowEls: [label, slider, valueEl], valueEl, sliderEl: slider };
-  }
-  const majorRow = sliderRow('Major Radius', majorRadius, (v) => {
+  const majorValue = document.createElement('span');
+  majorValue.textContent = String(majorRadius);
+  majorValue.style.color = 'var(--ri-fg-1)';
+  majorValue.style.fontSize = '11px';
+  majorValue.style.fontWeight = '600';
+  majorValue.style.textAlign = 'right';
+
+  majorSlider.addEventListener('input', () => {
+    const v = parseInt(majorSlider.value, 10);
+    majorValue.textContent = String(v);
     majorRadius = v;
+    refresh();
   });
-  const minorRow = sliderRow('Minor Radius', minorRadius, (v) => {
+
+  const minorSlider = document.createElement('input');
+  minorSlider.type = 'range';
+  minorSlider.min = '4';
+  minorSlider.max = '8';
+  minorSlider.step = '1';
+  minorSlider.value = String(minorRadius);
+  minorSlider.style.width = '100%';
+  minorSlider.style.accentColor = 'var(--ri-accent)';
+
+  const minorValue = document.createElement('span');
+  minorValue.textContent = String(minorRadius);
+  minorValue.style.color = 'var(--ri-fg-1)';
+  minorValue.style.fontSize = '11px';
+  minorValue.style.fontWeight = '600';
+  minorValue.style.textAlign = 'right';
+
+  minorSlider.addEventListener('input', () => {
+    const v = parseInt(minorSlider.value, 10);
+    minorValue.textContent = String(v);
     minorRadius = v;
+    refresh();
   });
-  for (const el of majorRow.rowEls) sizeGrid.appendChild(el);
-  for (const el of minorRow.rowEls) sizeGrid.appendChild(el);
-  sizeSection.appendChild(sizeGrid);
 
-  // --- Position inputs -----------------------------------------------------
-  const posSection = document.createElement('div');
-  posSection.appendChild(sectionLabel('Position (world-tile coords)'));
-  const posGrid = document.createElement('div');
-  styled(posGrid, 'display: grid; grid-template-columns: 90px 1fr 90px 1fr; gap: 8px; align-items: center');
+  const posXInput = document.createElement('input');
+  posXInput.type = 'number';
+  posXInput.value = String(posX);
+  posXInput.step = '1';
+  posXInput.style.background = '#1a1f2a';
+  posXInput.style.color = 'var(--ri-fg-1)';
+  posXInput.style.border = '1px solid var(--ri-border-strong)';
+  posXInput.style.padding = '3px 5px';
+  posXInput.style.fontFamily = 'var(--ri-font-mono)';
+  posXInput.style.fontSize = '12px';
+  posXInput.style.width = '100%';
+  posXInput.addEventListener('input', () => {
+    const v = parseInt(posXInput.value, 10);
+    if (Number.isFinite(v)) {
+      posX = v;
+      refresh();
+    }
+  });
 
-  function numberInputRow(
-    labelText: string,
-    initial: number,
-    onChange: (v: number) => void,
-  ): HTMLElement[] {
-    const label = document.createElement('span');
-    label.textContent = labelText;
-    styled(label, `color: ${FG_DIM}; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase`);
-    const input = document.createElement('input');
-    input.type = 'number';
-    input.value = String(initial);
-    input.step = '1';
-    styled(
-      input,
-      [
-        `background: #1a1f2a`,
-        `color: ${FG}`,
-        `border: 1px solid ${PANEL_BORDER}`,
-        'padding: 3px 5px',
-        'font-family: ui-monospace, monospace',
-        'font-size: 12px',
-        'width: 100%',
-      ].join(';'),
-    );
-    input.addEventListener('input', () => {
-      const v = parseInt(input.value, 10);
-      if (Number.isFinite(v)) {
-        onChange(v);
-        refresh();
-      }
-    });
-    return [label, input];
-  }
-  for (const el of numberInputRow('Target X', posX, (v) => {
-    posX = v;
-  })) posGrid.appendChild(el);
-  for (const el of numberInputRow('Target Y', posY, (v) => {
-    posY = v;
-  })) posGrid.appendChild(el);
-  posSection.appendChild(posGrid);
+  const posYInput = document.createElement('input');
+  posYInput.type = 'number';
+  posYInput.value = String(posY);
+  posYInput.step = '1';
+  posYInput.style.background = '#1a1f2a';
+  posYInput.style.color = 'var(--ri-fg-1)';
+  posYInput.style.border = '1px solid var(--ri-border-strong)';
+  posYInput.style.padding = '3px 5px';
+  posYInput.style.fontFamily = 'var(--ri-font-mono)';
+  posYInput.style.fontSize = '12px';
+  posYInput.style.width = '100%';
+  posYInput.addEventListener('input', () => {
+    const v = parseInt(posYInput.value, 10);
+    if (Number.isFinite(v)) {
+      posY = v;
+      refresh();
+    }
+  });
 
-  // --- Name input ----------------------------------------------------------
-  // Optional player-supplied display name. Empty falls back to the
-  // allocated `art-N` id at submit time. Placeholder text shows the
-  // to-be-allocated id so the player can preview what the default looks
-  // like (read by peeking the construction counter without incrementing).
-  const nameSection = document.createElement('div');
-  nameSection.appendChild(sectionLabel('Name (optional)'));
   const nameInput = document.createElement('input');
   nameInput.type = 'text';
   nameInput.maxLength = ISLAND_NAME_MAX_LEN;
-  styled(
-    nameInput,
-    [
-      'background: #1a1f2a',
-      `color: ${FG}`,
-      `border: 1px solid ${PANEL_BORDER}`,
-      'padding: 4px 6px',
-      'font-family: ui-monospace, monospace',
-      'font-size: 12px',
-      'width: 100%',
-    ].join(';'),
-  );
+  nameInput.style.background = '#1a1f2a';
+  nameInput.style.color = 'var(--ri-fg-1)';
+  nameInput.style.border = '1px solid var(--ri-border-strong)';
+  nameInput.style.padding = '4px 6px';
+  nameInput.style.fontFamily = 'var(--ri-font-mono)';
+  nameInput.style.fontSize = '12px';
+  nameInput.style.width = '100%';
   nameInput.addEventListener('input', () => {
     customName = nameInput.value;
   });
-  nameSection.appendChild(nameInput);
 
-  // --- Cost readout --------------------------------------------------------
-  const costSection = document.createElement('div');
-  costSection.appendChild(sectionLabel('Materials Required'));
-  const costGrid = document.createElement('div');
-  styled(costGrid, 'display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px');
-  function makeCostRow(label: string): { wrap: HTMLDivElement; valueEl: HTMLSpanElement } {
-    const wrap = document.createElement('div');
-    styled(
-      wrap,
-      [
-        `border: 1px solid ${PANEL_BORDER}`,
-        'padding: 6px 8px',
-        'display: flex',
-        'flex-direction: column',
-        'gap: 2px',
-        'background: rgba(20, 24, 32, 0.4)',
-      ].join(';'),
-    );
-    const l = document.createElement('span');
-    l.textContent = label;
-    styled(l, `color: ${FG_DIM}; font-size: 10px; letter-spacing: 0.10em; text-transform: uppercase`);
-    const valueEl = document.createElement('span');
-    valueEl.textContent = '—';
-    styled(valueEl, `color: ${FG}; font-size: 13px; font-weight: 600`);
-    wrap.appendChild(l);
-    wrap.appendChild(valueEl);
-    return { wrap, valueEl };
-  }
-  const steelCost = makeCostRow('Steel');
-  const ironCost = makeCostRow('Iron Ingot');
-  const woodCost = makeCostRow('Wood');
-  costGrid.appendChild(steelCost.wrap);
-  costGrid.appendChild(ironCost.wrap);
-  costGrid.appendChild(woodCost.wrap);
-  costSection.appendChild(costGrid);
+  const steelValue = document.createElement('span');
+  steelValue.textContent = '—';
+  steelValue.style.color = 'var(--ri-fg-1)';
+  steelValue.style.fontSize = '13px';
+  steelValue.style.fontWeight = '600';
 
-  body.appendChild(founderSection);
-  body.appendChild(biomeSection);
-  body.appendChild(sizeSection);
-  body.appendChild(posSection);
-  body.appendChild(nameSection);
-  body.appendChild(costSection);
+  const ironValue = document.createElement('span');
+  ironValue.textContent = '—';
+  ironValue.style.color = 'var(--ri-fg-1)';
+  ironValue.style.fontSize = '13px';
+  ironValue.style.fontWeight = '600';
 
-  // -------------------------------------------------------------------------
-  // Footer — status + Construct CTA
-  // -------------------------------------------------------------------------
-  const footer = document.createElement('div');
-  styled(
-    footer,
-    [
-      'padding: 9px 16px',
-      `border-top: 1px solid ${PANEL_HEADER_BORDER}`,
-      `background: ${STRIP_BG}`,
-      'display: flex',
-      'align-items: center',
-      'justify-content: space-between',
-      'gap: 12px',
-    ].join(';'),
-  );
+  const woodValue = document.createElement('span');
+  woodValue.textContent = '—';
+  woodValue.style.color = 'var(--ri-fg-1)';
+  woodValue.style.fontSize = '13px';
+  woodValue.style.fontWeight = '600';
+
   const statusEl = document.createElement('span');
-  styled(
-    statusEl,
-    [
-      `color: ${FG_DIM}`,
-      'font-size: 10.5px',
-      'letter-spacing: 0.06em',
-      'text-transform: uppercase',
-      'flex: 1 1 auto',
-    ].join(';'),
-  );
+  statusEl.className = 'ri-muted';
+  statusEl.style.fontSize = '10.5px';
+  statusEl.style.letterSpacing = '0.06em';
+  statusEl.style.textTransform = 'uppercase';
+
   const constructBtn = document.createElement('button');
   constructBtn.textContent = '▶ CONSTRUCT';
-  styled(
-    constructBtn,
-    [
-      `background: ${ACCENT}`,
-      `color: #0a0e14`,
-      `border: 1px solid ${ACCENT_DIM}`,
-      'padding: 5px 14px',
-      'cursor: pointer',
-      'font-family: ui-monospace, monospace',
-      'font-size: 11px',
-      'font-weight: 700',
-      'letter-spacing: 0.10em',
-      'text-transform: uppercase',
-      'transition: background 80ms ease',
-    ].join(';'),
-  );
+  constructBtn.className = 'ri-btn';
+  constructBtn.style.fontWeight = '700';
+  constructBtn.style.letterSpacing = '0.10em';
   constructBtn.addEventListener('click', () => {
     tryConstruct();
     constructBtn.blur();
   });
-  footer.appendChild(statusEl);
-  footer.appendChild(constructBtn);
 
-  panel.appendChild(header);
-  panel.appendChild(body);
-  panel.appendChild(footer);
+  // -------------------------------------------------------------------------
+  // Mount modal
+  // -------------------------------------------------------------------------
+  const handle = mountModal(parentEl, {
+    title: 'CONSTRUCT',
+    subtitle: '§2.5 / platform constructor',
+    onClose: () => handle.hide(),
+    buildBody(body) {
+      body.style.display = 'flex';
+      body.style.flexDirection = 'column';
+      body.style.gap = '10px';
 
-  parentEl.appendChild(scrim);
-  parentEl.appendChild(panel);
-  panel.style.display = 'none';
+      // --- Founder picker --------------------------------------------------
+      const founderSection = document.createElement('div');
+      const founderLabel = document.createElement('div');
+      founderLabel.textContent = 'Founder Island';
+      founderLabel.className = 'ri-sectionhead';
+      founderSection.appendChild(founderLabel);
+      founderSection.appendChild(founderSelect);
+      body.appendChild(founderSection);
+
+      // --- Biome picker (chip strip) ---------------------------------------
+      const biomeSection = document.createElement('div');
+      const biomeLabel = document.createElement('div');
+      biomeLabel.textContent = 'Biome';
+      biomeLabel.className = 'ri-sectionhead';
+      biomeSection.appendChild(biomeLabel);
+
+      const biomeStrip = document.createElement('div');
+      biomeStrip.style.display = 'flex';
+      biomeStrip.style.gap = '6px';
+      biomeStrip.style.flexWrap = 'wrap';
+      for (const b of BIOME_ORDER) {
+        const chip = document.createElement('button');
+        chip.textContent = BIOME_DEFS[b].displayName;
+        chip.className = 'ri-chip';
+        chip.addEventListener('click', () => {
+          selectedBiome = b;
+          refresh();
+          chip.blur();
+        });
+        biomeChips.set(b, chip);
+        biomeStrip.appendChild(chip);
+      }
+      biomeSection.appendChild(biomeStrip);
+      body.appendChild(biomeSection);
+
+      // --- Size sliders ----------------------------------------------------
+      const sizeSection = document.createElement('div');
+      const sizeLabel = document.createElement('div');
+      sizeLabel.textContent = 'Size (ellipse radii in tiles)';
+      sizeLabel.className = 'ri-sectionhead';
+      sizeSection.appendChild(sizeLabel);
+
+      const sizeGrid = document.createElement('div');
+      sizeGrid.style.display = 'grid';
+      sizeGrid.style.gridTemplateColumns = '90px 1fr 40px';
+      sizeGrid.style.gap = '8px';
+      sizeGrid.style.alignItems = 'center';
+
+      function makeSliderLabel(text: string): HTMLSpanElement {
+        const label = document.createElement('span');
+        label.textContent = text;
+        label.style.color = 'var(--ri-fg-3)';
+        label.style.fontSize = '11px';
+        label.style.letterSpacing = '0.08em';
+        label.style.textTransform = 'uppercase';
+        return label;
+      }
+
+      sizeGrid.appendChild(makeSliderLabel('Major Radius'));
+      sizeGrid.appendChild(majorSlider);
+      sizeGrid.appendChild(majorValue);
+      sizeGrid.appendChild(makeSliderLabel('Minor Radius'));
+      sizeGrid.appendChild(minorSlider);
+      sizeGrid.appendChild(minorValue);
+      sizeSection.appendChild(sizeGrid);
+      body.appendChild(sizeSection);
+
+      // --- Position inputs -------------------------------------------------
+      const posSection = document.createElement('div');
+      const posLabel = document.createElement('div');
+      posLabel.textContent = 'Position (world-tile coords)';
+      posLabel.className = 'ri-sectionhead';
+      posSection.appendChild(posLabel);
+
+      const posGrid = document.createElement('div');
+      posGrid.style.display = 'grid';
+      posGrid.style.gridTemplateColumns = '90px 1fr 90px 1fr';
+      posGrid.style.gap = '8px';
+      posGrid.style.alignItems = 'center';
+
+      function makePosLabel(text: string): HTMLSpanElement {
+        const label = document.createElement('span');
+        label.textContent = text;
+        label.style.color = 'var(--ri-fg-3)';
+        label.style.fontSize = '11px';
+        label.style.letterSpacing = '0.08em';
+        label.style.textTransform = 'uppercase';
+        return label;
+      }
+
+      posGrid.appendChild(makePosLabel('Target X'));
+      posGrid.appendChild(posXInput);
+      posGrid.appendChild(makePosLabel('Target Y'));
+      posGrid.appendChild(posYInput);
+      posSection.appendChild(posGrid);
+      body.appendChild(posSection);
+
+      // --- Name input ------------------------------------------------------
+      const nameSection = document.createElement('div');
+      const nameLabel = document.createElement('div');
+      nameLabel.textContent = 'Name (optional)';
+      nameLabel.className = 'ri-sectionhead';
+      nameSection.appendChild(nameLabel);
+      nameSection.appendChild(nameInput);
+      body.appendChild(nameSection);
+
+      // --- Cost readout ----------------------------------------------------
+      const costSection = document.createElement('div');
+      const costLabel = document.createElement('div');
+      costLabel.textContent = 'Materials Required';
+      costLabel.className = 'ri-sectionhead';
+      costSection.appendChild(costLabel);
+
+      const costGrid = document.createElement('div');
+      costGrid.style.display = 'grid';
+      costGrid.style.gridTemplateColumns = '1fr 1fr 1fr';
+      costGrid.style.gap = '8px';
+
+      function makeCostBox(label: string, valueEl: HTMLSpanElement): HTMLDivElement {
+        const wrap = document.createElement('div');
+        wrap.style.border = '1px solid var(--ri-border-strong)';
+        wrap.style.padding = '6px 8px';
+        wrap.style.display = 'flex';
+        wrap.style.flexDirection = 'column';
+        wrap.style.gap = '2px';
+        wrap.style.background = 'rgba(20, 24, 32, 0.4)';
+        const l = document.createElement('span');
+        l.textContent = label;
+        l.style.color = 'var(--ri-fg-3)';
+        l.style.fontSize = '10px';
+        l.style.letterSpacing = '0.10em';
+        l.style.textTransform = 'uppercase';
+        wrap.appendChild(l);
+        wrap.appendChild(valueEl);
+        return wrap;
+      }
+
+      costGrid.appendChild(makeCostBox('Steel', steelValue));
+      costGrid.appendChild(makeCostBox('Iron Ingot', ironValue));
+      costGrid.appendChild(makeCostBox('Wood', woodValue));
+      costSection.appendChild(costGrid);
+      body.appendChild(costSection);
+    },
+    buildFooter(footer) {
+      footer.prepend(statusEl);
+      footer.appendChild(constructBtn);
+    },
+  });
 
   // -------------------------------------------------------------------------
   // Refresh — recompute eligibility, cost, validation; repaint UI
@@ -670,9 +528,7 @@ export function mountConstructionUi(
     // Repaint biome chips.
     for (const [b, chip] of biomeChips) {
       const active = b === selectedBiome;
-      chip.style.background = active ? 'rgba(125, 211, 232, 0.10)' : 'transparent';
-      chip.style.borderColor = active ? ACCENT : FG_MUTED;
-      chip.style.color = active ? ACCENT : FG_DIM;
+      chip.dataset.active = active ? 'true' : 'false';
     }
 
     // Update cost readout.
@@ -685,9 +541,9 @@ export function mountConstructionUi(
     const founder = selectedFounder
       ? eligible.find((e) => e.spec.id === selectedFounder)
       : null;
-    paintCostRow(steelCost.valueEl, cost.steel, founder?.state.inventory.steel ?? 0);
-    paintCostRow(ironCost.valueEl, cost.iron_ingot, founder?.state.inventory.iron_ingot ?? 0);
-    paintCostRow(woodCost.valueEl, cost.wood, founder?.state.inventory.wood ?? 0);
+    paintCostRow(steelValue, cost.steel, founder?.state.inventory.steel ?? 0);
+    paintCostRow(ironValue, cost.iron_ingot, founder?.state.inventory.iron_ingot ?? 0);
+    paintCostRow(woodValue, cost.wood, founder?.state.inventory.wood ?? 0);
 
     // Validate.
     let reason: ValidationReason | 'overlap' | null = null;
@@ -704,32 +560,32 @@ export function mountConstructionUi(
 
     if (reason === null) {
       statusEl.textContent = `Ready — ${selectedBiome} ${majorRadius}×${minorRadius} at (${posX}, ${posY})`;
-      statusEl.style.color = ACCENT;
-      constructBtn.style.background = ACCENT;
+      statusEl.style.color = 'var(--ri-accent)';
+      constructBtn.style.background = 'var(--ri-accent)';
       constructBtn.style.color = '#0a0e14';
-      constructBtn.style.borderColor = ACCENT_DIM;
+      constructBtn.style.borderColor = 'var(--ri-accent-dim)';
       constructBtn.style.cursor = 'pointer';
       constructBtn.title = '';
-      (constructBtn as HTMLButtonElement).disabled = false;
+      constructBtn.disabled = false;
     } else {
       const label = reason === 'overlap'
         ? 'Position overlaps an existing island'
         : REASON_LABEL[reason];
       statusEl.textContent = label.toUpperCase();
-      statusEl.style.color = WARN;
-      constructBtn.style.background = FG_MUTED;
-      constructBtn.style.color = FG_DIM;
-      constructBtn.style.borderColor = FG_MUTED;
+      statusEl.style.color = 'var(--ri-warn)';
+      constructBtn.style.background = 'var(--ri-fg-4)';
+      constructBtn.style.color = 'var(--ri-fg-3)';
+      constructBtn.style.borderColor = 'var(--ri-fg-4)';
       constructBtn.style.cursor = 'not-allowed';
       constructBtn.title = label;
-      (constructBtn as HTMLButtonElement).disabled = true;
+      constructBtn.disabled = true;
     }
 
     // The radius cap depends on the founder's tier — surface for clarity.
     if (founder) {
       const cap = maxRadiusForFounderLevel(founder.state.level);
-      majorRow.sliderEl.max = String(cap);
-      minorRow.sliderEl.max = String(cap);
+      majorSlider.max = String(cap);
+      minorSlider.max = String(cap);
     }
 
     // Name placeholder previews the to-be-allocated `art-N` id, so the
@@ -742,9 +598,9 @@ export function mountConstructionUi(
   function paintCostRow(el: HTMLSpanElement, need: number, have: number): void {
     el.textContent = `${have.toFixed(0)} / ${need}`;
     if (have >= need) {
-      el.style.color = FG;
+      el.style.color = 'var(--ri-fg-1)';
     } else {
-      el.style.color = WARN;
+      el.style.color = 'var(--ri-warn)';
       el.title = `Short by ${(need - have).toFixed(0)}`;
     }
     // Reset warn-dim fallback when have meets need.
@@ -799,15 +655,13 @@ export function mountConstructionUi(
   function show(): void {
     if (visible) return;
     visible = true;
-    panel.style.display = 'flex';
-    scrim.style.display = 'block';
+    handle.show();
     refresh();
   }
   function hide(): void {
     if (!visible) return;
     visible = false;
-    panel.style.display = 'none';
-    scrim.style.display = 'none';
+    handle.hide();
   }
   function toggle(): boolean {
     if (visible) hide();
@@ -816,7 +670,7 @@ export function mountConstructionUi(
   }
 
   return {
-    el: panel,
+    el: handle.el,
     refresh,
     show,
     hide,
